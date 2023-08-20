@@ -28,6 +28,8 @@
 #include "jxl/decode.h"
 #include "jxl/decode_cxx.h"
 #include "jxl/types.h"
+#include <jxl/resizable_parallel_runner.h>
+#include <jxl/resizable_parallel_runner_cxx.h>
 
 #include <cstdint>
 #include <cstring>
@@ -57,7 +59,10 @@ bool SkJpegxlCodec::IsJpegxl(const void* buffer, size_t bytesRead) {
 
 class SkJpegxlCodecPriv : public SkFrameHolder {
 public:
-    SkJpegxlCodecPriv() : fDecoder(JxlDecoderMake(/* memory_manager= */ nullptr)) {}
+    SkJpegxlCodecPriv() : 
+        fParallelRunner(JxlResizableParallelRunnerMake(nullptr)),
+        fDecoder(JxlDecoderMake(/* memory_manager= */ nullptr)) {}
+    JxlResizableParallelRunnerPtr fParallelRunner; // Multi-threaded parallel runner
     JxlDecoderPtr fDecoder;  // unique_ptr with custom destructor
     JxlBasicInfo fInfo;
     bool fSeenAllFrames = false;
@@ -103,88 +108,114 @@ std::unique_ptr<SkCodec> SkJpegxlCodec::MakeFromStream(std::unique_ptr<SkStream>
 
     auto priv = std::make_unique<SkJpegxlCodecPriv>();
     JxlDecoder* dec = priv->fDecoder.get();
+    void* runner = priv->fParallelRunner.get();
 
     // Only query metadata this time.
-    auto status = JxlDecoderSubscribeEvents(dec, JXL_DEC_BASIC_INFO | JXL_DEC_COLOR_ENCODING);
-    if (status != JXL_DEC_SUCCESS) {
+    if (JxlDecoderSubscribeEvents(dec, JXL_DEC_BASIC_INFO | JXL_DEC_COLOR_ENCODING) !=
+        JXL_DEC_SUCCESS) {
         // Fresh instance must accept request for subscription.
         SkDEBUGFAIL("libjxl returned unexpected status");
         return nullptr;
     }
 
-    status = JxlDecoderSetInput(dec, data->bytes(), data->size());
-    if (status != JXL_DEC_SUCCESS) {
+    if (JxlDecoderSetParallelRunner(dec, JxlResizableParallelRunner, runner) !=
+        JXL_DEC_SUCCESS) {
+        SkDEBUGFAIL("libjxl status: JxlDecoderSetParallelRunner failed");
+        return nullptr;
+    }
+    
+    if (JxlDecoderSetInput(dec, data->bytes(), data->size()) != JXL_DEC_SUCCESS) {
         // Fresh instance must accept first chunk of input.
         SkDEBUGFAIL("libjxl returned unexpected status");
         return nullptr;
     }
 
-    status = JxlDecoderProcessInput(dec);
-    if (status == JXL_DEC_NEED_MORE_INPUT) {
-        *result = kIncompleteInput;
-        return nullptr;
-    }
-    if (status != JXL_DEC_BASIC_INFO) {
-        *result = kInvalidInput;
-        return nullptr;
-    }
-    JxlBasicInfo& info = priv->fInfo;
-    status = JxlDecoderGetBasicInfo(dec, &info);
-    if (status != JXL_DEC_SUCCESS) {
-        // Current event is "JXL_DEC_BASIC_INFO" -> can't fail.
-        SkDEBUGFAIL("libjxl returned unexpected status");
-        return nullptr;
-    }
+    JxlDecoderCloseInput(dec);
 
-    // Check that image dimensions are not too large.
-    if (!SkTFitsIn<int32_t>(info.xsize) || !SkTFitsIn<int32_t>(info.ysize)) {
-        *result = kInvalidInput;
-        return nullptr;
-    }
-    int32_t width = SkTo<int32_t>(info.xsize);
-    int32_t height = SkTo<int32_t>(info.ysize);
-
-    bool hasAlpha = (info.alpha_bits != 0);
-    bool isGray = (info.num_color_channels == 1);
-    SkEncodedInfo::Alpha alpha =
-            hasAlpha ? SkEncodedInfo::kUnpremul_Alpha : SkEncodedInfo::kOpaque_Alpha;
-    SkEncodedInfo::Color color;
-    if (hasAlpha) {
-        color = isGray ? SkEncodedInfo::kGrayAlpha_Color : SkEncodedInfo::kRGBA_Color;
-    } else {
-        color = isGray ? SkEncodedInfo::kGray_Color : SkEncodedInfo::kRGB_Color;
-    }
-
-    status = JxlDecoderProcessInput(dec);
-    if (status != JXL_DEC_COLOR_ENCODING) {
-        *result = kInvalidInput;
-        return nullptr;
-    }
-
-    size_t iccSize = 0;
-    // TODO(eustas): format field is currently ignored by decoder.
-    status = JxlDecoderGetICCProfileSize(
-        dec, /* format = */ nullptr, JXL_COLOR_PROFILE_TARGET_DATA, &iccSize);
-    if (status != JXL_DEC_SUCCESS) {
-        // Likely incompatible colorspace.
-        iccSize = 0;
-    }
+    int32_t width = 0, height = 0;
+    SkEncodedInfo::Alpha alpha = SkEncodedInfo::kUnpremul_Alpha;
+    SkEncodedInfo::Color color = SkEncodedInfo::kRGBA_Color;
     std::unique_ptr<SkEncodedInfo::ICCProfile> profile = nullptr;
-    if (iccSize) {
-        auto icc = SkData::MakeUninitialized(iccSize);
-        // TODO(eustas): format field is currently ignored by decoder.
-        status = JxlDecoderGetColorAsICCProfile(dec,
-                                                /* format = */ nullptr,
-                                                JXL_COLOR_PROFILE_TARGET_DATA,
-                                                reinterpret_cast<uint8_t*>(icc->writable_data()),
-                                                iccSize);
-        if (status != JXL_DEC_SUCCESS) {
-            // Current event is JXL_DEC_COLOR_ENCODING -> can't fail.
+
+    while (true) {
+        JxlDecoderStatus status = JxlDecoderProcessInput(dec);
+
+        if (status == JXL_DEC_ERROR) {
+            *result = kInvalidInput;
+            return nullptr;
+        } 
+        else if (status == JXL_DEC_NEED_MORE_INPUT) {
+            *result = kIncompleteInput;
+            return nullptr;
+        }
+        else if (status == JXL_DEC_BASIC_INFO) {
+            JxlBasicInfo& info = priv->fInfo;
+            status = JxlDecoderGetBasicInfo(dec, &info);
+            if (status != JXL_DEC_SUCCESS) {
+                // Current event is "JXL_DEC_BASIC_INFO" -> can't fail.
+                SkDEBUGFAIL("libjxl returned unexpected status");
+                return nullptr;
+            }
+
+            // Check that image dimensions are not too large.
+            if (!SkTFitsIn<int32_t>(info.xsize) || !SkTFitsIn<int32_t>(info.ysize)) {
+                *result = kInvalidInput;
+                return nullptr;
+            }
+
+            width = SkTo<int32_t>(info.xsize);
+            height = SkTo<int32_t>(info.ysize);
+
+            JxlResizableParallelRunnerSetThreads(
+                    runner, JxlResizableParallelRunnerSuggestThreads(info.xsize, info.ysize));
+
+            bool hasAlpha = (info.alpha_bits != 0);
+            bool isGray = (info.num_color_channels == 1);
+
+            alpha = hasAlpha ? SkEncodedInfo::kUnpremul_Alpha : SkEncodedInfo::kOpaque_Alpha;
+            if (hasAlpha) {
+                color = isGray ? SkEncodedInfo::kGrayAlpha_Color : SkEncodedInfo::kRGBA_Color;
+            } else {
+                color = isGray ? SkEncodedInfo::kGray_Color : SkEncodedInfo::kRGB_Color;
+            }
+        }
+        else if (status == JXL_DEC_COLOR_ENCODING) {
+            size_t iccSize = 0;
+            // TODO(eustas): format field is currently ignored by decoder.
+            if (JxlDecoderGetICCProfileSize(dec, /* format = */ nullptr, 
+                JXL_COLOR_PROFILE_TARGET_DATA, &iccSize) != JXL_DEC_SUCCESS) {
+                // Likely incompatible colorspace.
+                iccSize = 0;
+            }
+            
+            if (iccSize) {
+                auto icc = SkData::MakeUninitialized(iccSize);
+                // TODO(eustas): format field is currently ignored by decoder.
+                status = JxlDecoderGetColorAsICCProfile(
+                        dec,
+                        /* format = */ nullptr,
+                        JXL_COLOR_PROFILE_TARGET_DATA,
+                        reinterpret_cast<uint8_t*>(icc->writable_data()),
+                        iccSize);
+                if (status != JXL_DEC_SUCCESS) {
+                    // Current event is JXL_DEC_COLOR_ENCODING -> can't fail.
+                    SkDEBUGFAIL("libjxl returned unexpected status");
+                    return nullptr;
+                }
+                profile = SkEncodedInfo::ICCProfile::Make(std::move(icc));
+            }
+        } 
+        else if (status == JXL_DEC_SUCCESS) {
+            // All decoding successfully finished.
+            // It's not required to call JxlDecoderReleaseInput(dec) here since
+            // the decoder will be destroyed.
+            break;
+        } 
+        else {
             SkDEBUGFAIL("libjxl returned unexpected status");
             return nullptr;
         }
-        profile = SkEncodedInfo::ICCProfile::Make(std::move(icc));
-    }
+    }    
 
     int bitsPerChannel = 16;
 
@@ -196,8 +227,11 @@ std::unique_ptr<SkCodec> SkJpegxlCodec::MakeFromStream(std::unique_ptr<SkStream>
             std::move(priv), std::move(encodedInfo), std::move(stream), std::move(data)));
 }
 
-SkCodec::Result SkJpegxlCodec::onGetPixels(const SkImageInfo& dstInfo, void* dst, size_t rowBytes,
-                                           const Options& options, int* rowsDecodedPtr) {
+SkCodec::Result SkJpegxlCodec::onGetPixels(const SkImageInfo& dstInfo,
+                                           void* dst,
+                                           size_t rowBytes,
+                                           const Options& options,
+                                           int* rowsDecodedPtr) {
     // TODO(eustas): implement
     if (options.fSubset) {
         return kUnimplemented;
@@ -206,23 +240,23 @@ SkCodec::Result SkJpegxlCodec::onGetPixels(const SkImageInfo& dstInfo, void* dst
     const int index = options.fFrameIndex;
     SkASSERT(0 == index || static_cast<size_t>(index) < codec.fFrames.size());
     auto* dec = codec.fDecoder.get();
-    JxlDecoderStatus status;
 
     if ((codec.fLastProcessedFrame >= index) || (codec.fLastProcessedFrame = SkCodec::kNoFrame)) {
         codec.fLastProcessedFrame = SkCodec::kNoFrame;
         JxlDecoderRewind(dec);
-        status = JxlDecoderSubscribeEvents(dec, JXL_DEC_FRAME | JXL_DEC_FULL_IMAGE);
-        if (status != JXL_DEC_SUCCESS) {
+
+        if (JxlDecoderSubscribeEvents(dec, /*JXL_DEC_FRAME | */JXL_DEC_FULL_IMAGE) != JXL_DEC_SUCCESS) {
             // Fresh decoder instance (after rewind) must accept subscription request.
             SkDEBUGFAIL("libjxl returned unexpected status");
             return kInternalError;
         }
-        status = JxlDecoderSetInput(dec, fData->bytes(), fData->size());
-        if (status != JXL_DEC_SUCCESS) {
+        if (JxlDecoderSetInput(dec, fData->bytes(), fData->size()) != JXL_DEC_SUCCESS) {
             // Fresh decoder instance (after rewind) must accept first data chunk.
             SkDEBUGFAIL("libjxl returned unexpected status");
             return kInternalError;
         }
+
+        JxlDecoderCloseInput(dec);
         SkASSERT(codec.fLastProcessedFrame + 1 == 0);
     }
 
@@ -231,54 +265,50 @@ SkCodec::Result SkJpegxlCodec::onGetPixels(const SkImageInfo& dstInfo, void* dst
         JxlDecoderSkipFrames(dec, index - nextFrame);
     }
 
-    // Decode till the frame start.
-    status = JxlDecoderProcessInput(dec);
-    // TODO(eustas): actually, frame is not completely processed; for streaming / partial decoding
-    //               we should also add a flag that "last processed frame" is still incomplete, and
-    //               flip that flag when frame decoding is over.
-    codec.fLastProcessedFrame = index;
-    if (status != JXL_DEC_FRAME) {
-        // TODO(eustas): check status: it might be either corrupted or incomplete input.
-        return kInternalError;
+    while (true) {
+        JxlDecoderStatus status = JxlDecoderProcessInput(dec);
+
+        if (status == JXL_DEC_ERROR) {
+            return kInternalError;
+        } else if (status == JXL_DEC_NEED_MORE_INPUT) {
+            return kInternalError;
+        } else if (status == JXL_DEC_NEED_IMAGE_OUT_BUFFER) {
+            codec.fDst = dst;
+            codec.fRowBytes = rowBytes;
+
+            // Handle Grayscale
+            uint32_t numChannels = fCodec->fDstColorType == kGray_8_SkColorType ? 1 : 4;
+            JxlPixelFormat format = {numChannels, JXL_TYPE_UINT8, JXL_NATIVE_ENDIAN, /* align = */ 0};
+
+            if (JxlDecoderSetImageOutBuffer(dec, &format, codec.fDst, codec.fInfo.ysize * rowBytes) !=
+                JXL_DEC_SUCCESS) {
+                SkDEBUGFAIL("libjxl returned unexpected status");
+                return kInternalError;
+            }
+        } 
+        else if (status == JXL_DEC_FULL_IMAGE) {
+            // Nothing to do. Do not yet return. If the image is an animation, more
+            // full frames may be decoded. This example only keeps the last one.
+
+            // TODO(eustas): actually, frame is not completely processed; for streaming / partial decoding
+            //               we should also add a flag that "last processed frame" is still incomplete, and
+            //               flip that flag when frame decoding is over.
+            codec.fLastProcessedFrame = index;
+        } 
+        else if (status == JXL_DEC_SUCCESS) {
+            // All decoding successfully finished.
+            // It's not required to call JxlDecoderReleaseInput(dec) here since
+            // the decoder will be destroyed.
+            break;
+        } 
+        else {
+            SkDEBUGFAIL("libjxl returned unexpected status");
+            return kInternalError;
+        }
     }
 
-    codec.fDst = dst;
-    codec.fRowBytes = rowBytes;
-
-    // TODO(eustas): consider grayscale.
-    uint32_t numColorChannels = 3;
-    // TODO(eustas): consider no-alpha.
-    uint32_t numAlphaChannels = 1;
-    // NB: SKIA works with little-endian F16s.
-    auto endianness = JXL_LITTLE_ENDIAN;
-
-    // Internally JXL does most processing in floats. By "default" we request
-    // output data type to be U8; it takes less memory, but results in some precision loss.
-    //  We request F16 in two cases:
-    //  - destination type is F16
-    //  - color transformation is required; in this case values are remapped,
-    //    and with 8-bit precision it is likely that visual artefact will appear
-    //    (like banding, etc.)
-    bool halfFloatOutput = false;
-    if (fCodec->fDstColorType == kRGBA_F16_SkColorType) halfFloatOutput = true;
-    if (colorXform()) halfFloatOutput = true;
-    auto dataType = halfFloatOutput ? JXL_TYPE_FLOAT16 : JXL_TYPE_UINT8;
-
-    JxlPixelFormat format =
-        {numColorChannels + numAlphaChannels, dataType, endianness, /* align = */ 0};
-    status = JxlDecoderSetImageOutCallback(dec, &format, SkJpegxlCodec::imageOutCallback, this);
-    if (status != JXL_DEC_SUCCESS) {
-        // Current event is JXL_DEC_FRAME -> decoder must accept callback.
-        SkDEBUGFAIL("libjxl returned unexpected status");
-        return kInternalError;
     }
 
-    // Decode till the frame start.
-    status = JxlDecoderProcessInput(dec);
-    if (status != JXL_DEC_FULL_IMAGE) {
-        // TODO(eustas): check status: it might be either corrupted or incomplete input.
-        return kInternalError;
-    }
     // TODO(eustas): currently it is supposed that complete input is accessible;
     //               when streaming support is added JXL_DEC_NEED_MORE_INPUT would also
     //               become a legal outcome; amount of decoded scanlines should be calculated
@@ -301,15 +331,14 @@ bool SkJpegxlCodec::conversionSupported(const SkImageInfo& dstInfo, bool srcIsOp
             return true;  // memcpy
         case kBGRA_8888_SkColorType:
             return true;  // rgba->bgra
-
         case kRGBA_F16_SkColorType:
             SkASSERT(needsColorXform);  // TODO(eustas): not necessary for JXL.
+            return true;  // memcpy
+        case kGray_8_SkColorType:
             return true;  // memcpy
 
         // TODO(eustas): implement
         case kRGB_565_SkColorType:
-            return false;
-        case kGray_8_SkColorType:
             return false;
         case kAlpha_8_SkColorType:
             return false;
@@ -320,33 +349,37 @@ bool SkJpegxlCodec::conversionSupported(const SkImageInfo& dstInfo, bool srcIsOp
     return true;
 }
 
-void SkJpegxlCodec::imageOutCallback(void* opaque, size_t x, size_t y,
-                                     size_t num_pixels, const void* pixels) {
-    SkJpegxlCodec* instance = reinterpret_cast<SkJpegxlCodec*>(opaque);
-    auto& codec = *instance->fCodec.get();
-    size_t offset = y * codec.fRowBytes + (x << codec.fPixelShift);
-    void* dst = SkTAddOffset<void>(codec.fDst, offset);
-    if (instance->colorXform()) {
-        instance->applyColorXform(dst, pixels, num_pixels);
-        return;
-    }
-    switch (codec.fDstColorType) {
-        case kRGBA_8888_SkColorType:
-            memcpy(dst, pixels, 4 * num_pixels);
-            return;
-        case kBGRA_8888_SkColorType:
-            SkOpts::RGBA_to_bgrA((uint32_t*) dst, (const uint32_t*)(pixels), num_pixels);
-            return;
-        case kRGBA_F16_SkColorType:
-            memcpy(dst, pixels, 8 * num_pixels);
-            return;
-        default:
-            SK_ABORT("Selected output format is not supported yet");
-            return;
-    }
-}
+//void SkJpegxlCodec::imageOutCallback(void* opaque, size_t x, size_t y,
+//                                     size_t num_pixels, const void* pixels) {
+//    SkJpegxlCodec* instance = reinterpret_cast<SkJpegxlCodec*>(opaque);
+//    auto& codec = *instance->fCodec.get();
+//    size_t offset = y * codec.fRowBytes + (x << codec.fPixelShift);
+//    void* dst = SkTAddOffset<void>(codec.fDst, offset);
+//    if (instance->colorXform()) {
+//        instance->applyColorXform(dst, pixels, num_pixels);
+//        return;
+//    }
+//    switch (codec.fDstColorType) {
+//        case kRGBA_8888_SkColorType:
+//            memcpy(dst, pixels, 4 * num_pixels);
+//            return;
+//        case kBGRA_8888_SkColorType:
+//            SkOpts::RGBA_to_bgrA((uint32_t*) dst, (const uint32_t*)(pixels), num_pixels);
+//            return;
+//        case kRGBA_F16_SkColorType:
+//            memcpy(dst, pixels, 8 * num_pixels);
+//            return;
+//        case kGray_8_SkColorType:
+//            memcpy(dst, pixels, num_pixels);
+//            return;
+//        default:
+//            SK_ABORT("Selected output format is not supported yet");
+//            return;
+//    }
+//}
 
 bool SkJpegxlCodec::scanFrames() {
+    auto runner = JxlResizableParallelRunnerMake(nullptr);
     auto decoder = JxlDecoderMake(/* memory_manager = */ nullptr);
     JxlDecoder* dec = decoder.get();
     auto* frameHolder = fCodec.get();
@@ -361,6 +394,12 @@ bool SkJpegxlCodec::scanFrames() {
     if (status != JXL_DEC_SUCCESS) {
         // Fresh instance must accept request for subscription.
         SkDEBUGFAIL("libjxl returned unexpected status");
+        return true;
+    }
+
+    status = JxlDecoderSetParallelRunner(dec, JxlResizableParallelRunner, runner.get());
+    if (status != JXL_DEC_SUCCESS) {
+        SkDEBUGFAIL("libjxl status: JxlDecoderSetParallelRunner failed");
         return true;
     }
 
