@@ -307,6 +307,8 @@ SkCodec::Result SkJpegxlCodec::onGetPixels(const SkImageInfo& dstInfo,
         }
     }
 
+    if (fCodec->fDstColorType == kBGRA_8888_SkColorType) {
+        SkOpts::RGBA_to_BGRA((uint32_t*)codec.fDst, (const uint32_t*)(codec.fDst), codec.fInfo.ysize * codec.fInfo.xsize);
     }
 
     // TODO(eustas): currently it is supposed that complete input is accessible;
