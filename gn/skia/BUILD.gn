@@ -631,7 +631,7 @@ config("debug_symbols") {
       "-funwind-tables",  # Helps make in-process backtraces fuller.
     ]
   } else if (is_win) {
-    cflags = [ "/Z7" ]
+    cflags = [ "/Zi" ]
     if (is_clang) {
       cflags += [ "-gcodeview-ghash" ]
       ldflags = [ "/DEBUG:GHASH" ]
@@ -709,7 +709,7 @@ config("NDEBUG") {
 
 config("trivial_abi") {
   if (is_clang) {
-    defines = [ "SK_TRIVIAL_ABI=[[clang::trivial_abi]]" ]
+    #defines = [ "SK_TRIVIAL_ABI=[[clang::trivial_abi]]" ]
   }
 }
 
