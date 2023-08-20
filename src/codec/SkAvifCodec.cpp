@@ -16,6 +16,7 @@
 #include "include/core/SkStream.h"
 #include "include/core/SkTypes.h"
 #include "modules/skcms/skcms.h"
+#include "src/codec/SkSwizzler.h"
 #include "src/core/SkStreamPriv.h"
 
 #include <cstdint>
@@ -199,10 +200,10 @@ SkCodec::Result SkAvifCodec::onGetPixels(const SkImageInfo& dstInfo,
     }
 
     const SkColorType dstColorType = dstInfo.colorType();
-    if (dstColorType != kRGBA_8888_SkColorType && dstColorType != kRGBA_F16_SkColorType) {
+    if (dstColorType != kRGBA_8888_SkColorType && dstColorType != kBGRA_8888_SkColorType &&
+        dstColorType != kRGBA_F16_SkColorType) {
         // TODO(vigneshv): Check if more color types need to be supported.
-        // Currently android supports at least RGB565 and BGRA8888 which is not
-        // supported here.
+        // Currently android supports at least RGB565 which is not supported here.
         return kUnimplemented;
     }
 
@@ -224,7 +225,7 @@ SkCodec::Result SkAvifCodec::onGetPixels(const SkImageInfo& dstInfo,
     avifRGBImage rgbImage;
     avifRGBImageSetDefaults(&rgbImage, fAvifDecoder->image);
 
-    if (dstColorType == kRGBA_8888_SkColorType) {
+    if (dstColorType == kRGBA_8888_SkColorType || dstColorType == kBGRA_8888_SkColorType) {
         rgbImage.depth = 8;
     } else if (dstColorType == kRGBA_F16_SkColorType) {
         rgbImage.depth = 16;
@@ -238,6 +239,10 @@ SkCodec::Result SkAvifCodec::onGetPixels(const SkImageInfo& dstInfo,
     result = avifImageYUVToRGB(fAvifDecoder->image, &rgbImage);
     if (result != AVIF_RESULT_OK) {
         return kInvalidInput;
+    }
+
+    if (dstColorType == kBGRA_8888_SkColorType) {
+        SkOpts::RGBA_to_BGRA((uint32_t*)rgbImage.pixels, (const uint32_t*)(rgbImage.pixels), rgbImage.width * rgbImage.height);
     }
 
     *rowsDecoded = fAvifDecoder->image->height;
