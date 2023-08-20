@@ -8,7 +8,7 @@ import("skcms.gni")
 static_library("skcms") {
   cflags = []
   if (!is_win || is_clang) {
-    cflags += [ "-std=c11" ]
+    cflags += [ "-std:c++17" ]
   }
 
   public = skcms_public_headers
