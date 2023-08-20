@@ -24,6 +24,8 @@ bool SkSVGAttributeParser::parse<SkPath>(SkPath* path) {
     return SkParsePath::FromSVGString(fCurPos, path);
 }
 
+const SkPath* SkSVGPath::onResolvePath(const SkSVGRenderContext&) const { return &fPath; }
+
 void SkSVGPath::onDraw(SkCanvas* canvas, const SkSVGLengthContext&, const SkPaint& paint,
                        SkPathFillType fillType) const {
     // the passed fillType follows inheritance rules and needs to be applied at draw time.

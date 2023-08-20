@@ -29,6 +29,10 @@ bool SkSVGPoly::parseAndSetAttribute(const char* n, const char* v) {
     return false;
 }
 
+const SkPath* SkSVGPoly::onResolvePath(const SkSVGRenderContext&) const { 
+    return &fPath; 
+}
+
 void SkSVGPoly::onDraw(SkCanvas* canvas, const SkSVGLengthContext&, const SkPaint& paint,
                        SkPathFillType fillType) const {
     // the passed fillType follows inheritance rules and needs to be applied at draw time.

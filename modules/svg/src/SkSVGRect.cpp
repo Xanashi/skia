@@ -62,17 +62,26 @@ SkRRect SkSVGRect::resolve(const SkSVGLengthContext& lctx) const {
     return SkRRect::MakeRectXY(rect, rx, ry);
 }
 
+const SkPath* SkSVGRect::onResolvePath(const SkSVGRenderContext& ctx) const { 
+    if (fPath.isEmpty()) {
+        fRect = this->resolve(ctx.lengthContext());
+        fPath = SkPath::RRect(fRect);
+    }
+    return &fPath; 
+}
+
 void SkSVGRect::onDraw(SkCanvas* canvas, const SkSVGLengthContext& lctx,
                        const SkPaint& paint, SkPathFillType) const {
-    canvas->drawRRect(this->resolve(lctx), paint);
+    if (fWidth.value() == 0 || fHeight.value() == 0) {
+        return;
+    }
+    canvas->drawRRect(fRect, paint);
 }
 
 SkPath SkSVGRect::onAsPath(const SkSVGRenderContext& ctx) const {
-    SkPath path = SkPath::RRect(this->resolve(ctx.lengthContext()));
-
-    this->mapToParent(&path);
-
-    return path;
+    this->onResolvePath(ctx);
+    this->mapToParent(&fPath);
+    return fPath;
 }
 
 SkRect SkSVGRect::onObjectBoundingBox(const SkSVGRenderContext& ctx) const {

@@ -7,16 +7,19 @@
 
 #include "modules/svg/include/SkSVGRenderContext.h"
 #include "modules/svg/include/SkSVGShape.h"
+#include "include/core/SkPath.h"
 
 SkSVGShape::SkSVGShape(SkSVGTag t) : INHERITED(t) {}
 
 void SkSVGShape::onRender(const SkSVGRenderContext& ctx) const {
-    const auto fillType = ctx.presentationContext().fInherited.fFillRule->asFillType();
+    // Perform geometry resolution in onResolvePath and cache it for the 2 below onDraw calls
+    const SkPath* path = this->onResolvePath(ctx);
 
+
+    const auto fillType  = ctx.presentationContext().fInherited.fFillRule->asFillType();
     const auto fillPaint = ctx.fillPaint(),
              strokePaint = ctx.strokePaint();
 
-    // TODO: this approach forces duplicate geometry resolution in onDraw(); refactor to avoid.
     if (fillPaint.isValid()) {
         this->onDraw(ctx.canvas(), ctx.lengthContext(), *fillPaint, fillType);
     }

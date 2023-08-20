@@ -28,20 +28,21 @@ std::tuple<SkPoint, SkPoint> SkSVGLine::resolve(const SkSVGLengthContext& lctx) 
                       lctx.resolve(fY2, SkSVGLengthContext::LengthType::kVertical)));
 }
 
+const SkPath* SkSVGLine::onResolvePath(const SkSVGRenderContext& ctx) const {
+    if (fPath.isEmpty()) {
+        std::tie(fP0, fP1) = this->resolve(ctx.lengthContext());
+        fPath = SkPath::Line(fP0, fP1);
+    }
+    return &fPath;
+}
+
 void SkSVGLine::onDraw(SkCanvas* canvas, const SkSVGLengthContext& lctx,
                        const SkPaint& paint, SkPathFillType) const {
-    SkPoint p0, p1;
-    std::tie(p0, p1) = this->resolve(lctx);
-
-    canvas->drawLine(p0, p1, paint);
+    canvas->drawLine(fP0, fP1, paint);
 }
 
 SkPath SkSVGLine::onAsPath(const SkSVGRenderContext& ctx) const {
-    SkPoint p0, p1;
-    std::tie(p0, p1) = this->resolve(ctx.lengthContext());
-
-    SkPath path = SkPath::Line(p0, p1);
-    this->mapToParent(&path);
-
-    return path;
+    this->onResolvePath(ctx);
+    this->mapToParent(&fPath);
+    return fPath;
 }

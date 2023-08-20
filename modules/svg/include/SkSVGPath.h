@@ -20,6 +20,8 @@ public:
 protected:
     bool parseAndSetAttribute(const char*, const char*) override;
 
+    const SkPath* onResolvePath(const SkSVGRenderContext&) const override;
+
     void onDraw(SkCanvas*, const SkSVGLengthContext&, const SkPaint&,
                 SkPathFillType) const override;
 

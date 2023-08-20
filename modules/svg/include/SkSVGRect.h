@@ -10,8 +10,8 @@
 
 #include "modules/svg/include/SkSVGShape.h"
 #include "modules/svg/include/SkSVGTypes.h"
+#include "include/core/SkRRect.h"
 
-class SkRRect;
 
 class SK_API SkSVGRect final : public SkSVGShape {
 public:
@@ -28,6 +28,8 @@ public:
 protected:
     bool parseAndSetAttribute(const char*, const char*) override;
 
+    const SkPath* onResolvePath(const SkSVGRenderContext&) const override;
+
     void onDraw(SkCanvas*, const SkSVGLengthContext&, const SkPaint&,
                 SkPathFillType) const override;
 
@@ -41,6 +43,9 @@ private:
     SkRRect resolve(const SkSVGLengthContext&) const;
 
     using INHERITED = SkSVGShape;
+
+    mutable SkRRect fRect;
+    mutable SkPath fPath;
 };
 
 #endif // SkSVGRect_DEFINED

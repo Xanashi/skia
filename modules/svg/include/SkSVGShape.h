@@ -23,8 +23,10 @@ protected:
 
     void onRender(const SkSVGRenderContext&) const final;
 
-    virtual void onDraw(SkCanvas*, const SkSVGLengthContext&, const SkPaint&,
-                        SkPathFillType) const = 0;
+
+    virtual const SkPath* onResolvePath(const SkSVGRenderContext&) const = 0; 
+    virtual void          onDraw(SkCanvas*, const SkSVGLengthContext&, const SkPaint&,
+                                 SkPathFillType) const = 0;
 
 private:
     using INHERITED = SkSVGTransformableNode;

@@ -27,7 +27,9 @@ public:
 protected:
     bool parseAndSetAttribute(const char*, const char*) override;
 
-    void onDraw(SkCanvas*, const SkSVGLengthContext&, const SkPaint&,
+    const SkPath* onResolvePath(const SkSVGRenderContext&) const override; 
+
+    void   onDraw(SkCanvas*, const SkSVGLengthContext&, const SkPaint&,
                 SkPathFillType) const override;
 
     SkPath onAsPath(const SkSVGRenderContext&) const override;

@@ -26,29 +26,32 @@ std::tuple<SkPoint, SkScalar> SkSVGCircle::resolve(const SkSVGLengthContext& lct
 
     return std::make_tuple(SkPoint::Make(cx, cy), r);
 }
+
+const SkPath* SkSVGCircle::onResolvePath(const SkSVGRenderContext& ctx) const {
+    if (fPath.isEmpty()) {
+        std::tie(fPos, fRad) = this->resolve(ctx.lengthContext());
+        fPath = SkPath::Circle(fPos.x(), fPos.y(), fRad);
+    }
+
+    return &fPath;
+}
+
 void SkSVGCircle::onDraw(SkCanvas* canvas, const SkSVGLengthContext& lctx,
                          const SkPaint& paint, SkPathFillType) const {
-    SkPoint pos;
-    SkScalar r;
-    std::tie(pos, r) = this->resolve(lctx);
-
-    if (r > 0) {
-        canvas->drawCircle(pos.x(), pos.y(), r, paint);
+    if (fRad > 0) {
+        canvas->drawCircle(fPos.x(), fPos.y(), fRad, paint);
     }
 }
 
 SkPath SkSVGCircle::onAsPath(const SkSVGRenderContext& ctx) const {
-    SkPoint pos;
-    SkScalar r;
-    std::tie(pos, r) = this->resolve(ctx.lengthContext());
-
-    SkPath path = SkPath::Circle(pos.x(), pos.y(), r);
-    this->mapToParent(&path);
-
-    return path;
+    this->onResolvePath(ctx);
+    this->mapToParent(&fPath);
+    return fPath;
 }
 
 SkRect SkSVGCircle::onObjectBoundingBox(const SkSVGRenderContext& ctx) const {
-    const auto [pos, r] = this->resolve(ctx.lengthContext());
-    return SkRect::MakeXYWH(pos.fX - r, pos.fY - r, 2 * r, 2 * r);
+    this->onResolvePath(ctx);
+    return SkRect::MakeXYWH(fPos.fX - fRad, fPos.fY - fRad, 2 * fRad, 2 * fRad);
+}
+
 }

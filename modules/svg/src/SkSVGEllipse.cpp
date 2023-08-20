@@ -31,14 +31,26 @@ SkRect SkSVGEllipse::resolve(const SkSVGLengthContext& lctx) const {
         : SkRect::MakeEmpty();
 }
 
+const SkPath* SkSVGEllipse::onResolvePath(const SkSVGRenderContext& ctx) const {
+    if (fPath.isEmpty()) {
+        fRect = this->resolve(ctx.lengthContext());
+        fPath = SkPath::Oval(fRect);
+    }
+    return &fPath;
+}
+
 void SkSVGEllipse::onDraw(SkCanvas* canvas, const SkSVGLengthContext& lctx,
                           const SkPaint& paint, SkPathFillType) const {
-    canvas->drawOval(this->resolve(lctx), paint);
+    canvas->drawOval(fRect, paint);
 }
 
 SkPath SkSVGEllipse::onAsPath(const SkSVGRenderContext& ctx) const {
-    SkPath path = SkPath::Oval(this->resolve(ctx.lengthContext()));
-    this->mapToParent(&path);
+    this->onResolvePath(ctx);
+    this->mapToParent(&fPath);
+    return fPath;
+}
 
-    return path;
+SkRect SkSVGEllipse::onObjectBoundingBox(const SkSVGRenderContext& ctx) const {
+    this->onResolvePath(ctx);
+    return fRect;
 }

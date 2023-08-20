@@ -24,6 +24,8 @@ public:
 protected:
     bool parseAndSetAttribute(const char*, const char*) override;
 
+    const SkPath* onResolvePath(const SkSVGRenderContext&) const override; 
+
     void onDraw(SkCanvas*, const SkSVGLengthContext&, const SkPaint&,
                 SkPathFillType) const override;
 
@@ -38,6 +40,10 @@ private:
     std::tuple<SkPoint, SkScalar> resolve(const SkSVGLengthContext&) const;
 
     using INHERITED = SkSVGShape;
+
+    mutable SkPoint fPos;
+    mutable SkScalar fRad;
+    mutable SkPath fPath;
 };
 
 #endif // SkSVGCircle_DEFINED
