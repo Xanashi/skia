@@ -18,6 +18,7 @@
 #include "src/base/SkEndian.h"
 #include "src/base/SkUTF.h"
 #include "src/core/SkFontDescriptor.h"
+#include "src/core/SkStringUtils.h"
 #include "src/core/SkTypefaceCache.h"
 #include "src/ports/SkTypeface_win_dw.h"
 #include "src/utils/win/SkDWrite.h"
@@ -788,13 +789,23 @@ sk_sp<SkTypeface> SkFontMgr_DirectWrite::onLegacyMakeTypeface(const char familyN
     SkTScopedComPtr<IDWriteFontFamily> fontFamily;
     DWriteStyle dwStyle(style);
     if (familyName) {
+        skia_private::TArray<SkString> fontFamilies;
+        SkStrSplit(familyName, ",", &fontFamilies);
+
         SkSMallocWCHAR dwFamilyName;
-        if (SUCCEEDED(sk_cstring_to_wchar(familyName, &dwFamilyName))) {
-            this->getByFamilyName(dwFamilyName, &fontFamily);
-            if (!fontFamily && fFontFallback) {
-                return this->fallback(
-                        dwFamilyName, dwStyle, fLocaleName.get(), 32);
+        for (auto&& fam : fontFamilies) {
+            familyName = SkStrTrim(fam).c_str();
+
+            if (SUCCEEDED(sk_cstring_to_wchar(familyName, &dwFamilyName))) {
+                this->getByFamilyName(dwFamilyName, &fontFamily);
+                if (fontFamily) {
+                    break;
+                }
             }
+        }
+
+        if (!fontFamily && fFontFallback) {
+            return this->fallback(dwFamilyName, dwStyle, fLocaleName.get(), 32);
         }
     }
 

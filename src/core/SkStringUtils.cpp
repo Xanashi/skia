@@ -115,3 +115,26 @@ void SkStrSplit(const char* str,
         }
     }
 }
+
+inline bool is_whitespace(char c) { return c == ' ' || c == '\n' || c == '\r' || c == '\t'; }
+
+SkString SkStrTrim(SkString& s) {
+    char* str = s.data();
+    const char* start = str;              // start is inclusive
+    const char* end = start + s.size();  // end is exclusive
+    while (is_whitespace(*start)) {
+        ++start;
+    }
+    if (start != end) {
+        --end;  // make end inclusive
+        while (is_whitespace(*end)) {
+            --end;
+        }
+        ++end;  // make end exclusive
+    }
+    size_t len = end - start;
+    memmove(str, start, len);
+    s.resize(len);
+
+    return s;
+}

@@ -963,11 +963,7 @@ bool SkSVGAttributeParser::parse(SkSVGFontFamily* family) {
         *family = SkSVGFontFamily();
         parsedValue = true;
     } else {
-        // The spec allows specifying a comma-separated list for explicit fallback order.
-        // For now, we only use the first entry and rely on the font manager to handle fallback.
-        const auto* comma = strchr(fCurPos, ',');
-        auto family_name = comma ? SkString(fCurPos, comma - fCurPos)
-                                 : SkString(fCurPos);
+        auto family_name = SkString(fCurPos);
         *family = SkSVGFontFamily(family_name.c_str());
         fCurPos += strlen(fCurPos);
         parsedValue = true;
