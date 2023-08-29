@@ -1142,3 +1142,35 @@ bool SkSVGAttributeParser::parse(SkSVGDisplay* display) {
 
     return parsedValue && this->parseEOSToken();
 }
+
+template <>
+bool SkSVGAttributeParser::parse(SkSVGBlendMode* blendMode) {
+    static constexpr std::tuple<const char*, SkBlendMode> gBlendModeMap[] = {
+        {"normal"     , SkBlendMode::kSrcOver},
+        {"multiply"   , SkBlendMode::kMultiply},
+        {"screen"     , SkBlendMode::kScreen},
+        {"overlay"    , SkBlendMode::kOverlay},
+        {"darken"     , SkBlendMode::kDarken},
+        {"lighten"    , SkBlendMode::kLighten},
+        {"color-dodge", SkBlendMode::kColorDodge},
+        {"color-burn" , SkBlendMode::kColorBurn},
+        {"hard-light" , SkBlendMode::kHardLight},
+        {"soft-light" , SkBlendMode::kSoftLight},
+        {"difference" , SkBlendMode::kDifference},
+        {"exclusion"  , SkBlendMode::kExclusion},
+        {"hue"        , SkBlendMode::kHue},
+        {"saturation" , SkBlendMode::kSaturation},
+        {"color"      , SkBlendMode::kColor},
+        {"luminosity" , SkBlendMode::kLuminosity}
+    };
+
+    bool parsedValue = false;
+    SkBlendMode mode;
+         
+    if (this->parseEnumMap(gBlendModeMap, &mode)) {
+        *blendMode = SkSVGBlendMode(mode);
+        parsedValue = true;
+    }
+
+    return parsedValue && this->parseEOSToken();
+}

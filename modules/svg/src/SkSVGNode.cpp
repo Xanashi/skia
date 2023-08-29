@@ -111,6 +111,7 @@ bool SkSVGNode::parseAndSetAttribute(const char* n, const char* v) {
            || PARSE_AND_SET("font-weight"                , FontWeight)
            || PARSE_AND_SET("lighting-color"             , LightingColor)
            || PARSE_AND_SET("mask"                       , Mask)
+           || PARSE_AND_SET("mix-blend-mode"             , BlendMode)
            || PARSE_AND_SET("opacity"                    , Opacity)
            || PARSE_AND_SET("stop-color"                 , StopColor)
            || PARSE_AND_SET("stop-opacity"               , StopOpacity)

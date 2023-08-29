@@ -8,6 +8,7 @@
 #ifndef SkSVGTypes_DEFINED
 #define SkSVGTypes_DEFINED
 
+#include "include/core/SkBlendMode.h"
 #include "include/core/SkColor.h"
 #include "include/core/SkMatrix.h"
 #include "include/core/SkPath.h"
@@ -709,6 +710,20 @@ struct SK_API SkSVGFeTurbulenceType {
 
     SkSVGFeTurbulenceType() : fType(kTurbulence) {}
     explicit SkSVGFeTurbulenceType(Type type) : fType(type) {}
+};
+
+class SkSVGBlendMode {
+public:
+    SkSVGBlendMode() : fBlendMode(SkBlendMode::kSrcOver) {}
+    explicit SkSVGBlendMode(SkBlendMode b) : fBlendMode(b) {}
+
+    bool operator==(const SkSVGBlendMode& other) const { return fBlendMode == other.fBlendMode; }
+    bool operator!=(const SkSVGBlendMode& other) const { return !(*this == other); }
+
+    SkBlendMode blendMode() const { return fBlendMode; }
+
+private:
+    SkBlendMode fBlendMode;
 };
 
 enum class SkSVGXmlSpace {

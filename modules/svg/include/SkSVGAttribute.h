@@ -96,6 +96,7 @@ struct SkSVGPresentationAttributes {
     SkSVGProperty<SkSVGFontSize  , true> fFontSize;
     SkSVGProperty<SkSVGFontWeight, true> fFontWeight;
     SkSVGProperty<SkSVGTextAnchor, true> fTextAnchor;
+    SkSVGProperty<SkSVGBlendMode    , true> fBlendMode;
 
     // uninherited
     SkSVGProperty<SkSVGNumberType, false> fOpacity;

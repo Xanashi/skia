@@ -7,6 +7,7 @@
 
 #include "modules/svg/include/SkSVGRenderContext.h"
 
+#include "include/core/SkBlendMode.h"
 #include "include/core/SkCanvas.h"
 #include "include/core/SkImageFilter.h"
 #include "include/core/SkPath.h"
@@ -232,6 +233,7 @@ void SkSVGRenderContext::applyPresentationAttributes(const SkSVGPresentationAttr
     ApplyLazyInheritedAttribute(StrokeOpacity);
     ApplyLazyInheritedAttribute(StrokeWidth);
     ApplyLazyInheritedAttribute(TextAnchor);
+    ApplyLazyInheritedAttribute(BlendMode);
     ApplyLazyInheritedAttribute(Visibility);
     ApplyLazyInheritedAttribute(Color);
     ApplyLazyInheritedAttribute(ColorInterpolation);
@@ -424,6 +426,11 @@ SkTLazy<SkPaint> SkSVGRenderContext::commonPaint(const SkSVGPaint& paint_selecto
     }
 
     p->setAntiAlias(true); // TODO: shape-rendering support
+
+    auto blendMode = fPresentationContext->fInherited.fBlendMode->blendMode();
+    if (blendMode != SkBlendMode::kSrcOver) {
+        p->setBlendMode(blendMode);
+    }
 
     // We observe 3 opacity components:
     //   - initial paint server opacity (e.g. color stop opacity)
