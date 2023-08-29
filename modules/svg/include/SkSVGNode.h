@@ -21,6 +21,9 @@ class SkSVGRenderContext;
 class SkSVGValue;
 
 enum class SkSVGTag {
+    kAnimate,
+    kAnimateTransform,
+    kAnimateMotion,
     kCircle,
     kClipPath,
     kDefs,

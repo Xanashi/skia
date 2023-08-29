@@ -45,3 +45,10 @@ SkPath SkSVGPath::onAsPath(const SkSVGRenderContext& ctx) const {
 SkRect SkSVGPath::onObjectBoundingBox(const SkSVGRenderContext& ctx) const {
     return fPath.computeTightBounds();
 }
+
+void SkSVGPath::onApplyAnimationNode(const SkSVGAnimate* node) {
+    if (fPath.isEmpty()) {
+        const auto [n, v] = node->getFirstAttributeValue();
+        setPath(SkSVGAttributeParser::parse<SkPath>("d", n.c_str(), v.c_str()));
+    }
+}

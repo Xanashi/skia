@@ -743,4 +743,10 @@ enum class SkSVGDisplay {
     kNone,
 };
 
+enum class SkSVGAnimationTag {
+    kAnimate,
+    kAnimateTransform,
+    kAnimateMotion
+};
+
 #endif // SkSVGTypes_DEFINED

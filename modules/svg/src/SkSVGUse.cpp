@@ -10,11 +10,22 @@
 #include "include/core/SkCanvas.h"
 #include "modules/svg/include/SkSVGRenderContext.h"
 #include "modules/svg/include/SkSVGValue.h"
+#include "modules/svg/include/SkSVGAnimate.h"
 
 SkSVGUse::SkSVGUse() : INHERITED(SkSVGTag::kUse) {}
 
-void SkSVGUse::appendChild(sk_sp<SkSVGNode>) {
-    SkDebugf("cannot append child nodes to this element.\n");
+void SkSVGUse::appendChild(sk_sp<SkSVGNode> node) {
+    if (node->tag() == SkSVGTag::kAnimateTransform) {
+        if (!isTransformSet()) {
+            const auto [n, v] = static_cast<const SkSVGAnimate*>(node.get())->getFirstAttributeValue();
+            auto parseResult = SkSVGAttributeParser::parse<SkSVGTransformType>(v.c_str());
+            if (parseResult.isValid()) {
+                this->setTransform(SkSVGTransformValue(*parseResult));
+            }        
+        }
+    } else {
+        SkDebugf("cannot append child nodes to an SVG Use element.\n");
+    }
 }
 
 bool SkSVGUse::parseAndSetAttribute(const char* n, const char* v) {

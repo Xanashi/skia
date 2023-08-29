@@ -33,6 +33,8 @@ protected:
 
     SkRect onObjectBoundingBox(const SkSVGRenderContext&) const override;
 
+    void onApplyAnimationNode(const SkSVGAnimate*) override;
+
 private:
     SkSVGCircle();
 

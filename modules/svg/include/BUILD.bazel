@@ -8,6 +8,7 @@ exports_files_legacy()
 skia_filegroup(
     name = "public_hdrs",
     srcs = [
+        "SkSVGAnimate.h",
         "SkSVGAttribute.h",
         "SkSVGAttributeParser.h",
         "SkSVGCircle.h",

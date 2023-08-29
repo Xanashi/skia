@@ -54,4 +54,13 @@ SkRect SkSVGCircle::onObjectBoundingBox(const SkSVGRenderContext& ctx) const {
     return SkRect::MakeXYWH(fPos.fX - fRad, fPos.fY - fRad, 2 * fRad, 2 * fRad);
 }
 
+void SkSVGCircle::onApplyAnimationNode(const SkSVGAnimate* node) {
+    const auto [n, v] = node->getFirstAttributeValue();
+    if (fCx.value() == 0) {
+        setCx(SkSVGAttributeParser::parse<SkSVGLength>("cx", n.c_str(), v.c_str()));
+    } else if (fCy.value() == 0) {
+        setCy(SkSVGAttributeParser::parse<SkSVGLength>("cy", n.c_str(), v.c_str()));
+    } else if (fR.value() == 0) {
+        setR(SkSVGAttributeParser::parse<SkSVGLength>("r", n.c_str(), v.c_str()));
+    }
 }

@@ -9,6 +9,7 @@
 #include "include/core/SkFontMgr.h"
 #include "include/core/SkString.h"
 #include "include/private/base/SkTo.h"
+#include "modules/svg/include/SkSVGAnimate.h"
 #include "modules/svg/include/SkSVGAttributeParser.h"
 #include "modules/svg/include/SkSVGCircle.h"
 #include "modules/svg/include/SkSVGClipPath.h"
@@ -236,6 +237,9 @@ SortedDictionaryEntry<AttrParseInfo> gAttributeParseInfo[] = {
 
 SortedDictionaryEntry<sk_sp<SkSVGNode>(*)()> gTagFactories[] = {
     { "a"                 , []() -> sk_sp<SkSVGNode> { return SkSVGG::Make();                  }},
+    { "animate"           , []() -> sk_sp<SkSVGNode> { return SkSVGAnimate::Make(SkSVGAnimationTag::kAnimate);          }},
+    { "animateTransform"  , []() -> sk_sp<SkSVGNode> { return SkSVGAnimate::Make(SkSVGAnimationTag::kAnimateTransform); }},
+    { "animateMotion"     , []() -> sk_sp<SkSVGNode> { return SkSVGAnimate::Make(SkSVGAnimationTag::kAnimateMotion);    }},
     { "circle"            , []() -> sk_sp<SkSVGNode> { return SkSVGCircle::Make();             }},
     { "clipPath"          , []() -> sk_sp<SkSVGNode> { return SkSVGClipPath::Make();           }},
     { "defs"              , []() -> sk_sp<SkSVGNode> { return SkSVGDefs::Make();               }},

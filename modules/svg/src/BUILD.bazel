@@ -14,6 +14,7 @@ skia_filegroup(
 skia_filegroup(
     name = "srcs",
     srcs = [
+        "SkSVGAnimate.cpp",
         "SkSVGAttribute.cpp",
         "SkSVGAttributeParser.cpp",
         "SkSVGCircle.cpp",

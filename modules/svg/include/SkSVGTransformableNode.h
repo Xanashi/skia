@@ -14,6 +14,7 @@
 class SK_API SkSVGTransformableNode : public SkSVGNode {
 public:
     void setTransform(const SkSVGTransformType& t) { fTransform = t; }
+    bool isTransformSet() const { return fTransform != SkMatrix::I(); }
 
 protected:
     SkSVGTransformableNode(SkSVGTag);

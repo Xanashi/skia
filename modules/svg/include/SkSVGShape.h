@@ -10,6 +10,7 @@
 
 #include "include/core/SkPath.h"
 #include "modules/svg/include/SkSVGTransformableNode.h"
+#include "modules/svg/include/SkSVGAnimate.h"
 
 class SkSVGLengthContext;
 class SkPaint;
@@ -23,6 +24,7 @@ protected:
 
     void onRender(const SkSVGRenderContext&) const final;
 
+    virtual void          onApplyAnimationNode(const SkSVGAnimate*) {}
 
     virtual const SkPath* onResolvePath(const SkSVGRenderContext&) const = 0; 
     virtual void          onDraw(SkCanvas*, const SkSVGLengthContext&, const SkPaint&,
