@@ -27,6 +27,7 @@ enum class SkSVGAttribute {
     kFillRule,
     kFilter,
     kFilterUnits,
+    kFont,
     kFontFamily,
     kFontSize,
     kFontStyle,

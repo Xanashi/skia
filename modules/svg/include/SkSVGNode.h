@@ -182,6 +182,7 @@ protected:
         return SkRect::MakeEmpty();
     }
 
+    bool setFontAttribute(const char* stringValue);
 private:
     SkSVGTag                    fTag;
 

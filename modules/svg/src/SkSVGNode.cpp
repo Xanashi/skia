@@ -14,6 +14,8 @@
 #include "modules/svg/include/SkSVGValue.h"
 #include "src/base/SkTLazy.h"
 
+#include <regex>
+
 SkSVGNode::SkSVGNode(SkSVGTag t) : fTag(t) {
     // Uninherited presentation attributes need a non-null default value.
     fPresentationAttributes.fStopColor.set(SkSVGColor(SK_ColorBLACK));
@@ -87,6 +89,42 @@ void SetInheritedByDefault(SkTLazy<T>& presentation_attribute, const T& value) {
     }
 }
 
+std::string cssNumPattern(R"((?:[-+]?(?:\d*\.\d+|\d+\.?)(?:[eE][-+]?\d+)?))");
+const std::regex fontPattern(
+        "(normal|italic)?\\s*"                                                   // font-style
+        "(normal|small-caps)?\\s*"                                               // font-variant
+        "(normal|bold|bolder|lighter|100|200|300|400|500|600|700|800|900)?\\s*"  // font-weight
+        "(" + cssNumPattern + "(?:px|cm|mm|em|ex|pt|pc|in)*)" +                  // font-size
+        "(?:\\/(normal|" + cssNumPattern + "))?\\s"                              // line-height
+        "+(.*)");                                                                // font-family
+
+bool SkSVGNode::setFontAttribute(const char* stringValue) {
+    std::smatch match;
+    std::string fontValue(stringValue);
+    if (std::regex_match(fontValue, match, fontPattern)) {
+        if (match[1].matched) {
+            this->parseAndSetAttribute("font-style", match[1].str().c_str());
+        }
+        if (match[2].matched) {
+            this->parseAndSetAttribute("font-variant", match[2].str().c_str());
+        }
+        if (match[3].matched) {
+            this->parseAndSetAttribute("font-weight", match[3].str().c_str());
+        }
+        if (match[4].matched) {
+            this->parseAndSetAttribute("font-size", match[4].str().c_str());
+        }
+        if (match[5].matched) {
+            this->parseAndSetAttribute("line-height", match[5].str().c_str());
+        }
+        if (match[6].matched) {
+            this->parseAndSetAttribute("font-family", match[6].str().c_str());
+        }
+        return true;
+    }
+    return false;
+}
+
 bool SkSVGNode::parseAndSetAttribute(const char* n, const char* v) {
 #define PARSE_AND_SET(svgName, attrName)                                                        \
     this->set##attrName(                                                                        \
@@ -97,6 +135,10 @@ bool SkSVGNode::parseAndSetAttribute(const char* n, const char* v) {
     if (!strcmp(n, "class")) {
         this->fClasses = future::StringUtil::split(v, ' ');
     }
+    if (!strcmp(n, "font")) {
+        return setFontAttribute(v);
+    }
+
     return PARSE_AND_SET(   "class"                      , Class)
            || PARSE_AND_SET("clip-path"                  , ClipPath)
            || PARSE_AND_SET("clip-rule"                  , ClipRule)
