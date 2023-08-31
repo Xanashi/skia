@@ -77,49 +77,50 @@ struct SkSVGPresentationAttributes {
 
     // TODO: SkSVGProperty adds an extra ptr per attribute; refactor to reduce overhead.
 
-    SkSVGProperty<SkSVGPaint     , true> fFill;
-    SkSVGProperty<SkSVGNumberType, true> fFillOpacity;
-    SkSVGProperty<SkSVGFillRule  , true> fFillRule;
-    SkSVGProperty<SkSVGFillRule  , true> fClipRule;
-
-    SkSVGProperty<SkSVGPaint     , true> fStroke;
-    SkSVGProperty<SkSVGDashArray , true> fStrokeDashArray;
-    SkSVGProperty<SkSVGLength    , true> fStrokeDashOffset;
-    SkSVGProperty<SkSVGLineCap   , true> fStrokeLineCap;
-    SkSVGProperty<SkSVGLineJoin  , true> fStrokeLineJoin;
-    SkSVGProperty<SkSVGNumberType, true> fStrokeMiterLimit;
-    SkSVGProperty<SkSVGNumberType, true> fStrokeOpacity;
-    SkSVGProperty<SkSVGLength    , true> fStrokeWidth;
-
-    SkSVGProperty<SkSVGVisibility, true> fVisibility;
-
-    SkSVGProperty<SkSVGColorType , true> fColor;
-    SkSVGProperty<SkSVGColorspace, true> fColorInterpolation;
-    SkSVGProperty<SkSVGColorspace, true> fColorInterpolationFilters;
-
-    SkSVGProperty<SkSVGFontFamily, true> fFontFamily;
-    SkSVGProperty<SkSVGFontStyle , true> fFontStyle;
-    SkSVGProperty<SkSVGFontSize  , true> fFontSize;
-    SkSVGProperty<SkSVGFontWeight, true> fFontWeight;
-    SkSVGProperty<SkSVGTextAnchor, true> fTextAnchor;
+    SkSVGProperty<SkSVGPaint        , true> fFill;
+    SkSVGProperty<SkSVGNumberType   , true> fFillOpacity;
+    SkSVGProperty<SkSVGFillRule     , true> fFillRule;
+    SkSVGProperty<SkSVGFillRule     , true> fClipRule;
     SkSVGProperty<SkSVGLength       , true> fCornerRadius;
+                                    
+    SkSVGProperty<SkSVGPaint        , true> fStroke;
+    SkSVGProperty<SkSVGDashArray    , true> fStrokeDashArray;
+    SkSVGProperty<SkSVGLength       , true> fStrokeDashOffset;
+    SkSVGProperty<SkSVGLineCap      , true> fStrokeLineCap;
+    SkSVGProperty<SkSVGLineJoin     , true> fStrokeLineJoin;
+    SkSVGProperty<SkSVGNumberType   , true> fStrokeMiterLimit;
+    SkSVGProperty<SkSVGNumberType   , true> fStrokeOpacity;
+    SkSVGProperty<SkSVGLength       , true> fStrokeWidth;
+                                    
     SkSVGProperty<SkSVGBlendMode    , true> fBlendMode;
+    SkSVGProperty<SkSVGVisibility   , true> fVisibility;
+                                    
+    SkSVGProperty<SkSVGColorType    , true> fColor;
+    SkSVGProperty<SkSVGColorspace   , true> fColorInterpolation;
+    SkSVGProperty<SkSVGColorspace   , true> fColorInterpolationFilters;
+                                    
+    SkSVGProperty<SkSVGFontFamily   , true> fFontFamily;
+    SkSVGProperty<SkSVGFontStyle    , true> fFontStyle;
+    SkSVGProperty<SkSVGFontSize     , true> fFontSize;
+    SkSVGProperty<SkSVGFontWeight   , true> fFontWeight;
+    SkSVGProperty<SkSVGTextAnchor   , true> fTextAnchor;
     SkSVGProperty<SkSVGTextTransform, true> fTextTransform;
 
     // uninherited
-    SkSVGProperty<SkSVGNumberType, false> fOpacity;
-    SkSVGProperty<SkSVGFuncIRI   , false> fClipPath;
-    SkSVGProperty<SkSVGDisplay   , false> fDisplay;
-    SkSVGProperty<SkSVGFuncIRI   , false> fMask;
-    SkSVGProperty<SkSVGFuncIRI   , false> fFilter;
-    SkSVGProperty<SkSVGColor     , false> fStopColor;
-    SkSVGProperty<SkSVGNumberType, false> fStopOpacity;
-    SkSVGProperty<SkSVGColor     , false> fFloodColor;
-    SkSVGProperty<SkSVGNumberType, false> fFloodOpacity;
-    SkSVGProperty<SkSVGColor     , false> fLightingColor;
     SkSVGProperty<SkSVGString       , false> fId;
     SkSVGProperty<SkSVGString       , false> fClass;
     SkSVGProperty<SkSVGString       , false> fStyle;
+                                    
+    SkSVGProperty<SkSVGNumberType   , false> fOpacity;
+    SkSVGProperty<SkSVGFuncIRI      , false> fClipPath;
+    SkSVGProperty<SkSVGDisplay      , false> fDisplay;
+    SkSVGProperty<SkSVGFuncIRI      , false> fMask;
+    SkSVGProperty<SkSVGFuncIRI      , false> fFilter;
+    SkSVGProperty<SkSVGColor        , false> fStopColor;
+    SkSVGProperty<SkSVGNumberType   , false> fStopOpacity;
+    SkSVGProperty<SkSVGColor        , false> fFloodColor;
+    SkSVGProperty<SkSVGNumberType   , false> fFloodOpacity;
+    SkSVGProperty<SkSVGColor        , false> fLightingColor;
                                     
 };
 
