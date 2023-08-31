@@ -331,7 +331,6 @@ void parse_node_attributes(const SkDOM& xmlDom, const SkDOM::Node* xmlNode,
         // We're handling id attributes out of band for now.
         if (!strcmp(name, "id")) {
             mapper->set(SkString(value), svgNode);
-            continue;
         }
         set_string_attribute(svgNode, name, value);
     }

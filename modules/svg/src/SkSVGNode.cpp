@@ -93,7 +93,12 @@ bool SkSVGNode::parseAndSetAttribute(const char* n, const char* v) {
             SkSVGAttributeParser::parseProperty<decltype(fPresentationAttributes.f##attrName)>( \
                     svgName, n, v))
 
-    return PARSE_AND_SET(   "clip-path"                  , ClipPath)
+
+    if (!strcmp(n, "class")) {
+        this->fClasses = future::StringUtil::split(v, ' ');
+    }
+    return PARSE_AND_SET(   "class"                      , Class)
+           || PARSE_AND_SET("clip-path"                  , ClipPath)
            || PARSE_AND_SET("clip-rule"                  , ClipRule)
            || PARSE_AND_SET("color"                      , Color)
            || PARSE_AND_SET("color-interpolation"        , ColorInterpolation)
@@ -109,6 +114,7 @@ bool SkSVGNode::parseAndSetAttribute(const char* n, const char* v) {
            || PARSE_AND_SET("font-family"                , FontFamily)
            || PARSE_AND_SET("font-size"                  , FontSize)
            || PARSE_AND_SET("font-style"                 , FontStyle)
+           || PARSE_AND_SET("id"                         , Id)
            || PARSE_AND_SET("font-weight"                , FontWeight)
            || PARSE_AND_SET("lighting-color"             , LightingColor)
            || PARSE_AND_SET("mask"                       , Mask)
@@ -124,6 +130,7 @@ bool SkSVGNode::parseAndSetAttribute(const char* n, const char* v) {
            || PARSE_AND_SET("stroke-miterlimit"          , StrokeMiterLimit)
            || PARSE_AND_SET("stroke-opacity"             , StrokeOpacity)
            || PARSE_AND_SET("stroke-width"               , StrokeWidth)
+           || PARSE_AND_SET("style"                      , Style)
            || PARSE_AND_SET("text-anchor"                , TextAnchor)
            || PARSE_AND_SET("visibility"                 , Visibility);
 

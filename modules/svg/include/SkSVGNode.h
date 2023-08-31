@@ -150,6 +150,10 @@ public:
     SVG_PRES_ATTR(FloodColor               , SkSVGColor     , false)
     SVG_PRES_ATTR(FloodOpacity             , SkSVGNumberType, false)
     SVG_PRES_ATTR(LightingColor            , SkSVGColor     , false)
+                                                               
+    SVG_PRES_ATTR(Class                    , SkSVGString       , false)
+    SVG_PRES_ATTR(Id                       , SkSVGString       , false)
+    SVG_PRES_ATTR(Style                    , SkSVGString       , false)
 
 protected:
     SkSVGNode(SkSVGTag);
@@ -180,6 +184,8 @@ protected:
 
 private:
     SkSVGTag                    fTag;
+
+    std::vector<std::string> fClasses;
 
     // FIXME: this should be sparse
     SkSVGPresentationAttributes fPresentationAttributes;

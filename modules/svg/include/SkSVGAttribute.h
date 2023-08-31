@@ -14,6 +14,7 @@
 class SkSVGRenderContext;
 
 enum class SkSVGAttribute {
+    kClass,
     kClipRule,
     kColor,
     kColorInterpolation,
@@ -36,6 +37,7 @@ enum class SkSVGAttribute {
     kGradientTransform,
     kHeight,
     kHref,
+    kId,
     kOpacity,
     kPoints,
     kPreserveAspectRatio,
@@ -51,6 +53,7 @@ enum class SkSVGAttribute {
     kStrokeLineJoin,
     kStrokeMiterLimit,
     kStrokeWidth,
+    kStyle,
     kTransform,
     kText,
     kTextAnchor,
@@ -111,6 +114,10 @@ struct SkSVGPresentationAttributes {
     SkSVGProperty<SkSVGColor     , false> fFloodColor;
     SkSVGProperty<SkSVGNumberType, false> fFloodOpacity;
     SkSVGProperty<SkSVGColor     , false> fLightingColor;
+    SkSVGProperty<SkSVGString       , false> fId;
+    SkSVGProperty<SkSVGString       , false> fClass;
+    SkSVGProperty<SkSVGString       , false> fStyle;
+                                    
 };
 
 #endif // SkSVGAttribute_DEFINED
