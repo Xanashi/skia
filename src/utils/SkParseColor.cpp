@@ -308,6 +308,12 @@ static constexpr struct ColorRec {
 };
 
 const char* SkParse::FindNamedColor(const char* name, size_t len, SkColor* color) {
+    std::string lcName;
+    for (int i = 0; name[i] != '\0'; i++) {
+        lcName += std::tolower(name[i]);
+    }
+
+    name = lcName.c_str();
     const auto rec = std::lower_bound(std::begin(gColorNames),
                                       std::end  (gColorNames),
                                       name, // key
