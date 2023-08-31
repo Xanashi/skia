@@ -83,6 +83,7 @@ static constexpr const char* gColorNames[] = {
     "lightcoral",
     "lightcyan",
     "lightgoldenrodyellow",
+    "lightgray",
     "lightgreen",
     "lightgrey",
     "lightpink",
@@ -142,6 +143,7 @@ static constexpr const char* gColorNames[] = {
     "skyblue",
     "slateblue",
     "slategray",
+    "slategrey",
     "snow",
     "springgreen",
     "steelblue",
@@ -228,6 +230,7 @@ static constexpr struct ColorRec {
     { 0xf0,0x80,0x80 }, // lightcoral
     { 0xe0,0xff,0xff }, // lightcyan
     { 0xfa,0xfa,0xd2 }, // lightgoldenrodyellow
+    { 0xd3,0xd3,0xd3 }, // lightgray
     { 0x90,0xee,0x90 }, // lightgreen
     { 0xd3,0xd3,0xd3 }, // lightgrey
     { 0xff,0xb6,0xc1 }, // lightpink
@@ -287,6 +290,7 @@ static constexpr struct ColorRec {
     { 0x87,0xce,0xeb }, // skyblue
     { 0x6a,0x5a,0xcd }, // slateblue
     { 0x70,0x80,0x90 }, // slategray
+    { 0x70,0x80,0x90 }, // slategrey
     { 0xff,0xfa,0xfa }, // snow
     { 0x00,0xff,0x7f }, // springgreen
     { 0x46,0x82,0xb4 }, // steelblue
