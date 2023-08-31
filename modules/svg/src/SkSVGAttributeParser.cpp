@@ -267,8 +267,13 @@ bool SkSVGAttributeParser::parseHexColorToken(SkColor* c) {
     SkParse::FindHex(hexString.c_str(), &v);
 
     switch (hexString.size()) {
+    case 8:
+        // matched #xxxxxxxxx | rgba
+        *c = ((v >> 8) & 0x00FFFFFF) | ((v << 24) & 0xFF000000);  // convert to argb
+        break;
     case 6:
         // matched #xxxxxxx
+        *c = v | 0xff000000;
         break;
     case 3:
         // matched '#xxx;
@@ -276,12 +281,12 @@ bool SkSVGAttributeParser::parseHexColorToken(SkColor* c) {
             ((v <<  8) & 0x000ff000) |
             ((v <<  4) & 0x00000ff0) |
             ((v <<  0) & 0x0000000f);
+        *c = v | 0xff000000;
         break;
     default:
         return false;
     }
 
-    *c = v | 0xff000000;
     fCurPos = hexEnd;
 
     restoreCurPos.clear();
