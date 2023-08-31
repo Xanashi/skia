@@ -1068,6 +1068,27 @@ bool SkSVGAttributeParser::parse(SkSVGTextAnchor* anchor) {
     return parsedValue && this->parseEOSToken();
 }
 
+// Not an officially supported SVG property
+template <>
+bool SkSVGAttributeParser::parse(SkSVGTextTransform* textTransform) {
+    static constexpr std::tuple<const char*, SkSVGTextTransform::Type> gTxtTranformMap[] = {
+        { "capitalize", SkSVGTextTransform::Type::kCapitalize },
+        { "uppercase" , SkSVGTextTransform::Type::kUppercase  },
+        { "lowercase" , SkSVGTextTransform::Type::kLowercase  },
+        { "none"      , SkSVGTextTransform::Type::kNone       },
+    };
+
+    bool parsedValue = false;
+    SkSVGTextTransform::Type type;
+
+    if (this->parseEnumMap(gTxtTranformMap, &type)) {
+        *textTransform = SkSVGTextTransform(type);
+        parsedValue = true;
+    }
+
+    return parsedValue && this->parseEOSToken();
+}
+
 // https://www.w3.org/TR/SVG11/coords.html#PreserveAspectRatioAttribute
 bool SkSVGAttributeParser::parsePreserveAspectRatio(SkSVGPreserveAspectRatio* par) {
     static constexpr std::tuple<const char*, SkSVGPreserveAspectRatio::Align> gAlignMap[] = {

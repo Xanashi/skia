@@ -632,6 +632,27 @@ private:
     Type fType;
 };
 
+class SK_API SkSVGTextTransform {
+public:
+    enum class Type {
+        kCapitalize,
+        kUppercase,
+        kLowercase,
+        kNone,
+    };
+
+    SkSVGTextTransform() : fType(Type::kNone) {}
+    explicit SkSVGTextTransform(Type t) : fType(t) {}
+
+    bool operator==(const SkSVGTextTransform& other) const { return fType == other.fType; }
+    bool operator!=(const SkSVGTextTransform& other) const { return !(*this == other); }
+
+    Type type() const { return fType; }
+
+private:
+    Type fType;
+};
+
 // https://www.w3.org/TR/SVG11/filters.html#FilterPrimitiveInAttribute
 class SK_API SkSVGFeInputType {
 public:

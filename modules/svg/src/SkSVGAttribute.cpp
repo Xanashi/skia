@@ -41,6 +41,7 @@ SkSVGPresentationAttributes SkSVGPresentationAttributes::MakeInitial() {
     result.fFontSize.init(SkSVGLength(24));
     result.fFontWeight.init(SkSVGFontWeight::Type::kNormal);
     result.fTextAnchor.init(SkSVGTextAnchor::Type::kStart);
+    result.fTextTransform.init(SkSVGTextTransform::Type::kNone);
 
     result.fDisplay.init(SkSVGDisplay::kInline);
 

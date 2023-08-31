@@ -58,6 +58,7 @@ enum class SkSVGAttribute {
     kTransform,
     kText,
     kTextAnchor,
+    kTextTransform,
     kViewBox,
     kVisibility,
     kWidth,
@@ -103,6 +104,7 @@ struct SkSVGPresentationAttributes {
     SkSVGProperty<SkSVGTextAnchor, true> fTextAnchor;
     SkSVGProperty<SkSVGLength       , true> fCornerRadius;
     SkSVGProperty<SkSVGBlendMode    , true> fBlendMode;
+    SkSVGProperty<SkSVGTextTransform, true> fTextTransform;
 
     // uninherited
     SkSVGProperty<SkSVGNumberType, false> fOpacity;

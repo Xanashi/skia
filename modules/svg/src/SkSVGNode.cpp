@@ -174,6 +174,7 @@ bool SkSVGNode::parseAndSetAttribute(const char* n, const char* v) {
            || PARSE_AND_SET("stroke-width"               , StrokeWidth)
            || PARSE_AND_SET("style"                      , Style)
            || PARSE_AND_SET("text-anchor"                , TextAnchor)
+           || PARSE_AND_SET("text-transform"             , TextTransform)
            || PARSE_AND_SET("visibility"                 , Visibility);
 
 #undef PARSE_AND_SET

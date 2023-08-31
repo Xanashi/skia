@@ -8,6 +8,7 @@
 #include "modules/svg/include/SkSVGText.h"
 
 #include <limits>
+#include <iostream>
 
 #include "include/core/SkCanvas.h"
 #include "include/core/SkContourMeasure.h"
@@ -294,10 +295,24 @@ void SkSVGTextContext::shapeFragment(const SkString& txt, const SkSVGRenderConte
         }
         return ch;
     };
+    auto transformChar = [](SkUnichar ch, bool firstChar, SkSVGTextTransform::Type transform) 
+        -> SkUnichar {
+        // Convert newline and tab chars to space.
+        if (transform == SkSVGTextTransform::Type::kUppercase || 
+            (transform == SkSVGTextTransform::Type::kCapitalize && firstChar)) {
+            ch = std::toupper(ch);
+        } else if (transform == SkSVGTextTransform::Type::kLowercase) {
+            ch = std::tolower(ch);
+        }
+        return ch;
+    };
 
     // Stash paints for access from SkShaper callbacks.
     fCurrentFill   = ctx.fillPaint();
     fCurrentStroke = ctx.strokePaint();
+
+    bool firstChar = true;
+    const auto txtTransform = ctx.presentationContext().fInherited.fTextTransform->type();
 
     const auto font = ResolveFont(ctx);
     fShapeBuffer.reserve(txt.size());
@@ -314,6 +329,10 @@ void SkSVGTextContext::shapeFragment(const SkString& txt, const SkSVGRenderConte
         if (ch < 0) {
             // invalid utf or char filtered out
             continue;
+        }
+
+        if (txtTransform != SkSVGTextTransform::Type::kNone) {
+            ch = transformChar(ch, firstChar, txtTransform);            
         }
 
         SkASSERT(fPosResolver);
