@@ -316,6 +316,13 @@ bool set_string_attribute(const sk_sp<SkSVGNode>& node, const char* name, const 
     return true;
 }
 
+void apply_group_attributes(const sk_sp<SkSVGNode>& svgNode, SkSVGNode* parent) {
+    auto gNode = reinterpret_cast<SkSVGG*>(parent);
+    if (gNode && gNode->tag() == SkSVGTag::kG) {
+        gNode->applyAttributesToChild(svgNode);
+    }
+}
+
 void parse_node_attributes(const SkDOM& xmlDom, const SkDOM::Node* xmlNode,
                            const sk_sp<SkSVGNode>& svgNode, SkSVGIDMapper* mapper) {
     const char* name, *value;
@@ -373,6 +380,7 @@ sk_sp<SkSVGNode> construct_svg_node(const SkDOM& dom, const ConstructionContext&
         return nullptr;
     }
 
+    apply_group_attributes(node, ctx.fParent);
     parse_node_attributes(dom, xmlNode, node, ctx.fIDMapper);
 
     ConstructionContext localCtx(ctx, node);
