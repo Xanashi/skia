@@ -42,6 +42,7 @@ static constexpr const char* gColorNames[] = {
     "darkgoldenrod",
     "darkgray",
     "darkgreen",
+    "darkgrey",
     "darkkhaki",
     "darkmagenta",
     "darkolivegreen",
@@ -52,6 +53,7 @@ static constexpr const char* gColorNames[] = {
     "darkseagreen",
     "darkslateblue",
     "darkslategray",
+    "darkslategrey",
     "darkturquoise",
     "darkviolet",
     "deeppink",
@@ -69,6 +71,7 @@ static constexpr const char* gColorNames[] = {
     "gray",
     "green",
     "greenyellow",
+    "grey",
     "honeydew",
     "hotpink",
     "indianred",
@@ -91,6 +94,7 @@ static constexpr const char* gColorNames[] = {
     "lightseagreen",
     "lightskyblue",
     "lightslategray",
+    "lightslategrey",
     "lightsteelblue",
     "lightyellow",
     "lime",
@@ -189,6 +193,7 @@ static constexpr struct ColorRec {
     { 0xb8,0x86,0x0b }, // darkgoldenrod
     { 0xa9,0xa9,0xa9 }, // darkgray
     { 0x00,0x64,0x00 }, // darkgreen
+    { 0xa9,0xa9,0xa9 }, // darkgrey
     { 0xbd,0xb7,0x6b }, // darkkhaki
     { 0x8b,0x00,0x8b }, // darkmagenta
     { 0x55,0x6b,0x2f }, // darkolivegreen
@@ -199,6 +204,7 @@ static constexpr struct ColorRec {
     { 0x8f,0xbc,0x8f }, // darkseagreen
     { 0x48,0x3d,0x8b }, // darkslateblue
     { 0x2f,0x4f,0x4f }, // darkslategray
+    { 0x2f,0x4f,0x4f }, // darkslategrey
     { 0x00,0xce,0xd1 }, // darkturquoise
     { 0x94,0x00,0xd3 }, // darkviolet
     { 0xff,0x14,0x93 }, // deeppink
@@ -216,6 +222,7 @@ static constexpr struct ColorRec {
     { 0x80,0x80,0x80 }, // gray
     { 0x00,0x80,0x00 }, // green
     { 0xad,0xff,0x2f }, // greenyellow
+    { 0x80,0x80,0x80 }, // grey
     { 0xf0,0xff,0xf0 }, // honeydew
     { 0xff,0x69,0xb4 }, // hotpink
     { 0xcd,0x5c,0x5c }, // indianred
@@ -238,6 +245,7 @@ static constexpr struct ColorRec {
     { 0x20,0xb2,0xaa }, // lightseagreen
     { 0x87,0xce,0xfa }, // lightskyblue
     { 0x77,0x88,0x99 }, // lightslategray
+    { 0x77,0x88,0x99 }, // lightslategrey
     { 0xb0,0xc4,0xde }, // lightsteelblue
     { 0xff,0xff,0xe0 }, // lightyellow
     { 0x00,0xff,0x00 }, // lime
