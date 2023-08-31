@@ -19,8 +19,12 @@ class SK_API SkSVGShape : public SkSVGTransformableNode {
 public:
     void appendChild(sk_sp<SkSVGNode>) override;
 
+    SVG_ATTR(PathLength , SkSVGLength , SkSVGLength(0))
+
 protected:
     SkSVGShape(SkSVGTag);
+
+    bool parseAndSetAttribute(const char*, const char*) override;
 
     void onRender(const SkSVGRenderContext&) const final;
 
@@ -32,6 +36,8 @@ protected:
 
 private:
     using INHERITED = SkSVGTransformableNode;
+
+    SkScalar getPathLengthRatio(const SkPath*) const;
 };
 
 #endif // SkSVGShape_DEFINED

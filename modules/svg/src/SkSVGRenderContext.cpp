@@ -115,7 +115,8 @@ SkPaint::Join toSkJoin(const SkSVGLineJoin& join) {
 }
 
 static sk_sp<SkPathEffect> dash_effect(const SkSVGPresentationAttributes& props,
-                                       const SkSVGLengthContext& lctx) {
+                                       const SkSVGLengthContext& lctx, 
+                                       const SkScalar pathLengthRatio) {
     if (props.fStrokeDashArray->type() != SkSVGDashArray::Type::kDashArray) {
         return nullptr;
     }
@@ -124,7 +125,8 @@ static sk_sp<SkPathEffect> dash_effect(const SkSVGPresentationAttributes& props,
     const auto count = da.dashArray().size();
     STArray<128, SkScalar, true> intervals(count);
     for (const auto& dash : da.dashArray()) {
-        intervals.push_back(lctx.resolve(dash, SkSVGLengthContext::LengthType::kOther));
+        intervals.push_back(lctx.resolve(dash, SkSVGLengthContext::LengthType::kOther) *
+                            pathLengthRatio);
     }
 
     if (count & 1) {
@@ -137,7 +139,7 @@ static sk_sp<SkPathEffect> dash_effect(const SkSVGPresentationAttributes& props,
     SkASSERT((intervals.size() & 1) == 0);
 
     const auto phase = lctx.resolve(*props.fStrokeDashOffset,
-                                    SkSVGLengthContext::LengthType::kOther);
+                                    SkSVGLengthContext::LengthType::kOther) * pathLengthRatio;
 
     return SkDashPathEffect::Make(intervals.begin(), intervals.size(), phase);
 }
@@ -201,6 +203,12 @@ SkSVGRenderContext::BorrowedNode SkSVGRenderContext::findNodeById(const SkSVGIRI
         return BorrowedNode(nullptr);
     }
     return BorrowedNode(fIDMapper.find(iri.iri()));
+}
+
+void SkSVGRenderContext::setPathLengthRatio(const SkScalar ratio) const {
+    if (ratio != 1) {
+        fPathLengthRatio = ratio;
+    }
 }
 
 void SkSVGRenderContext::applyPresentationAttributes(const SkSVGPresentationAttributes& attrs,
@@ -485,7 +493,7 @@ SkTLazy<SkPaint> SkSVGRenderContext::strokePaint() const {
         p->setStrokeCap(toSkCap(*props.fStrokeLineCap));
         p->setStrokeJoin(toSkJoin(*props.fStrokeLineJoin));
         p->setStrokeMiter(*props.fStrokeMiterLimit);
-        p->setPathEffect(dash_effect(props, *fLengthContext));
+        p->setPathEffect(dash_effect(props, *fLengthContext, fPathLengthRatio));
     }
 
     return p;

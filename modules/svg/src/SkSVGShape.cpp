@@ -8,8 +8,16 @@
 #include "modules/svg/include/SkSVGRenderContext.h"
 #include "modules/svg/include/SkSVGShape.h"
 #include "include/core/SkPath.h"
+#include "include/core/SkPathMeasure.h"
 
 SkSVGShape::SkSVGShape(SkSVGTag t) : INHERITED(t) {}
+
+
+bool SkSVGShape::parseAndSetAttribute(const char* n, const char* v) {
+    return INHERITED::parseAndSetAttribute(n, v) ||
+           this->resolveShorthandMarker(n, v) ||
+           this->setPathLength(SkSVGAttributeParser::parse<SkSVGLength>("pathLength", n, v));
+}
 
 void SkSVGShape::appendChild(sk_sp<SkSVGNode> node) {
     auto tag = node->tag();
@@ -26,6 +34,9 @@ void SkSVGShape::onRender(const SkSVGRenderContext& ctx) const {
     // Perform geometry resolution in onResolvePath and cache it for the 2 below onDraw calls
     const SkPath* path = this->onResolvePath(ctx);
 
+    if (path) {
+        ctx.setPathLengthRatio(this->getPathLengthRatio(path));        
+    }
 
     const auto fillType  = ctx.presentationContext().fInherited.fFillRule->asFillType();
     const auto fillPaint = ctx.fillPaint(),
@@ -40,6 +51,14 @@ void SkSVGShape::onRender(const SkSVGRenderContext& ctx) const {
     }
 }
 
-void SkSVGShape::appendChild(sk_sp<SkSVGNode>) {
-    SkDebugf("cannot append child nodes to an SVG shape.\n");
+SkScalar SkSVGShape::getPathLengthRatio(const SkPath* path) const {
+    if (fPathLength.value() > 0) {
+        SkScalar computedPathLength = SkPathMeasure(*path, false).getLength();
+        if (computedPathLength > 0) {            
+            return computedPathLength / fPathLength.value();
+        }
+    }
+    return 1;
+}
+
 }

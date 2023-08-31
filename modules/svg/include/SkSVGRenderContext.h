@@ -87,6 +87,9 @@ public:
     enum ApplyFlags {
         kLeaf = 1 << 0, // the target node doesn't have descendants
     };
+
+    void setPathLengthRatio(const SkScalar ratio) const;
+
     void applyPresentationAttributes(const SkSVGPresentationAttributes&, uint32_t flags);
 
     // Scoped wrapper that temporarily clears the original node reference.
@@ -181,6 +184,7 @@ private:
 
     // Deferred opacity optimization for leaf nodes.
     float                                         fDeferredPaintOpacity = 1;
+    mutable float                                 fPathLengthRatio = 1;
 
     // Current object bounding box scope.
     const OBBScope                                fOBBScope;
