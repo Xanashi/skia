@@ -19,6 +19,7 @@
 #include "modules/svg/include/SkSVGFilter.h"
 #include "modules/svg/include/SkSVGMask.h"
 #include "modules/svg/include/SkSVGNode.h"
+#include "modules/svg/include/SkSVGRect.h"
 #include "modules/svg/include/SkSVGTypes.h"
 
 using namespace skia_private;
@@ -238,6 +239,7 @@ void SkSVGRenderContext::applyPresentationAttributes(const SkSVGPresentationAttr
     ApplyLazyInheritedAttribute(Color);
     ApplyLazyInheritedAttribute(ColorInterpolation);
     ApplyLazyInheritedAttribute(ColorInterpolationFilters);
+    ApplyLazyInheritedAttribute(CornerRadius);
 
 #undef ApplyLazyInheritedAttribute
 
@@ -250,6 +252,10 @@ void SkSVGRenderContext::applyPresentationAttributes(const SkSVGPresentationAttr
 
     if (attrs.fClipPath.isValue()) {
         this->applyClip(*attrs.fClipPath);
+    }
+
+    if (attrs.fCornerRadius.isValue()) {
+        this->applyCornerRadius(*attrs.fCornerRadius);
     }
 
     if (attrs.fMask.isValue()) {
@@ -349,6 +355,21 @@ void SkSVGRenderContext::applyClip(const SkSVGFuncIRI& clip) {
 
     fCanvas->clipPath(clipPath, true);
     fClipPath.set(clipPath);
+}
+
+void SkSVGRenderContext::applyCornerRadius(const SkSVGLength& radiusValue) {  
+    sk_sp<SkSVGClipPath> clipNode = SkSVGClipPath::Make();
+    sk_sp<SkSVGRect> rect = SkSVGRect::Make();
+
+    rect->setWidth(SkSVGLength(100, SkSVGLength::Unit::kPercentage));
+    rect->setHeight(SkSVGLength(100, SkSVGLength::Unit::kPercentage));
+    rect->setRx(radiusValue);
+
+    clipNode->appendChild(std::move(rect));
+    const SkPath clipPath = clipNode->resolveClip(*this);
+    this->saveOnce();
+
+    fCanvas->clipPath(clipPath, true);
 }
 
 void SkSVGRenderContext::applyMask(const SkSVGFuncIRI& mask) {

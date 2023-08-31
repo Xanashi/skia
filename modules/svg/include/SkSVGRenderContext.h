@@ -161,6 +161,7 @@ private:
     void applyOpacity(SkScalar opacity, uint32_t flags, bool hasFilter);
     void applyFilter(const SkSVGFuncIRI&);
     void applyClip(const SkSVGFuncIRI&);
+    void applyCornerRadius(const SkSVGLength&);
     void applyMask(const SkSVGFuncIRI&);
 
     SkTLazy<SkPaint> commonPaint(const SkSVGPaint&, float opacity) const;

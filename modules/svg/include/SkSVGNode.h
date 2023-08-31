@@ -137,6 +137,7 @@ public:
     SVG_PRES_ATTR(TextAnchor               , SkSVGTextAnchor, true)
     SVG_PRES_ATTR(Visibility               , SkSVGVisibility, true)
     SVG_PRES_ATTR(BlendMode                , SkSVGBlendMode    , true)
+    SVG_PRES_ATTR(CornerRadius             , SkSVGLength       , true)
 
     // not inherited
     SVG_PRES_ATTR(ClipPath                 , SkSVGFuncIRI   , false)

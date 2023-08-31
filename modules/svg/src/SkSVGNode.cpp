@@ -98,6 +98,7 @@ bool SkSVGNode::parseAndSetAttribute(const char* n, const char* v) {
            || PARSE_AND_SET("color"                      , Color)
            || PARSE_AND_SET("color-interpolation"        , ColorInterpolation)
            || PARSE_AND_SET("color-interpolation-filters", ColorInterpolationFilters)
+           || PARSE_AND_SET("border-radius"              , CornerRadius)
            || PARSE_AND_SET("display"                    , Display)
            || PARSE_AND_SET("fill"                       , Fill)
            || PARSE_AND_SET("fill-opacity"               , FillOpacity)

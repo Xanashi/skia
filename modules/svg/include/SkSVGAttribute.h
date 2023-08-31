@@ -18,6 +18,7 @@ enum class SkSVGAttribute {
     kColor,
     kColorInterpolation,
     kColorInterpolationFilters,
+    kCornerRadius,
     kCx, // <circle>, <ellipse>, <radialGradient>: center x position
     kCy, // <circle>, <ellipse>, <radialGradient>: center y position
     kFill,
@@ -96,6 +97,7 @@ struct SkSVGPresentationAttributes {
     SkSVGProperty<SkSVGFontSize  , true> fFontSize;
     SkSVGProperty<SkSVGFontWeight, true> fFontWeight;
     SkSVGProperty<SkSVGTextAnchor, true> fTextAnchor;
+    SkSVGProperty<SkSVGLength       , true> fCornerRadius;
     SkSVGProperty<SkSVGBlendMode    , true> fBlendMode;
 
     // uninherited

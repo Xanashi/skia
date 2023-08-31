@@ -14,6 +14,7 @@ SkSVGPresentationAttributes SkSVGPresentationAttributes::MakeInitial() {
     result.fFillOpacity.set(SkSVGNumberType(1));
     result.fFillRule.set(SkSVGFillRule(SkSVGFillRule::Type::kNonZero));
     result.fClipRule.set(SkSVGFillRule(SkSVGFillRule::Type::kNonZero));
+    result.fCornerRadius.set(SkSVGLength(0));
 
     result.fStroke.set(SkSVGPaint(SkSVGPaint::Type::kNone));
     result.fStrokeDashArray.set(SkSVGDashArray(SkSVGDashArray::Type::kNone));
