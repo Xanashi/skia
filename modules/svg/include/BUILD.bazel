@@ -22,6 +22,7 @@ skia_filegroup(
         "SkSVGFeColorMatrix.h",
         "SkSVGFeComposite.h",
         "SkSVGFeDisplacementMap.h",
+        "SkSVGFeDropShadow.h",
         "SkSVGFeFlood.h",
         "SkSVGFeGaussianBlur.h",
         "SkSVGFeImage.h",
