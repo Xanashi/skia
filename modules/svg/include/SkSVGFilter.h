@@ -33,6 +33,9 @@ private:
 
     bool parseAndSetAttribute(const char*, const char*) override;
 
+    /** Propagates any inherited presentation attributes in the given context. */
+    void applyProperties(SkSVGRenderContext*) const;
+
     using INHERITED = SkSVGHiddenContainer;
 };
 

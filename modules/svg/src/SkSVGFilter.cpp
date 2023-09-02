@@ -25,11 +25,17 @@ bool SkSVGFilter::parseAndSetAttribute(const char* name, const char* value) {
                    "primitiveUnits", name, value));
 }
 
+void SkSVGFilter::applyProperties(SkSVGRenderContext* ctx) const { this->onPrepareToRender(ctx); }
+
 sk_sp<SkImageFilter> SkSVGFilter::buildFilterDAG(const SkSVGRenderContext& ctx) const {
     sk_sp<SkImageFilter> filter;
     SkSVGFilterContext fctx(ctx.resolveOBBRect(fX, fY, fWidth, fHeight, fFilterUnits),
                             fPrimitiveUnits);
     SkSVGColorspace cs = SkSVGColorspace::kSRGB;
+
+    SkSVGRenderContext filterCtx(ctx);
+    this->applyProperties(&filterCtx);
+
     for (const auto& child : fChildren) {
         if (!SkSVGFe::IsFilterEffect(child)) {
             continue;
@@ -42,11 +48,11 @@ sk_sp<SkImageFilter> SkSVGFilter::buildFilterDAG(const SkSVGRenderContext& ctx) 
         // color-interpolation-filters). We call this explicitly here because the SkSVGFe
         // nodes do not participate in the normal onRender path, which is when property
         // propagation currently occurs.
-        SkSVGRenderContext localCtx(ctx);
+        SkSVGRenderContext localCtx(filterCtx);
         feNode.applyProperties(&localCtx);
 
         const SkRect filterSubregion = feNode.resolveFilterSubregion(localCtx, fctx);
-        cs = feNode.resolveColorspace(ctx, fctx);
+        cs = feNode.resolveColorspace(localCtx, fctx);
         filter = feNode.makeImageFilter(localCtx, fctx);
 
         if (!feResultType.isEmpty()) {
