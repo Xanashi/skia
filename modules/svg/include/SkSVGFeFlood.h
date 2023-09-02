@@ -21,6 +21,11 @@ protected:
 
     std::vector<SkSVGFeInputType> getInputs() const override { return {}; }
 
+    SkSVGColorspace resolveColorspace(const SkSVGRenderContext&,
+                                      const SkSVGFilterContext&) const override {
+        return SkSVGColorspace::kSRGB;
+    }
+
 private:
     SkSVGFeFlood() : INHERITED(SkSVGTag::kFeFlood) {}
 

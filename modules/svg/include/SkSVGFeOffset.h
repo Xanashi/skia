@@ -24,6 +24,11 @@ protected:
 
     std::vector<SkSVGFeInputType> getInputs() const override { return {this->getIn()}; }
 
+    SkSVGColorspace resolveColorspace(const SkSVGRenderContext&,
+                                      const SkSVGFilterContext&) const override {
+        return SkSVGColorspace::kSRGB;
+    }
+
     bool parseAndSetAttribute(const char*, const char*) override;
 
 private:
