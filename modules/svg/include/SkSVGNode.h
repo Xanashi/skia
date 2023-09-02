@@ -38,6 +38,8 @@ enum class SkSVGTag {
     kFeFlood,
     kFeGaussianBlur,
     kFeImage,
+    kFeMerge,
+    kFeMergeNode,
     kFeMorphology,
     kFeOffset,
     kFePointLight,

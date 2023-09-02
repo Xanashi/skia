@@ -33,6 +33,7 @@ skia_filegroup(
         "SkSVGFeImage.cpp",
         "SkSVGFeLightSource.cpp",
         "SkSVGFeLighting.cpp",
+        "SkSVGFeMerge.cpp",
         "SkSVGFeMorphology.cpp",
         "SkSVGFeOffset.cpp",
         "SkSVGFeTurbulence.cpp",
