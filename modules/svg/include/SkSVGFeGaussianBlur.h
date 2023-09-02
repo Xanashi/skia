@@ -13,11 +13,6 @@
 
 class SK_API SkSVGFeGaussianBlur : public SkSVGFe {
 public:
-    struct StdDeviation {
-        SkSVGNumberType fX;
-        SkSVGNumberType fY;
-    };
-
     static sk_sp<SkSVGFeGaussianBlur> Make() {
         return sk_sp<SkSVGFeGaussianBlur>(new SkSVGFeGaussianBlur());
     }

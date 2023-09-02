@@ -1194,6 +1194,18 @@ bool SkSVGAttributeParser::parse(SkSVGDisplay* display) {
     return parsedValue && this->parseEOSToken();
 }
 
+template <> 
+bool SkSVGAttributeParser::parse<StdDeviation>(StdDeviation* stdDeviation) {
+    std::vector<SkSVGNumberType> values;
+    if (!this->parse(&values)) {
+        return false;
+    }
+
+    stdDeviation->fX = values[0];
+    stdDeviation->fY = values.size() > 1 ? values[1] : values[0];
+    return true;
+}
+
 template <>
 bool SkSVGAttributeParser::parse(SkSVGBlendMode* blendMode) {
     static constexpr std::tuple<const char*, SkBlendMode> gBlendModeMap[] = {

@@ -747,6 +747,11 @@ private:
     SkBlendMode fBlendMode;
 };
 
+struct StdDeviation {
+    SkSVGNumberType fX;
+    SkSVGNumberType fY;
+};
+
 enum class SkSVGXmlSpace {
     kDefault,
     kPreserve,
