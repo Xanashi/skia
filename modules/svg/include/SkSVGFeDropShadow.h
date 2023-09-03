@@ -17,6 +17,10 @@ public:
         return sk_sp<SkSVGFeDropShadow>(new SkSVGFeDropShadow());
     }
 
+    sk_sp<SkSVGNode> makeShallowClone() const override {
+        return sk_sp<SkSVGFeDropShadow>(new SkSVGFeDropShadow(*this));
+    }
+
     SVG_ATTR(Dx, SkSVGNumberType, SkSVGNumberType(0))
     SVG_ATTR(Dy, SkSVGNumberType, SkSVGNumberType(0))
     SVG_ATTR(StdDeviation, StdDeviation, StdDeviation({0, 0}))
@@ -31,6 +35,8 @@ protected:
 
 private:
     SkSVGFeDropShadow() : INHERITED(SkSVGTag::kFeDropShadow) {}
+    SkSVGFeDropShadow(const SkSVGFeDropShadow& other) : INHERITED(other)
+        , fDx(other.fDx), fDy(other.fDy), fStdDeviation(other.fStdDeviation) {}
 
     SkColor resolveFloodColor(const SkSVGRenderContext&) const;
 

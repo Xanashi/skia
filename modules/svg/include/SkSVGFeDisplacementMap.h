@@ -19,6 +19,10 @@ public:
         return sk_sp<SkSVGFeDisplacementMap>(new SkSVGFeDisplacementMap());
     }
 
+    sk_sp<SkSVGNode> makeShallowClone() const override {
+        return sk_sp<SkSVGFeDisplacementMap>(new SkSVGFeDisplacementMap(*this));
+    }
+
     SkSVGColorspace resolveColorspace(const SkSVGRenderContext&,
                                       const SkSVGFilterContext&) const final;
 
@@ -39,6 +43,9 @@ protected:
 
 private:
     SkSVGFeDisplacementMap() : INHERITED(SkSVGTag::kFeDisplacementMap) {}
+    SkSVGFeDisplacementMap(const SkSVGFeDisplacementMap& other) : INHERITED(other)
+        , fIn2(other.fIn2) , fXChannelSelector(other.fXChannelSelector)
+        , fYChannelSelector(other.fYChannelSelector) , fScale(other.fScale) {}
 
     using INHERITED = SkSVGFe;
 };

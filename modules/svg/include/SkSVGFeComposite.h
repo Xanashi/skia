@@ -18,6 +18,10 @@ public:
         return sk_sp<SkSVGFeComposite>(new SkSVGFeComposite());
     }
 
+    sk_sp<SkSVGNode> makeShallowClone() const override {
+        return sk_sp<SkSVGFeComposite>(new SkSVGFeComposite(*this));
+    }
+
     SVG_ATTR(In2, SkSVGFeInputType, SkSVGFeInputType())
     SVG_ATTR(K1, SkSVGNumberType, SkSVGNumberType(0))
     SVG_ATTR(K2, SkSVGNumberType, SkSVGNumberType(0))
@@ -37,6 +41,9 @@ protected:
 
 private:
     SkSVGFeComposite() : INHERITED(SkSVGTag::kFeComposite) {}
+    SkSVGFeComposite(const SkSVGFeComposite& other) : INHERITED(other) 
+        , fIn2(other.fIn2), fK1(other.fK1), fK2(other.fK2), fK3(other.fK3)
+        , fK4(other.fK4), fOperator(other.fOperator) {}
 
     static SkBlendMode BlendModeForOperator(SkSVGFeCompositeOperator);
 

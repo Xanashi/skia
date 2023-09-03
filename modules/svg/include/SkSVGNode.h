@@ -117,6 +117,8 @@ public:
     // TODO: consolidate with existing setAttribute
     virtual bool parseAndSetAttribute(const char* name, const char* value);
 
+    virtual sk_sp<SkSVGNode> makeShallowClone() const = 0;
+
     // inherited
     SVG_PRES_ATTR(BlendMode                , SkSVGBlendMode    , true)
     SVG_PRES_ATTR(ClipRule                 , SkSVGFillRule     , true)
@@ -161,6 +163,7 @@ public:
 
 protected:
     SkSVGNode(SkSVGTag);
+    SkSVGNode(const SkSVGNode&);
 
     static SkMatrix ComputeViewboxMatrix(const SkRect&, const SkRect&, SkSVGPreserveAspectRatio);
 

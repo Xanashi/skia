@@ -18,6 +18,10 @@ public:
         return sk_sp<SkSVGFeColorMatrix>(new SkSVGFeColorMatrix());
     }
 
+    sk_sp<SkSVGNode> makeShallowClone() const override {
+        return sk_sp<SkSVGFeColorMatrix>(new SkSVGFeColorMatrix(*this));
+    }
+
     SVG_ATTR(Type, SkSVGFeColorMatrixType, SkSVGFeColorMatrixType(SkSVGFeColorMatrixType::kMatrix))
     SVG_ATTR(Values, SkSVGFeColorMatrixValues, SkSVGFeColorMatrixValues())
 
@@ -31,6 +35,8 @@ protected:
 
 private:
     SkSVGFeColorMatrix() : INHERITED(SkSVGTag::kFeColorMatrix) {}
+    SkSVGFeColorMatrix(const SkSVGFeColorMatrix& other) : INHERITED(other)
+        , fType(other.fType), fValues(other.fValues) {}
 
     SkColorMatrix makeMatrixForType() const;
 

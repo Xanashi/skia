@@ -25,6 +25,9 @@ public:
 
 protected:
     explicit SkSVGGradient(SkSVGTag t) : INHERITED(t) {}
+    SkSVGGradient(const SkSVGGradient& other) : INHERITED(other)
+        , fHref(other.fHref), fGradientTransform(other.fGradientTransform)
+        , fSpreadMethod(other.fSpreadMethod), fGradientUnits(other.fGradientUnits) {}
 
     bool parseAndSetAttribute(const char*, const char*) override;
 

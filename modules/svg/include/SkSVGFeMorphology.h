@@ -27,6 +27,10 @@ public:
         return sk_sp<SkSVGFeMorphology>(new SkSVGFeMorphology());
     }
 
+    sk_sp<SkSVGNode> makeShallowClone() const override { 
+        return sk_sp<SkSVGFeMorphology>(new SkSVGFeMorphology(*this));
+    }
+
     SVG_ATTR(Operator, Operator, Operator::kErode)
     SVG_ATTR(Radius  , Radius  , Radius({0, 0}))
 
@@ -40,6 +44,8 @@ protected:
 
 private:
     SkSVGFeMorphology() : INHERITED(SkSVGTag::kFeMorphology) {}
+    SkSVGFeMorphology(const SkSVGFeMorphology& other) : INHERITED(other)
+        , fOperator(other.fOperator), fRadius(other.fRadius)  {}
 
     using INHERITED = SkSVGFe;
 };

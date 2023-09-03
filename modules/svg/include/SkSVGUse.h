@@ -18,6 +18,10 @@
 class SK_API SkSVGUse final : public SkSVGTransformableNode {
 public:
     static sk_sp<SkSVGUse> Make() { return sk_sp<SkSVGUse>(new SkSVGUse()); }
+    
+    sk_sp<SkSVGNode> makeShallowClone() const override {
+        return sk_sp<SkSVGUse>(new SkSVGUse(*this));
+    }
 
     void appendChild(sk_sp<SkSVGNode>) override;
 
@@ -33,6 +37,8 @@ protected:
 
 private:
     SkSVGUse();
+    SkSVGUse(const SkSVGUse& other) : INHERITED(other)
+        , fX(other.fX), fY(other.fY), fHref(other.fHref) {}
 
     bool parseAndSetAttribute(const char*, const char*) override;
 

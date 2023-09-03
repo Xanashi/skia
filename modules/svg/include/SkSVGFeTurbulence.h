@@ -17,6 +17,10 @@ public:
         return sk_sp<SkSVGFeTurbulence>(new SkSVGFeTurbulence());
     }
 
+    sk_sp<SkSVGNode> makeShallowClone() const override {
+        return sk_sp<SkSVGFeTurbulence>(new SkSVGFeTurbulence(*this));
+    }
+
     SVG_ATTR(BaseFrequency, SkSVGFeTurbulenceBaseFrequency, SkSVGFeTurbulenceBaseFrequency({}))
     SVG_ATTR(NumOctaves, SkSVGIntegerType, SkSVGIntegerType(1))
     SVG_ATTR(Seed, SkSVGNumberType, SkSVGNumberType(0))
@@ -33,6 +37,9 @@ protected:
     bool parseAndSetAttribute(const char*, const char*) override;
 private:
     SkSVGFeTurbulence() : INHERITED(SkSVGTag::kFeTurbulence) {}
+    SkSVGFeTurbulence(const SkSVGFeTurbulence& other) : INHERITED(other)
+        , fBaseFrequency(other.fBaseFrequency), fNumOctaves(other.fNumOctaves)
+        , fSeed(other.fSeed), fTurbulenceType(other.fTurbulenceType) {}
 
     using INHERITED = SkSVGFe;
 };

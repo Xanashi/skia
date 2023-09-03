@@ -17,6 +17,10 @@ public:
         return sk_sp<SkSVGClipPath>(new SkSVGClipPath());
     }
 
+    sk_sp<SkSVGNode> makeShallowClone() const override { 
+        return sk_sp<SkSVGClipPath>(new SkSVGClipPath(*this));
+    }
+
     SVG_ATTR(ClipPathUnits, SkSVGObjectBoundingBoxUnits,
              SkSVGObjectBoundingBoxUnits(SkSVGObjectBoundingBoxUnits::Type::kUserSpaceOnUse))
 
@@ -24,6 +28,8 @@ private:
     friend class SkSVGRenderContext;
 
     SkSVGClipPath();
+    SkSVGClipPath(const SkSVGClipPath& other) : INHERITED(other)
+        , fClipPathUnits(other.fClipPathUnits) {}
 
     bool parseAndSetAttribute(const char*, const char*) override;
 

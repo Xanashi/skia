@@ -15,6 +15,9 @@ class SK_API SkSVGFeBlend : public SkSVGFe {
 public:
     static sk_sp<SkSVGFeBlend> Make() { return sk_sp<SkSVGFeBlend>(new SkSVGFeBlend()); }
 
+    sk_sp<SkSVGNode> makeShallowClone() const override {
+        return sk_sp<SkSVGFeBlend>(new SkSVGFeBlend(*this));
+    }
 
     SVG_ATTR(Mode, SkSVGBlendMode, SkSVGBlendMode())
     SVG_ATTR(In2 , SkSVGFeInputType, SkSVGFeInputType())
@@ -31,6 +34,8 @@ protected:
 
 private:
     SkSVGFeBlend() : INHERITED(SkSVGTag::kFeBlend) {}
+    SkSVGFeBlend(const SkSVGFeBlend& other) : INHERITED(other)
+        , fMode(other.fMode), fIn2(other.fIn2) {}
 
     using INHERITED = SkSVGFe;
 };

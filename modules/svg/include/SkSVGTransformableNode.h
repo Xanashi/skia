@@ -18,6 +18,8 @@ public:
 
 protected:
     SkSVGTransformableNode(SkSVGTag);
+    SkSVGTransformableNode(const SkSVGTransformableNode& other) : INHERITED(other)
+        , fTransform(other.fTransform) {}
 
     bool onPrepareToRender(SkSVGRenderContext*) const override;
 

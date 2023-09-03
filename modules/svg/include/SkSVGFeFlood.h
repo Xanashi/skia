@@ -15,6 +15,10 @@ class SK_API SkSVGFeFlood : public SkSVGFe {
 public:
     static sk_sp<SkSVGFeFlood> Make() { return sk_sp<SkSVGFeFlood>(new SkSVGFeFlood()); }
 
+    sk_sp<SkSVGNode> makeShallowClone() const override { 
+        return sk_sp<SkSVGFeFlood>(new SkSVGFeFlood(*this));
+    }
+
 protected:
     sk_sp<SkImageFilter> onMakeImageFilter(const SkSVGRenderContext&,
                                            const SkSVGFilterContext&) const override;
@@ -28,6 +32,7 @@ protected:
 
 private:
     SkSVGFeFlood() : INHERITED(SkSVGTag::kFeFlood) {}
+    SkSVGFeFlood(const SkSVGFeFlood& other) : INHERITED(other) {}
 
     SkColor resolveFloodColor(const SkSVGRenderContext&) const;
 

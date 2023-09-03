@@ -17,6 +17,10 @@ class SK_API SkSVGLine final : public SkSVGShape {
 public:
     static sk_sp<SkSVGLine> Make() { return sk_sp<SkSVGLine>(new SkSVGLine()); }
 
+    sk_sp<SkSVGNode> makeShallowClone() const override {
+        return sk_sp<SkSVGLine>(new SkSVGLine(*this));
+    }
+
     SVG_ATTR(X1, SkSVGLength, SkSVGLength(0))
     SVG_ATTR(Y1, SkSVGLength, SkSVGLength(0))
     SVG_ATTR(X2, SkSVGLength, SkSVGLength(0))
@@ -34,6 +38,9 @@ protected:
 
 private:
     SkSVGLine();
+    SkSVGLine(const SkSVGLine& other) : INHERITED(other)
+        , fX1(other.fX1), fY1(other.fY1), fX2(other.fX2), fY2(other.fY2)
+        , fP0(other.fP0), fP1(other.fP1), fPath(other.fPath) {}
 
     // resolve and return the two endpoints
     std::tuple<SkPoint, SkPoint> resolve(const SkSVGLengthContext&) const;

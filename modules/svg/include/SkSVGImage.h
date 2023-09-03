@@ -21,6 +21,10 @@ public:
         return sk_sp<SkSVGImage>(new SkSVGImage());
     }
 
+    sk_sp<SkSVGNode> makeShallowClone() const override {
+        return sk_sp<SkSVGImage>(new SkSVGImage(*this));
+    }
+
     void appendChild(sk_sp<SkSVGNode>) override {
         SkDebugf("cannot append child nodes to this element.\n");
     }
@@ -51,6 +55,9 @@ protected:
 
 private:
     SkSVGImage() : INHERITED(SkSVGTag::kImage) {}
+    SkSVGImage(const SkSVGImage& other) : INHERITED(other)
+        , fX(other.fX), fY(other.fY), fWidth(other.fWidth), fHeight(other.fHeight)
+        , fHref(other.fHref), fPreserveAspectRatio(other.fPreserveAspectRatio) {}
 
     using INHERITED = SkSVGTransformableNode;
 };

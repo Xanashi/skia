@@ -15,6 +15,10 @@ class SK_API SkSVGFilter final : public SkSVGHiddenContainer {
 public:
     static sk_sp<SkSVGFilter> Make() { return sk_sp<SkSVGFilter>(new SkSVGFilter()); }
 
+    sk_sp<SkSVGNode> makeShallowClone() const override {
+        return sk_sp<SkSVGFilter>(new SkSVGFilter(*this));
+    }
+
     sk_sp<SkImageFilter> buildFilterDAG(const SkSVGRenderContext&) const;
 
     SVG_ATTR(X, SkSVGLength, SkSVGLength(-10, SkSVGLength::Unit::kPercentage))
@@ -30,6 +34,9 @@ public:
 
 private:
     SkSVGFilter() : INHERITED(SkSVGTag::kFilter) {}
+    SkSVGFilter(const SkSVGFilter& other) : INHERITED(other) 
+        , fX(other.fX), fY(other.fY), fWidth(other.fWidth), fHeight(other.fHeight)
+        , fFilterUnits(other.fFilterUnits), fPrimitiveUnits(other.fPrimitiveUnits) {}
 
     bool parseAndSetAttribute(const char*, const char*) override;
 

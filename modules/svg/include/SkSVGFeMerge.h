@@ -19,6 +19,10 @@ public:
         return sk_sp<SkSVGFeMerge>(new SkSVGFeMerge());
     }
 
+    sk_sp<SkSVGNode> makeShallowClone() const override {
+        return sk_sp<SkSVGFeMerge>(new SkSVGFeMerge(*this));
+    }
+
 protected:
     void appendChild(sk_sp<SkSVGNode>) override;
 
@@ -29,6 +33,7 @@ protected:
 
 private:
     SkSVGFeMerge() : INHERITED(SkSVGTag::kFeMerge) {}
+    SkSVGFeMerge(const SkSVGFeMerge& other) : INHERITED(other) {}
 
     std::vector<sk_sp<SkSVGNode>> fMergeNodes;
 
@@ -39,6 +44,10 @@ class SK_API SkSVGFeMergeNode final : public SkSVGFe {
 public:
     static sk_sp<SkSVGFeMergeNode> Make() {
         return sk_sp<SkSVGFeMergeNode>(new SkSVGFeMergeNode());
+    }
+
+    sk_sp<SkSVGNode> makeShallowClone() const override {
+        return sk_sp<SkSVGFeMergeNode>(new SkSVGFeMergeNode(*this));
     }
 
     SkSVGFeInputType getInput() const { return this->getIn(); }
@@ -61,6 +70,7 @@ protected:
 
 private:
     SkSVGFeMergeNode() : INHERITED(SkSVGTag::kFeMergeNode) {}
+    SkSVGFeMergeNode(const SkSVGFeMergeNode& other) : INHERITED(other) {}
 
     using INHERITED = SkSVGFe;
 };

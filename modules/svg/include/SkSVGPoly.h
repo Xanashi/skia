@@ -22,6 +22,10 @@ public:
         return sk_sp<SkSVGPoly>(new SkSVGPoly(SkSVGTag::kPolyline));
     }
 
+    sk_sp<SkSVGNode> makeShallowClone() const override {
+        return sk_sp<SkSVGPoly>(new SkSVGPoly(*this));
+    }
+
     SVG_ATTR(Points, SkSVGPointsType, SkSVGPointsType())
 
 protected:
@@ -38,6 +42,8 @@ protected:
 
 private:
     SkSVGPoly(SkSVGTag);
+    SkSVGPoly(const SkSVGPoly& other) : INHERITED(other)
+        , fPoints(other.fPoints), fPath(other.fPath) {}
 
     mutable SkPath fPath;  // mutated in onDraw(), to apply inherited fill types.
 

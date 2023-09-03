@@ -22,6 +22,10 @@ public:
     };
     static sk_sp<SkSVGSVG> Make(Type t = Type::kInner) { return sk_sp<SkSVGSVG>(new SkSVGSVG(t)); }
 
+    sk_sp<SkSVGNode> makeShallowClone() const override {
+        return sk_sp<SkSVGSVG>(new SkSVGSVG(*this));
+    }
+
     SVG_ATTR(X                  , SkSVGLength, SkSVGLength(0))
     SVG_ATTR(Y                  , SkSVGLength, SkSVGLength(0))
     SVG_ATTR(Width              , SkSVGLength, SkSVGLength(100, SkSVGLength::Unit::kPercentage))
@@ -44,6 +48,11 @@ private:
         : INHERITED(SkSVGTag::kSvg)
         , fType(t)
     {}
+
+    SkSVGSVG(const SkSVGSVG& other) : INHERITED(other)
+        , fX(other.fX), fY(other.fY), fWidth(other.fWidth), fHeight(other.fHeight)
+        , fPreserveAspectRatio(other.fPreserveAspectRatio), fViewBox(other.fViewBox)
+        , fType(other.fType) {}
 
     // Some attributes behave differently for the outermost svg element.
     const Type fType;

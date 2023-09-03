@@ -19,6 +19,10 @@ public:
         return sk_sp<SkSVGPattern>(new SkSVGPattern());
     }
 
+    sk_sp<SkSVGNode> makeShallowClone() const override {
+        return sk_sp<SkSVGPattern>(new SkSVGPattern(*this));
+    }
+
     SVG_ATTR(Href, SkSVGIRI, SkSVGIRI())
     SVG_OPTIONAL_ATTR(X                  , SkSVGLength)
     SVG_OPTIONAL_ATTR(Y                  , SkSVGLength)
@@ -33,6 +37,11 @@ public:
 
 protected:
     SkSVGPattern();
+    SkSVGPattern(const SkSVGPattern& other) : INHERITED(other) 
+        , fHref(other.fHref), fX(other.fX), fY(other.fY), fWidth(other.fWidth)
+        , fHeight(other.fHeight), fPatternTransform(other.fPatternTransform) 
+        , fPatternContentUnits(other.fPatternContentUnits), fPatternUnits(other.fPatternUnits)
+        , fPreserveAspectRatio(other.fPreserveAspectRatio), fViewBox(other.fViewBox) {}
 
     bool parseAndSetAttribute(const char*, const char*) override;
     void onSetAttribute(SkSVGAttribute, const SkSVGValue&) override;

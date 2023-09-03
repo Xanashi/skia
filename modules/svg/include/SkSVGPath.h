@@ -15,6 +15,10 @@ class SK_API SkSVGPath final : public SkSVGShape {
 public:
     static sk_sp<SkSVGPath> Make() { return sk_sp<SkSVGPath>(new SkSVGPath()); }
 
+    sk_sp<SkSVGNode> makeShallowClone() const override {
+        return sk_sp<SkSVGPath>(new SkSVGPath(*this));
+    }
+
     SVG_ATTR(Path, SkPath, SkPath())
 
 protected:
@@ -33,6 +37,7 @@ protected:
 
 private:
     SkSVGPath();
+    SkSVGPath(const SkSVGPath& other) : INHERITED(other), fPath(other.fPath) {}
 
     using INHERITED = SkSVGShape;
 };

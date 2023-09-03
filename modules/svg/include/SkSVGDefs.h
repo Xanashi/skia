@@ -14,8 +14,13 @@ class SK_API SkSVGDefs : public SkSVGHiddenContainer {
 public:
     static sk_sp<SkSVGDefs> Make() { return sk_sp<SkSVGDefs>(new SkSVGDefs()); }
 
+    sk_sp<SkSVGNode> makeShallowClone() const override {
+        return sk_sp<SkSVGDefs>(new SkSVGDefs(*this));
+    }
+
 private:
     SkSVGDefs() : INHERITED(SkSVGTag::kDefs) {}
+    SkSVGDefs(const SkSVGDefs& other) : INHERITED(other) {}
 
     using INHERITED = SkSVGHiddenContainer;
 };

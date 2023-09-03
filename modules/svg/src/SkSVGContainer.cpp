@@ -10,7 +10,12 @@
 #include "include/core/SkPath.h"
 #include "include/pathops/SkPathOps.h"
 
-SkSVGContainer::SkSVGContainer(SkSVGTag t) : INHERITED(t) { }
+SkSVGContainer::SkSVGContainer(SkSVGTag t) : INHERITED(t) {}
+SkSVGContainer::SkSVGContainer(const SkSVGContainer& other) : INHERITED(other) {
+    for (int i = 0; i < other.fChildren.size(); ++i) {
+        this->appendChild(other.fChildren[i]);
+    }
+}
 
 void SkSVGContainer::appendChild(sk_sp<SkSVGNode> node) {
     SkASSERT(node);

@@ -23,6 +23,7 @@ public:
 
 protected:
     SkSVGShape(SkSVGTag);
+    SkSVGShape(const SkSVGShape& other) : INHERITED(other), fPathLength(other.fPathLength) {}
 
     bool parseAndSetAttribute(const char*, const char*) override;
 

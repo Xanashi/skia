@@ -17,6 +17,10 @@ class SK_API SkSVGRect final : public SkSVGShape {
 public:
     static sk_sp<SkSVGRect> Make() { return sk_sp<SkSVGRect>(new SkSVGRect()); }
 
+    sk_sp<SkSVGNode> makeShallowClone() const override {
+        return sk_sp<SkSVGRect>(new SkSVGRect(*this));
+    }
+
     SVG_ATTR(X     , SkSVGLength, SkSVGLength(0))
     SVG_ATTR(Y     , SkSVGLength, SkSVGLength(0))
     SVG_ATTR(Width , SkSVGLength, SkSVGLength(0))
@@ -39,6 +43,10 @@ protected:
 
 private:
     SkSVGRect();
+    SkSVGRect(const SkSVGRect& other) : INHERITED(other)
+        , fX(other.fX), fY(other.fY), fWidth(other.fWidth)
+        , fHeight(other.fHeight), fRx(other.fRx), fRy(other.fRy)
+        , fRect(other.fRect), fPath(other.fPath) {}
 
     SkRRect resolve(const SkSVGLengthContext&) const;
 

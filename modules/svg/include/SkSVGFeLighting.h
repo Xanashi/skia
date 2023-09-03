@@ -27,6 +27,8 @@ public:
 
 protected:
     explicit SkSVGFeLighting(SkSVGTag t) : INHERITED(t) {}
+    SkSVGFeLighting(const SkSVGFeLighting& other) : INHERITED(other)
+        , fSurfaceScale(other.fSurfaceScale), fKernelUnitLength(other.fKernelUnitLength) {}
 
     std::vector<SkSVGFeInputType> getInputs() const final { return {this->getIn()}; }
 
@@ -65,6 +67,10 @@ public:
         return sk_sp<SkSVGFeSpecularLighting>(new SkSVGFeSpecularLighting());
     }
 
+    sk_sp<SkSVGNode> makeShallowClone() const override {
+        return sk_sp<SkSVGFeSpecularLighting>(new SkSVGFeSpecularLighting(*this));
+    }
+
     SVG_ATTR(SpecularConstant, SkSVGNumberType, 1)
     SVG_ATTR(SpecularExponent, SkSVGNumberType, 1)
 
@@ -85,6 +91,8 @@ protected:
 
 private:
     SkSVGFeSpecularLighting() : INHERITED(SkSVGTag::kFeSpecularLighting) {}
+    SkSVGFeSpecularLighting(const SkSVGFeSpecularLighting& other) : INHERITED(other) 
+        , fSpecularConstant(other.fSpecularConstant), fSpecularExponent(other.fSpecularExponent) {}
 
     using INHERITED = SkSVGFeLighting;
 };
@@ -93,6 +101,10 @@ class SkSVGFeDiffuseLighting final : public SkSVGFeLighting {
 public:
     static sk_sp<SkSVGFeDiffuseLighting> Make() {
         return sk_sp<SkSVGFeDiffuseLighting>(new SkSVGFeDiffuseLighting());
+    }
+
+    sk_sp<SkSVGNode> makeShallowClone() const override {
+        return sk_sp<SkSVGFeDiffuseLighting>(new SkSVGFeDiffuseLighting(*this));
     }
 
     SVG_ATTR(DiffuseConstant, SkSVGNumberType, 1)
@@ -114,6 +126,8 @@ protected:
 
 private:
     SkSVGFeDiffuseLighting() : INHERITED(SkSVGTag::kFeDiffuseLighting) {}
+    SkSVGFeDiffuseLighting(const SkSVGFeDiffuseLighting& other) : INHERITED(other)
+            , fDiffuseConstant(other.fDiffuseConstant) {}
 
     using INHERITED = SkSVGFeLighting;
 };

@@ -17,6 +17,9 @@ public:
         return sk_sp<SkSVGRadialGradient>(new SkSVGRadialGradient());
     }
 
+    sk_sp<SkSVGNode> makeShallowClone() const override {
+        return sk_sp<SkSVGRadialGradient>(new SkSVGRadialGradient(*this));
+    }
 
     SVG_OPTIONAL_ATTR(Cx, SkSVGLength)
     SVG_OPTIONAL_ATTR(Cy, SkSVGLength)
@@ -35,6 +38,8 @@ protected:
                                  const SkMatrix&) const override;
 private:
     SkSVGRadialGradient();
+    SkSVGRadialGradient(const SkSVGRadialGradient& other) : INHERITED(other)
+        , fCx(other.fCx), fCy(other.fCy), fR(other.fR), fFx(other.fFx), fFy(other.fFy) {}
 
     using INHERITED = SkSVGGradient;
 };

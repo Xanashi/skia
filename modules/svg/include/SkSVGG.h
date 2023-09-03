@@ -15,6 +15,10 @@ class SK_API SkSVGG : public SkSVGContainer {
 public:
     static sk_sp<SkSVGG> Make() { return sk_sp<SkSVGG>(new SkSVGG()); }
 
+    sk_sp<SkSVGNode> makeShallowClone() const override { 
+        return sk_sp<SkSVGG>(new SkSVGG(*this));
+    }
+
     void applyAttributesToChild(const sk_sp<SkSVGNode>& node) {
         for (const auto& a : attrs) {
             node->parseAndSetAttribute(a.first, a.second);
@@ -31,7 +35,8 @@ protected:
     }
 
 private:
-    SkSVGG() : INHERITED(SkSVGTag::kG) { }
+    SkSVGG() : INHERITED(SkSVGTag::kG) {}
+    SkSVGG(const SkSVGG& other) : INHERITED(other) {}
 
     using INHERITED = SkSVGContainer;
 

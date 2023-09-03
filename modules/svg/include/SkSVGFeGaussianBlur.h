@@ -17,6 +17,10 @@ public:
         return sk_sp<SkSVGFeGaussianBlur>(new SkSVGFeGaussianBlur());
     }
 
+    sk_sp<SkSVGNode> makeShallowClone() const override {
+        return sk_sp<SkSVGFeGaussianBlur>(new SkSVGFeGaussianBlur(*this));
+    }
+
     SVG_ATTR(StdDeviation, StdDeviation, StdDeviation({0, 0}))
 
 protected:
@@ -29,6 +33,8 @@ protected:
 
 private:
     SkSVGFeGaussianBlur() : INHERITED(SkSVGTag::kFeGaussianBlur) {}
+    SkSVGFeGaussianBlur(const SkSVGFeGaussianBlur& other) : INHERITED(other)
+        , fStdDeviation(other.fStdDeviation) {}
 
     using INHERITED = SkSVGFe;
 };

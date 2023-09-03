@@ -19,6 +19,9 @@ public:
         return sk_sp<SkSVGStop>(new SkSVGStop());
     }
 
+    sk_sp<SkSVGNode> makeShallowClone() const override {
+        return sk_sp<SkSVGStop>(new SkSVGStop(*this));
+    }
 
     SVG_ATTR(Offset, SkSVGLength, SkSVGLength(0, SkSVGLength::Unit::kPercentage))
 
@@ -27,6 +30,8 @@ protected:
 
 private:
     SkSVGStop();
+    SkSVGStop(const SkSVGStop& other) : INHERITED(other)
+        , fOffset(other.fOffset) {}
 
     using INHERITED = SkSVGHiddenContainer;
 };

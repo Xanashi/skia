@@ -15,6 +15,10 @@ class SK_API SkSVGFeOffset : public SkSVGFe {
 public:
     static sk_sp<SkSVGFeOffset> Make() { return sk_sp<SkSVGFeOffset>(new SkSVGFeOffset()); }
 
+    sk_sp<SkSVGNode> makeShallowClone() const override {
+        return sk_sp<SkSVGFeOffset>(new SkSVGFeOffset(*this));
+    }
+
     SVG_ATTR(Dx, SkSVGNumberType, SkSVGNumberType(0))
     SVG_ATTR(Dy, SkSVGNumberType, SkSVGNumberType(0))
 
@@ -33,6 +37,8 @@ protected:
 
 private:
     SkSVGFeOffset() : INHERITED(SkSVGTag::kFeOffset) {}
+    SkSVGFeOffset(const SkSVGFeOffset& other) : INHERITED(other)
+        , fDx(other.fDx), fDy(other.fDy) {}
 
     using INHERITED = SkSVGFe;
 };

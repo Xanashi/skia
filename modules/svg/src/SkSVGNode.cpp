@@ -25,6 +25,49 @@ SkSVGNode::SkSVGNode(SkSVGTag t) : fTag(t) {
     fPresentationAttributes.fLightingColor.set(SkSVGColor(SK_ColorWHITE));
 }
 
+SkSVGNode::SkSVGNode(const SkSVGNode& other) 
+    : fTag(other.fTag) {
+    auto pa = other.fPresentationAttributes;
+
+    this->setClass(pa.fClass);
+    this->setClipPath(pa.fClipPath);
+    this->setClipRule(pa.fClipRule);
+    this->setColor(pa.fColor);
+    this->setColorInterpolation(pa.fColorInterpolation);
+    this->setColorInterpolationFilters(pa.fColorInterpolationFilters);
+    this->setCornerRadius(pa.fCornerRadius);
+    this->setDisplay(pa.fDisplay);
+    this->setFill(pa.fFill);
+    this->setFillOpacity(pa.fFillOpacity);
+    this->setFillRule(pa.fFillRule);
+    this->setFilter(pa.fFilter);
+    this->setFloodColor(pa.fFloodColor);
+    this->setFloodOpacity(pa.fFloodOpacity);
+    this->setFontFamily(pa.fFontFamily);
+    this->setFontSize(pa.fFontSize);
+    this->setFontStyle(pa.fFontStyle);
+    this->setId(pa.fId);
+    this->setFontWeight(pa.fFontWeight);
+    this->setLightingColor(pa.fLightingColor);
+    this->setMask(pa.fMask);
+    this->setBlendMode(pa.fBlendMode);
+    this->setOpacity(pa.fOpacity);
+    this->setStopColor(pa.fStopColor);
+    this->setStopOpacity(pa.fStopOpacity);
+    this->setStroke(pa.fStroke);
+    this->setStrokeDashArray(pa.fStrokeDashArray);
+    this->setStrokeDashOffset(pa.fStrokeDashOffset);
+    this->setStrokeLineCap(pa.fStrokeLineCap);
+    this->setStrokeLineJoin(pa.fStrokeLineJoin);
+    this->setStrokeMiterLimit(pa.fStrokeMiterLimit);
+    this->setStrokeOpacity(pa.fStrokeOpacity);
+    this->setStrokeWidth(pa.fStrokeWidth);
+    this->setStyle(pa.fStyle);
+    this->setTextAnchor(pa.fTextAnchor);
+    this->setTextTransform(pa.fTextTransform);
+    this->setVisibility(pa.fVisibility);
+}
+
 SkSVGNode::~SkSVGNode() { }
 
 void SkSVGNode::render(const SkSVGRenderContext& ctx) const {

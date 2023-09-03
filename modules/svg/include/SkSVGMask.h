@@ -17,6 +17,10 @@ public:
         return sk_sp<SkSVGMask>(new SkSVGMask());
     }
 
+    sk_sp<SkSVGNode> makeShallowClone() const override {
+        return sk_sp<SkSVGMask>(new SkSVGMask(*this));
+    }
+
     SVG_ATTR(X     , SkSVGLength, SkSVGLength(-10, SkSVGLength::Unit::kPercentage))
     SVG_ATTR(Y     , SkSVGLength, SkSVGLength(-10, SkSVGLength::Unit::kPercentage))
     SVG_ATTR(Width , SkSVGLength, SkSVGLength(120, SkSVGLength::Unit::kPercentage))
@@ -31,6 +35,9 @@ private:
     friend class SkSVGRenderContext;
 
     SkSVGMask() : INHERITED(SkSVGTag::kMask) {}
+    SkSVGMask(const SkSVGMask& other) : INHERITED(other)         
+        , fX(other.fX), fY(other.fY), fWidth(other.fWidth), fHeight(other.fHeight)
+        , fMaskUnits(other.fMaskUnits), fMaskContentUnits(other.fMaskContentUnits) {}
 
     bool parseAndSetAttribute(const char*, const char*) override;
 

@@ -17,6 +17,10 @@ class SK_API SkSVGEllipse final : public SkSVGShape {
 public:
     static sk_sp<SkSVGEllipse> Make() { return sk_sp<SkSVGEllipse>(new SkSVGEllipse()); }
 
+    sk_sp<SkSVGNode> makeShallowClone() const override {
+        return sk_sp<SkSVGEllipse>(new SkSVGEllipse(*this));
+    }
+
     SVG_ATTR(Cx, SkSVGLength, SkSVGLength(0))
     SVG_ATTR(Cy, SkSVGLength, SkSVGLength(0))
     SVG_ATTR(Rx, SkSVGLength, SkSVGLength(0))
@@ -34,6 +38,9 @@ protected:
 
 private:
     SkSVGEllipse();
+    SkSVGEllipse(const SkSVGEllipse& other) : INHERITED(other)
+        , fCx(other.fCx), fCy(other.fCy), fRx(other.fRx), fRy(other.fRy)
+        , fRect(other.fRect), fPath(other.fPath) {}
 
     SkRect resolve(const SkSVGLengthContext&) const;
 

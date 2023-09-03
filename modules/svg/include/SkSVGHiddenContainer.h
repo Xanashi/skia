@@ -13,6 +13,7 @@
 class SK_API SkSVGHiddenContainer : public SkSVGContainer {
 protected:
     explicit SkSVGHiddenContainer(SkSVGTag t) : INHERITED(t) {}
+    SkSVGHiddenContainer(const SkSVGHiddenContainer& other) : INHERITED(other) {}
 
     void onRender(const SkSVGRenderContext&) const final {}
 

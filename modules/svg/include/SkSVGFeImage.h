@@ -15,6 +15,10 @@ class SK_API SkSVGFeImage : public SkSVGFe {
 public:
     static sk_sp<SkSVGFeImage> Make() { return sk_sp<SkSVGFeImage>(new SkSVGFeImage()); }
 
+    sk_sp<SkSVGNode> makeShallowClone() const override {
+        return sk_sp<SkSVGFeImage>(new SkSVGFeImage(*this));
+    }
+
     SVG_ATTR(Href               , SkSVGIRI                , SkSVGIRI())
     SVG_ATTR(PreserveAspectRatio, SkSVGPreserveAspectRatio, SkSVGPreserveAspectRatio())
 
@@ -33,6 +37,8 @@ protected:
 
 private:
     SkSVGFeImage() : INHERITED(SkSVGTag::kFeImage) {}
+    SkSVGFeImage(const SkSVGFeImage& other) : INHERITED(other) 
+        , fHref(other.fHref), fPreserveAspectRatio(other.fPreserveAspectRatio) {}
 
     using INHERITED = SkSVGFe;
 };

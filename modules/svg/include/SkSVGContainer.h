@@ -17,6 +17,7 @@ public:
 
 protected:
     explicit SkSVGContainer(SkSVGTag);
+    SkSVGContainer(const SkSVGContainer& other);
 
     void onRender(const SkSVGRenderContext&) const override;
 

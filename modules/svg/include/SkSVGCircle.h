@@ -35,8 +35,15 @@ protected:
 
     void onApplyAnimationNode(const SkSVGAnimate*) override;
 
+    sk_sp<SkSVGNode> makeShallowClone() const override {
+        return sk_sp<SkSVGCircle>(new SkSVGCircle(*this));
+    }
+
 private:
     SkSVGCircle();
+    SkSVGCircle(const SkSVGCircle& other) : INHERITED(other)
+        , fCx(other.fCx), fCy(other.fCy), fR(other.fR)
+        , fPos(other.fPos), fRad(other.fRad), fPath(other.fPath) {}
 
     // resolve and return the center and radius values
     std::tuple<SkPoint, SkScalar> resolve(const SkSVGLengthContext&) const;

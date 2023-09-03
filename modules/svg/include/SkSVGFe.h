@@ -65,6 +65,9 @@ public:
 
 protected:
     explicit SkSVGFe(SkSVGTag t) : INHERITED(t) {}
+    SkSVGFe(const SkSVGFe& other) : INHERITED(other) 
+        , fIn(other.fIn), fResult(other.fResult), fX(other.fX), fY(other.fY)
+        , fWidth(other.fWidth), fHeight(other.fHeight) {}
 
     virtual sk_sp<SkImageFilter> onMakeImageFilter(const SkSVGRenderContext&,
                                                    const SkSVGFilterContext&) const = 0;
