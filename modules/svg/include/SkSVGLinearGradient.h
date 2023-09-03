@@ -17,17 +17,22 @@ public:
         return sk_sp<SkSVGLinearGradient>(new SkSVGLinearGradient());
     }
 
-    SVG_ATTR(X1, SkSVGLength, SkSVGLength(0  , SkSVGLength::Unit::kPercentage))
-    SVG_ATTR(Y1, SkSVGLength, SkSVGLength(0  , SkSVGLength::Unit::kPercentage))
-    SVG_ATTR(X2, SkSVGLength, SkSVGLength(100, SkSVGLength::Unit::kPercentage))
-    SVG_ATTR(Y2, SkSVGLength, SkSVGLength(0  , SkSVGLength::Unit::kPercentage))
+
+    SVG_OPTIONAL_ATTR(X1, SkSVGLength)
+    SVG_OPTIONAL_ATTR(Y1, SkSVGLength)
+    SVG_OPTIONAL_ATTR(X2, SkSVGLength)
+    SVG_OPTIONAL_ATTR(Y2, SkSVGLength)
 
 protected:
     bool parseAndSetAttribute(const char*, const char*) override;
 
+    bool applyAttributes(sk_sp<SkSVGGradient>*) const override;
+
     sk_sp<SkShader> onMakeShader(const SkSVGRenderContext&,
                                  const SkColor4f*, const SkScalar*, int count,
-                                 SkTileMode, const SkMatrix&) const override;
+                                 SkTileMode, const SkSVGObjectBoundingBoxUnits,
+                                 const SkMatrix&) const override;
+
 private:
     SkSVGLinearGradient();
 

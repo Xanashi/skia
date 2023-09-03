@@ -19,11 +19,9 @@ class SkSVGStop;
 class SK_API SkSVGGradient : public SkSVGHiddenContainer {
 public:
     SVG_ATTR(Href, SkSVGIRI, SkSVGIRI())
-    SVG_ATTR(GradientTransform, SkSVGTransformType, SkSVGTransformType(SkMatrix::I()))
-    SVG_ATTR(SpreadMethod, SkSVGSpreadMethod, SkSVGSpreadMethod(SkSVGSpreadMethod::Type::kPad))
-    SVG_ATTR(GradientUnits,
-             SkSVGObjectBoundingBoxUnits,
-             SkSVGObjectBoundingBoxUnits(SkSVGObjectBoundingBoxUnits::Type::kObjectBoundingBox))
+    SVG_OPTIONAL_ATTR(GradientTransform, SkSVGTransformType)
+    SVG_OPTIONAL_ATTR(SpreadMethod, SkSVGSpreadMethod)
+    SVG_OPTIONAL_ATTR(GradientUnits, SkSVGObjectBoundingBoxUnits)
 
 protected:
     explicit SkSVGGradient(SkSVGTag t) : INHERITED(t) {}
@@ -32,13 +30,18 @@ protected:
 
     bool onAsPaint(const SkSVGRenderContext&, SkPaint*) const final;
 
+    virtual bool applyAttributes(sk_sp<SkSVGGradient>*) const;
+
     virtual sk_sp<SkShader> onMakeShader(const SkSVGRenderContext&,
                                          const SkColor4f*, const SkScalar*, int count,
-                                         SkTileMode, const SkMatrix& localMatrix) const = 0;
+                                         SkTileMode, const SkSVGObjectBoundingBoxUnits,
+                                         const SkMatrix& localMatrix) const = 0;
 
 private:
     using StopPositionArray = skia_private::STArray<2, SkScalar , true>;
     using    StopColorArray = skia_private::STArray<2, SkColor4f, true>;
+    void getGradientWithTemplate(const SkSVGRenderContext& ctx, sk_sp<SkSVGGradient>* gradient,
+                                 StopPositionArray* pos, StopColorArray* colors, int hrefCount) const;
     void collectColorStops(const SkSVGRenderContext&, StopPositionArray*, StopColorArray*) const;
     SkColor4f resolveStopColor(const SkSVGRenderContext&, const SkSVGStop&) const;
 

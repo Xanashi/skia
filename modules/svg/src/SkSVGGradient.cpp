@@ -11,6 +11,11 @@
 #include "modules/svg/include/SkSVGRenderContext.h"
 #include "modules/svg/include/SkSVGStop.h"
 #include "modules/svg/include/SkSVGValue.h"
+#include "modules/svg/include/SkSVGTools.h"
+
+#include "modules/svg/include/SkSVGLinearGradient.h"
+#include "modules/svg/include/SkSVGRadialGradient.h"
+
 
 bool SkSVGGradient::parseAndSetAttribute(const char* name, const char* value) {
     return INHERITED::parseAndSetAttribute(name, value) ||
@@ -21,6 +26,37 @@ bool SkSVGGradient::parseAndSetAttribute(const char* name, const char* value) {
                    SkSVGAttributeParser::parse<SkSVGSpreadMethod>("spreadMethod", name, value)) ||
            this->setGradientUnits(SkSVGAttributeParser::parse<SkSVGObjectBoundingBoxUnits>(
                    "gradientUnits", name, value));
+}
+
+void SkSVGGradient::getGradientWithTemplate(const SkSVGRenderContext& ctx,
+                             sk_sp<SkSVGGradient>* gradient,
+                             StopPositionArray* pos,
+                             StopColorArray* colors,
+                             int hrefCount) const {
+    if (pos->empty()) {
+        this->collectColorStops(ctx, pos, colors);
+    }
+
+    bool gotAllAttrs = !this->applyAttributes(gradient);
+
+    if (gotAllAttrs && !pos->empty()) {
+        return; // We got all attributes and stops, no need to go further
+    }
+
+    if (!fHref.iri().isEmpty() && hrefCount < 100) {
+        const auto ref = ctx.findNodeById(fHref);
+        if (ref && (ref->tag() == SkSVGTag::kLinearGradient || 
+                    ref->tag() == SkSVGTag::kRadialGradient)) {
+            auto refGrad = static_cast<const SkSVGGradient*>(ref.get());
+            refGrad->getGradientWithTemplate(ctx, gradient, pos, colors, ++hrefCount);
+        }
+    }
+}
+
+bool SkSVGGradient::applyAttributes(sk_sp<SkSVGGradient>* gradient) const {
+    return inherit_if_needed(this->fGradientTransform, (*gradient)->fGradientTransform) |
+           inherit_if_needed(this->fSpreadMethod     , (*gradient)->fSpreadMethod) |
+           inherit_if_needed(this->fGradientUnits    , (*gradient)->fGradientUnits);
 }
 
 // https://www.w3.org/TR/SVG11/pservers.html#LinearGradientElementHrefAttribute
@@ -42,14 +78,6 @@ void SkSVGGradient::collectColorStops(const SkSVGRenderContext& ctx,
     }
 
     SkASSERT(colors->size() == pos->size());
-
-    if (pos->empty() && !fHref.iri().isEmpty()) {
-        const auto ref = ctx.findNodeById(fHref);
-        if (ref && (ref->tag() == SkSVGTag::kLinearGradient ||
-                    ref->tag() == SkSVGTag::kRadialGradient)) {
-            static_cast<const SkSVGGradient*>(ref.get())->collectColorStops(ctx, pos, colors);
-        }
-    }
 }
 
 SkColor4f SkSVGGradient::resolveStopColor(const SkSVGRenderContext& ctx,
@@ -67,17 +95,31 @@ SkColor4f SkSVGGradient::resolveStopColor(const SkSVGRenderContext& ctx,
     return { color.fR, color.fG, color.fB, *stopOpacity * color.fA };
 }
 
+
+
 bool SkSVGGradient::onAsPaint(const SkSVGRenderContext& ctx, SkPaint* paint) const {
     StopColorArray colors;
     StopPositionArray pos;
+    sk_sp<SkSVGGradient> gradient;
 
-    this->collectColorStops(ctx, &pos, &colors);
+    switch (this->tag()) {
+        case SkSVGTag::kLinearGradient:
+            gradient = SkSVGLinearGradient::Make(); break;
+        case SkSVGTag::kRadialGradient:
+            gradient = SkSVGRadialGradient::Make(); break;
+        default: return false;
+    }
+
+    this->getGradientWithTemplate(ctx, &gradient, &pos, &colors, 0);
 
     // TODO:
     //       * stop (lazy?) sorting
-    //       * href loop detection
-    //       * href attribute inheritance (not just color stops)
     //       * objectBoundingBox units support
+
+    auto gradTransform    = GETVAL(gradient->fGradientTransform, SkSVGTransformType(SkMatrix::I()));
+    auto gradSpreadMethod = GETVAL(gradient->fSpreadMethod, SkSVGSpreadMethod(SkSVGSpreadMethod::Type::kPad));
+    auto gradUnits        = GETVAL(gradient->fGradientUnits, 
+                            SkSVGObjectBoundingBoxUnits(SkSVGObjectBoundingBoxUnits::Type::kObjectBoundingBox));
 
     static_assert(static_cast<SkTileMode>(SkSVGSpreadMethod::Type::kPad) ==
                   SkTileMode::kClamp, "SkSVGSpreadMethod::Type is out of sync");
@@ -85,15 +127,15 @@ bool SkSVGGradient::onAsPaint(const SkSVGRenderContext& ctx, SkPaint* paint) con
                   SkTileMode::kRepeat, "SkSVGSpreadMethod::Type is out of sync");
     static_assert(static_cast<SkTileMode>(SkSVGSpreadMethod::Type::kReflect) ==
                   SkTileMode::kMirror, "SkSVGSpreadMethod::Type is out of sync");
-    const auto tileMode = static_cast<SkTileMode>(fSpreadMethod.type());
+    const auto tileMode = static_cast<SkTileMode>(gradSpreadMethod.type());
 
-    const auto obbt = ctx.transformForCurrentOBB(fGradientUnits);
+    const auto obbt = ctx.transformForCurrentOBB(gradUnits);
     const auto localMatrix = SkMatrix::Translate(obbt.offset.x, obbt.offset.y)
                            * SkMatrix::Scale(obbt.scale.x, obbt.scale.y)
-                           * fGradientTransform;
+                           * gradTransform;
 
-    paint->setShader(this->onMakeShader(ctx, colors.begin(), pos.begin(), colors.size(), tileMode,
-                                        localMatrix));
+    paint->setShader(gradient->onMakeShader(ctx, colors.begin(), pos.begin(), colors.size(), tileMode,
+                                        gradUnits, localMatrix));
     return true;
 }
 

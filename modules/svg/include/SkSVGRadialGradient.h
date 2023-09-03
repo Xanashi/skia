@@ -17,18 +17,22 @@ public:
         return sk_sp<SkSVGRadialGradient>(new SkSVGRadialGradient());
     }
 
-    SVG_ATTR(Cx, SkSVGLength, SkSVGLength(50, SkSVGLength::Unit::kPercentage))
-    SVG_ATTR(Cy, SkSVGLength, SkSVGLength(50, SkSVGLength::Unit::kPercentage))
-    SVG_ATTR(R,  SkSVGLength, SkSVGLength(50, SkSVGLength::Unit::kPercentage))
+
+    SVG_OPTIONAL_ATTR(Cx, SkSVGLength)
+    SVG_OPTIONAL_ATTR(Cy, SkSVGLength)
+    SVG_OPTIONAL_ATTR(R,  SkSVGLength)
     SVG_OPTIONAL_ATTR(Fx, SkSVGLength)
     SVG_OPTIONAL_ATTR(Fy, SkSVGLength)
 
 protected:
     bool parseAndSetAttribute(const char*, const char*) override;
 
+    bool applyAttributes(sk_sp<SkSVGGradient>*) const override;
+
     sk_sp<SkShader> onMakeShader(const SkSVGRenderContext&,
                                  const SkColor4f*, const SkScalar*, int count,
-                                 SkTileMode, const SkMatrix&) const override;
+                                 SkTileMode, const SkSVGObjectBoundingBoxUnits units,
+                                 const SkMatrix&) const override;
 private:
     SkSVGRadialGradient();
 
