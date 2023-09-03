@@ -23,9 +23,10 @@ bool SkSVGPattern::parseAndSetAttribute(const char* name, const char* value) {
            this->setY(SkSVGAttributeParser::parse<SkSVGLength>("y", name, value)) ||
            this->setWidth(SkSVGAttributeParser::parse<SkSVGLength>("width", name, value)) ||
            this->setHeight(SkSVGAttributeParser::parse<SkSVGLength>("height", name, value)) ||
+           this->setHref(SkSVGAttributeParser::parse<SkSVGIRI>("xlink:href", name, value)) ||
+           this->setHref(SkSVGAttributeParser::parse<SkSVGIRI>("href", name, value)) ||
            this->setPatternTransform(SkSVGAttributeParser::parse<SkSVGTransformType>(
                    "patternTransform", name, value)) ||
-           this->setHref(SkSVGAttributeParser::parse<SkSVGIRI>("xlink:href", name, value));
            this->setPatternContentUnits(SkSVGAttributeParser::parse<SkSVGObjectBoundingBoxUnits>(
                    "patternContentUnits", name, value)) ||
            this->setPatternUnits(SkSVGAttributeParser::parse<SkSVGObjectBoundingBoxUnits>(
