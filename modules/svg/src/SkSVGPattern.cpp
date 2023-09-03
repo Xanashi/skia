@@ -7,6 +7,7 @@
 
 #include "modules/svg/include/SkSVGPattern.h"
 
+#include "include/core/SkCanvas.h"
 #include "include/core/SkPicture.h"
 #include "include/core/SkPictureRecorder.h"
 #include "include/core/SkShader.h"
@@ -25,6 +26,27 @@ bool SkSVGPattern::parseAndSetAttribute(const char* name, const char* value) {
            this->setPatternTransform(SkSVGAttributeParser::parse<SkSVGTransformType>(
                    "patternTransform", name, value)) ||
            this->setHref(SkSVGAttributeParser::parse<SkSVGIRI>("xlink:href", name, value));
+           this->setPatternContentUnits(SkSVGAttributeParser::parse<SkSVGObjectBoundingBoxUnits>(
+                   "patternContentUnits", name, value)) ||
+           this->setPatternUnits(SkSVGAttributeParser::parse<SkSVGObjectBoundingBoxUnits>(
+                   "PatternUnits", name, value));
+}
+
+void SkSVGPattern::onSetAttribute(SkSVGAttribute attr, const SkSVGValue& v) {
+    switch (attr) {
+        case SkSVGAttribute::kViewBox:
+            if (const auto* vb = v.as<SkSVGViewBoxValue>()) {
+                this->setViewBox(*vb);
+            }
+            break;
+        case SkSVGAttribute::kPreserveAspectRatio:
+            if (const auto* par = v.as<SkSVGPreserveAspectRatioValue>()) {
+                this->setPreserveAspectRatio(*par);
+            }
+            break;
+        default:
+            this->INHERITED::onSetAttribute(attr, v);
+    }
 }
 
 const SkSVGPattern* SkSVGPattern::hrefTarget(const SkSVGRenderContext& ctx) const {
@@ -66,11 +88,15 @@ const SkSVGPattern* SkSVGPattern::resolveHref(const SkSVGRenderContext& ctx,
     do {
         // Bitwise OR to avoid short-circuiting.
         const bool didInherit =
-            inherit_if_needed(currentNode->fX               , attrs->fX)      |
-            inherit_if_needed(currentNode->fY               , attrs->fY)      |
-            inherit_if_needed(currentNode->fWidth           , attrs->fWidth)  |
-            inherit_if_needed(currentNode->fHeight          , attrs->fHeight) |
-            inherit_if_needed(currentNode->fPatternTransform, attrs->fPatternTransform);
+            inherit_if_needed(currentNode->fX                  , attrs->fX)      |
+            inherit_if_needed(currentNode->fY                  , attrs->fY)      |
+            inherit_if_needed(currentNode->fWidth              , attrs->fWidth)  |
+            inherit_if_needed(currentNode->fHeight             , attrs->fHeight) |
+            inherit_if_needed(currentNode->fPatternTransform   , attrs->fPatternTransform)    |
+            inherit_if_needed(currentNode->fPatternContentUnits, attrs->fPatternContentUnits) |
+            inherit_if_needed(currentNode->fPatternUnits       , attrs->fPatternUnits)        |
+            inherit_if_needed(currentNode->fPreserveAspectRatio, attrs->fPreserveAspectRatio) |
+            inherit_if_needed(currentNode->fViewBox            , attrs->fViewBox);
 
         if (!contentNode->hasChildren()) {
             contentNode = currentNode;
@@ -99,16 +125,54 @@ bool SkSVGPattern::onAsPaint(const SkSVGRenderContext& ctx, SkPaint* paint) cons
             attrs.fWidth.isValid()  ? *attrs.fWidth  : SkSVGLength(0),
             attrs.fHeight.isValid() ? *attrs.fHeight : SkSVGLength(0));
 
+    // TODO: Figure out how to implement the patternUnits attribute 
+    
+    //auto patternUnits = attrs.fPatternUnits.isValid() 
+    //        ? *attrs.fPatternUnits : SkSVGObjectBoundingBoxUnits(
+    //            SkSVGObjectBoundingBoxUnits::Type::kObjectBoundingBox);
+
+    //const auto tile = ctx.resolveOBBRect(
+    //        attrs.fX.isValid()      ? *attrs.fX      : SkSVGLength(0),
+    //        attrs.fY.isValid()      ? *attrs.fY      : SkSVGLength(0),
+    //        attrs.fWidth.isValid()  ? *attrs.fWidth  : SkSVGLength(0),
+    //        attrs.fHeight.isValid() ? *attrs.fHeight : SkSVGLength(0),
+    //        patternUnits);
+
     if (tile.isEmpty()) {
         return false;
     }
 
-    const SkMatrix* patternTransform = attrs.fPatternTransform.isValid()
-            ? attrs.fPatternTransform.get()
-            : nullptr;
+    auto patternTransform = attrs.fPatternTransform.isValid()
+            ? attrs.fPatternTransform.get() : nullptr;
+    auto patternContentUnits = attrs.fPatternContentUnits.isValid() 
+            ? *attrs.fPatternContentUnits : SkSVGObjectBoundingBoxUnits();
+    auto preserveAspectRatio = attrs.fPreserveAspectRatio.isValid() 
+            ? *attrs.fPreserveAspectRatio : SkSVGPreserveAspectRatio();
+    auto viewPort = SkSize::Make(tile.width(), tile.height());
 
+
+    SkMatrix viewTransform;
     SkPictureRecorder recorder;
     SkSVGRenderContext recordingContext(ctx, recorder.beginRecording(tile));
+
+    if (attrs.fViewBox.isValid()) {
+        const SkRect& viewBox = *attrs.fViewBox;
+        viewPort = SkSize::Make(viewBox.width(), viewBox.height());
+        viewTransform.preConcat(ComputeViewboxMatrix(viewBox, tile, preserveAspectRatio));
+    } 
+    else if (patternContentUnits.type() == SkSVGObjectBoundingBoxUnits::Type::kObjectBoundingBox) {
+        auto b = contentNode->objectBoundingBox(ctx);
+        viewTransform.preScale(b.width(), b.height());        
+    }
+
+    if (!viewTransform.isIdentity()) {
+        recordingContext.saveOnce();
+        recordingContext.canvas()->concat(viewTransform);
+    }
+
+    if (viewPort != recordingContext.lengthContext().viewPort()) {
+        recordingContext.writableLengthContext()->setViewPort(viewPort);
+    }
 
     // Cannot call into INHERITED:: because SkSVGHiddenContainer skips rendering.
     contentNode->SkSVGContainer::onRender(recordingContext);

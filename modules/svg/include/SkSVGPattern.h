@@ -20,16 +20,22 @@ public:
     }
 
     SVG_ATTR(Href, SkSVGIRI, SkSVGIRI())
-    SVG_OPTIONAL_ATTR(X               , SkSVGLength)
-    SVG_OPTIONAL_ATTR(Y               , SkSVGLength)
-    SVG_OPTIONAL_ATTR(Width           , SkSVGLength)
-    SVG_OPTIONAL_ATTR(Height          , SkSVGLength)
-    SVG_OPTIONAL_ATTR(PatternTransform, SkSVGTransformType)
+    SVG_OPTIONAL_ATTR(X                  , SkSVGLength)
+    SVG_OPTIONAL_ATTR(Y                  , SkSVGLength)
+    SVG_OPTIONAL_ATTR(Width              , SkSVGLength)
+    SVG_OPTIONAL_ATTR(Height             , SkSVGLength)
+    SVG_OPTIONAL_ATTR(PatternTransform   , SkSVGTransformType)
+    SVG_OPTIONAL_ATTR(PatternContentUnits, SkSVGObjectBoundingBoxUnits)
+    SVG_OPTIONAL_ATTR(PatternUnits       , SkSVGObjectBoundingBoxUnits)
+
+    SVG_OPTIONAL_ATTR(PreserveAspectRatio, SkSVGPreserveAspectRatio)
+    SVG_OPTIONAL_ATTR(ViewBox            , SkSVGViewBoxType)
 
 protected:
     SkSVGPattern();
 
     bool parseAndSetAttribute(const char*, const char*) override;
+    void onSetAttribute(SkSVGAttribute, const SkSVGValue&) override;
 
     bool onAsPaint(const SkSVGRenderContext&, SkPaint*) const override;
 
@@ -40,14 +46,14 @@ private:
                                     fWidth,
                                     fHeight;
         SkTLazy<SkSVGTransformType> fPatternTransform;
+        SkTLazy<SkSVGObjectBoundingBoxUnits> fPatternContentUnits;
+        SkTLazy<SkSVGObjectBoundingBoxUnits> fPatternUnits;
+        SkTLazy<SkSVGPreserveAspectRatio>    fPreserveAspectRatio;
+        SkTLazy<SkSVGViewBoxType>   fViewBox;
     };
 
     const SkSVGPattern* resolveHref(const SkSVGRenderContext&, PatternAttributes*) const;
     const SkSVGPattern* hrefTarget(const SkSVGRenderContext&) const;
-
-    // TODO:
-    //   - patternUnits
-    //   - patternContentUnits
 
     using INHERITED = SkSVGHiddenContainer;
 };
