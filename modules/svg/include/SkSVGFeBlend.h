@@ -13,18 +13,11 @@
 
 class SK_API SkSVGFeBlend : public SkSVGFe {
 public:
-    enum class Mode {
-        kNormal,
-        kMultiply,
-        kScreen,
-        kDarken,
-        kLighten,
-    };
-
     static sk_sp<SkSVGFeBlend> Make() { return sk_sp<SkSVGFeBlend>(new SkSVGFeBlend()); }
 
-    SVG_ATTR(Mode, Mode, Mode::kNormal)
-    SVG_ATTR(In2, SkSVGFeInputType, SkSVGFeInputType())
+
+    SVG_ATTR(Mode, SkSVGBlendMode, SkSVGBlendMode())
+    SVG_ATTR(In2 , SkSVGFeInputType, SkSVGFeInputType())
 
 protected:
     sk_sp<SkImageFilter> onMakeImageFilter(const SkSVGRenderContext&,
