@@ -15,7 +15,6 @@ SkSVGShape::SkSVGShape(SkSVGTag t) : INHERITED(t) {}
 
 bool SkSVGShape::parseAndSetAttribute(const char* n, const char* v) {
     return INHERITED::parseAndSetAttribute(n, v) ||
-           this->resolveShorthandMarker(n, v) ||
            this->setPathLength(SkSVGAttributeParser::parse<SkSVGLength>("pathLength", n, v));
 }
 
