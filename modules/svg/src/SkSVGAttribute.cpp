@@ -10,9 +10,9 @@
 SkSVGPresentationAttributes SkSVGPresentationAttributes::MakeInitial() {
     SkSVGPresentationAttributes result;
 
-    result.fId.set(SkSVGString());
-    result.fClass.set(SkSVGString());
-    result.fStyle.set(SkSVGString());
+    result.fId.set(SkSVGStringType());
+    result.fClass.set(SkSVGStringType());
+    result.fStyle.set(SkSVGStringType());
 
     result.fFill.set(SkSVGPaint(SkSVGColor(SK_ColorBLACK)));
     result.fFillOpacity.set(SkSVGNumberType(1));

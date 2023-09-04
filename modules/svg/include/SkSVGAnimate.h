@@ -18,9 +18,9 @@ public:
 
     std::tuple<SkString, SkString> getFirstAttributeValue() const;
 
-    SVG_ATTR(AttributeName, SkSVGString, SkSVGString())
-    SVG_ATTR(Values, SkSVGString, SkSVGString())
-    SVG_ATTR(Type, SkSVGString, SkSVGString())
+    SVG_ATTR(AttributeName, SkSVGStringType, SkSVGStringType())
+    SVG_ATTR(Values, SkSVGStringType, SkSVGStringType())
+    SVG_ATTR(Type, SkSVGStringType, SkSVGStringType())
 
 private:
     SkSVGTag GetAnimateTag(SkSVGAnimationTag animTag) {

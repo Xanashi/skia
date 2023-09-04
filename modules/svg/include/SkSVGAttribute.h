@@ -107,9 +107,9 @@ struct SkSVGPresentationAttributes {
     SkSVGProperty<SkSVGTextTransform, true> fTextTransform;
 
     // uninherited
-    SkSVGProperty<SkSVGString       , false> fId;
-    SkSVGProperty<SkSVGString       , false> fClass;
-    SkSVGProperty<SkSVGString       , false> fStyle;
+    SkSVGProperty<SkSVGStringType   , false> fId;
+    SkSVGProperty<SkSVGStringType   , false> fClass;
+    SkSVGProperty<SkSVGStringType   , false> fStyle;
                                     
     SkSVGProperty<SkSVGNumberType   , false> fOpacity;
     SkSVGProperty<SkSVGFuncIRI      , false> fClipPath;

@@ -158,9 +158,9 @@ public:
     SVG_PRES_ATTR(FloodOpacity             , SkSVGNumberType   , false)
     SVG_PRES_ATTR(LightingColor            , SkSVGColor        , false)
                                                                
-    SVG_PRES_ATTR(Class                    , SkSVGString       , false)
-    SVG_PRES_ATTR(Id                       , SkSVGString       , false)
-    SVG_PRES_ATTR(Style                    , SkSVGString       , false)
+    SVG_PRES_ATTR(Class                    , SkSVGStringType   , false)
+    SVG_PRES_ATTR(Id                       , SkSVGStringType   , false)
+    SVG_PRES_ATTR(Style                    , SkSVGStringType   , false)
 
 protected:
     SkSVGNode(SkSVGTag);
