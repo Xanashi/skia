@@ -20,6 +20,7 @@ inline const SkSVGMarker* AsMarker(SkSVGRenderContext::BorrowedNode node) {
 
 bool SkSVGShape::parseAndSetAttribute(const char* n, const char* v) {
     return INHERITED::parseAndSetAttribute(n, v) ||
+           this->resolveShorthandMarker(n, v) ||
            this->setMarkerStart(SkSVGAttributeParser::parse<SkSVGFuncIRI>("marker-start", n, v)) ||
            this->setMarkerMid(SkSVGAttributeParser::parse<SkSVGFuncIRI>("marker-mid", n, v)) ||
            this->setMarkerEnd(SkSVGAttributeParser::parse<SkSVGFuncIRI>("marker-end", n, v)) ||
@@ -187,4 +188,19 @@ std::vector<PathPoint> SkSVGShape::getPathPoints(const SkPath* markerPath) const
     return markerPoints;
 }
 
+bool SkSVGShape::resolveShorthandMarker(const char* n, const char* v) {
+    auto iri = SkSVGAttributeParser::parse<SkSVGFuncIRI>("marker", n, v);
+    if (iri.isValid()) {
+        if (fMarkerStart.type() != SkSVGFuncIRI::Type::kIRI) {
+            this->setMarkerStart(iri);
+        }
+        if (fMarkerMid.type() != SkSVGFuncIRI::Type::kIRI) {
+            this->setMarkerMid(iri);
+        }
+        if (fMarkerEnd.type() != SkSVGFuncIRI::Type::kIRI) {
+            this->setMarkerEnd(iri);
+        }
+        return true;
+    }
+    return false;
 }

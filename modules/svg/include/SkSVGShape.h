@@ -54,6 +54,7 @@ private:
     SkScalar getPathLengthRatio(const SkPath*) const;
     void renderMarkers(const SkSVGRenderContext&, const SkPath*) const;
     std::vector<PathPoint> getPathPoints(const SkPath* markerPath) const;
+    bool resolveShorthandMarker(const char*, const char*);
 };
 
 #endif // SkSVGShape_DEFINED
