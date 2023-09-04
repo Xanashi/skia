@@ -43,6 +43,7 @@ skia_filegroup(
         "SkSVGImage.cpp",
         "SkSVGLine.cpp",
         "SkSVGLinearGradient.cpp",
+        "SkSVGMarker.cpp",
         "SkSVGMask.cpp",
         "SkSVGNode.cpp",
         "SkSVGOpenTypeSVGDecoder.cpp",

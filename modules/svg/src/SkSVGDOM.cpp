@@ -35,6 +35,7 @@
 #include "modules/svg/include/SkSVGImage.h"
 #include "modules/svg/include/SkSVGLine.h"
 #include "modules/svg/include/SkSVGLinearGradient.h"
+#include "modules/svg/include/SkSVGMarker.h"
 #include "modules/svg/include/SkSVGMask.h"
 #include "modules/svg/include/SkSVGNode.h"
 #include "modules/svg/include/SkSVGPath.h"
@@ -269,6 +270,7 @@ SortedDictionaryEntry<sk_sp<SkSVGNode>(*)()> gTagFactories[] = {
     { "image"             , []() -> sk_sp<SkSVGNode> { return SkSVGImage::Make();              }},
     { "line"              , []() -> sk_sp<SkSVGNode> { return SkSVGLine::Make();               }},
     { "linearGradient"    , []() -> sk_sp<SkSVGNode> { return SkSVGLinearGradient::Make();     }},
+    { "marker"            , []() -> sk_sp<SkSVGNode> { return SkSVGMarker::Make();             }},
     { "mask"              , []() -> sk_sp<SkSVGNode> { return SkSVGMask::Make();               }},
     { "path"              , []() -> sk_sp<SkSVGNode> { return SkSVGPath::Make();               }},
     { "pattern"           , []() -> sk_sp<SkSVGNode> { return SkSVGPattern::Make();            }},

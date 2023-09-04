@@ -41,6 +41,7 @@ skia_filegroup(
         "SkSVGImage.h",
         "SkSVGLine.h",
         "SkSVGLinearGradient.h",
+        "SkSVGMarker.h",
         "SkSVGMask.h",
         "SkSVGNode.h",
         "SkSVGOpenTypeSVGDecoder.h",

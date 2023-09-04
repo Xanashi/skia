@@ -33,6 +33,8 @@ protected:
 
     SkRect onObjectBoundingBox(const SkSVGRenderContext&) const override;
 
+    bool onSupportsMarkers() const override { return true; }
+
     void onApplyAnimationNode(const SkSVGAnimate*) override;
 
 private:

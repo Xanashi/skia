@@ -40,6 +40,8 @@ protected:
 
     SkRect onObjectBoundingBox(const SkSVGRenderContext&) const override;
 
+    bool   onSupportsMarkers() const override { return true; }
+
 private:
     SkSVGPoly(SkSVGTag);
     SkSVGPoly(const SkSVGPoly& other) : INHERITED(other)

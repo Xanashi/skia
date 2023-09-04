@@ -51,6 +51,7 @@ enum class SkSVGTag {
     kImage,
     kLine,
     kLinearGradient,
+    kMarker,
     kMask,
     kPath,
     kPattern,

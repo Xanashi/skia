@@ -36,6 +36,8 @@ protected:
 
     SkPath onAsPath(const SkSVGRenderContext&) const override;
 
+    bool onSupportsMarkers() const override { return true; }
+
 private:
     SkSVGLine();
     SkSVGLine(const SkSVGLine& other) : INHERITED(other)

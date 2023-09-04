@@ -1237,3 +1237,36 @@ bool SkSVGAttributeParser::parse(SkSVGBlendMode* blendMode) {
 
     return parsedValue && this->parseEOSToken();
 }
+
+template <>
+bool SkSVGAttributeParser::parse(SkSVGMarkerUnits* markerUnits) {
+    bool parsedValue = false;
+    if (this->parseExpectedStringToken("userSpaceOnUse")) {
+        *markerUnits = SkSVGMarkerUnits(SkSVGMarkerUnits::Type::kUserSpaceOnUse);
+        parsedValue = true;
+    } else if (this->parseExpectedStringToken("strokeWidth")) {
+        *markerUnits = SkSVGMarkerUnits(SkSVGMarkerUnits::Type::kStrokeWidth);
+        parsedValue = true;
+    }
+    return parsedValue && this->parseEOSToken();
+}
+
+template <>
+bool SkSVGAttributeParser::parse(SkSVGMarkerOrient* orient) {
+    bool parsedValue = false;
+    if (this->parseExpectedStringToken("auto-start-reverse")) {
+        *orient = SkSVGMarkerOrient(SkSVGMarkerOrient::Type::kAutoStartReverse);
+        parsedValue = true;
+    } else if (this->parseExpectedStringToken("auto")) {
+        *orient = SkSVGMarkerOrient(SkSVGMarkerOrient::Type::kAuto);
+        parsedValue = true;
+    } else {
+        SkScalar angle;
+        if (this->parseScalarToken(&angle)) {
+            *orient = SkSVGMarkerOrient(angle);
+            parsedValue = true;
+        }
+    }
+
+    return parsedValue && this->parseEOSToken();
+}

@@ -475,6 +475,56 @@ private:
     Type fType;
 };
 
+class SK_API SkSVGMarkerUnits {
+public:
+    enum class Type {
+        kUserSpaceOnUse,
+        kStrokeWidth,
+    };
+
+    SkSVGMarkerUnits() : fType(Type::kStrokeWidth) {}
+    explicit SkSVGMarkerUnits(Type t) : fType(t) {}
+
+    bool operator==(const SkSVGMarkerUnits& other) const { return fType == other.fType; }
+    bool operator!=(const SkSVGMarkerUnits& other) const { return !(*this == other); }
+
+    Type type() const { return fType; }
+
+private:
+    Type fType;
+};
+
+class SK_API SkSVGMarkerOrient {
+public:
+    enum class Type {
+        kAuto,
+        kAutoStartReverse,
+        kAngle
+    };
+
+    SkSVGMarkerOrient() : fType(Type::kAngle), fAngle(0) {}
+    explicit SkSVGMarkerOrient(Type t) : fType(t), fAngle(0) {}
+    explicit SkSVGMarkerOrient(const SkScalar& a) : fType(Type::kAngle), fAngle(a) {}
+
+    SkSVGMarkerOrient(const SkSVGMarkerOrient&) = default;
+    SkSVGMarkerOrient& operator=(const SkSVGMarkerOrient&) = default;
+
+    bool operator==(const SkSVGMarkerOrient& other) const {
+        return fType == other.fType && fAngle == other.fAngle;
+    }
+    bool operator!=(const SkSVGMarkerOrient& other) const { return !(*this == other); }
+
+    Type type() const { return fType; }
+    const SkScalar& angle() const {
+        SkASSERT(fType == Type::kAngle);
+        return fAngle;
+    }
+
+private:
+    Type fType;
+    SkScalar fAngle;
+};
+
 class SK_API SkSVGFontFamily {
 public:
     enum class Type {
