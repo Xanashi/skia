@@ -50,7 +50,3 @@ SkPath SkSVGEllipse::onAsPath(const SkSVGRenderContext& ctx) const {
     return fPath;
 }
 
-SkRect SkSVGEllipse::onObjectBoundingBox(const SkSVGRenderContext& ctx) const {
-    this->onResolvePath(ctx);
-    return fRect;
-}
