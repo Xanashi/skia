@@ -353,9 +353,11 @@ void SkSVGTextContext::shapeFragment(const SkString& txt, const SkSVGRenderConte
         float dx = (pos.has(PosAttrs::kDx) ? pos[PosAttrs::kDx] : 0);
         float dy = (pos.has(PosAttrs::kDy) ? pos[PosAttrs::kDy] : 0);
 
+        bool firstDx = (firstChar && dx != 0);
+
         // Absolute position adjustments define a new chunk.
         // (https://www.w3.org/TR/SVG11/text.html#TextLayoutIntroduction)
-        if (pos.has(PosAttrs::kX) || pos.has(PosAttrs::kY)) {
+        if (pos.has(PosAttrs::kX) || pos.has(PosAttrs::kY) || firstDx) {
             this->shapePendingBuffer(font);
             this->flushChunk(ctx);
 
@@ -365,6 +367,9 @@ void SkSVGTextContext::shapeFragment(const SkString& txt, const SkSVGRenderConte
             }
             if (pos.has(PosAttrs::kY)) {
                 fChunkPos.fY = pos[PosAttrs::kY];
+            }
+            if (firstDx) {
+                fChunkPos.fX += dx;
             }
         }
 
