@@ -477,6 +477,7 @@ SkTLazy<SkPaint> SkSVGRenderContext::commonPaint(const SkSVGPaint& paint_selecto
     //   - initial paint server opacity (e.g. color stop opacity)
     //   - paint-specific opacity (e.g. 'fill-opacity', 'stroke-opacity')
     //   - deferred opacity override (optimization for leaf nodes 'opacity')
+    if (paint_opacity > 1) { paint_opacity /= 100; }     
     p->setAlphaf(SkTPin(p->getAlphaf() * paint_opacity * fDeferredPaintOpacity, 0.0f, 1.0f));
 
     return p;
