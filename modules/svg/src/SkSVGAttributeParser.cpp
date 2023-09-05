@@ -471,7 +471,7 @@ bool SkSVGAttributeParser::parse(SkSVGIRI* iri) {
     }
 
     const auto* start = fCurPos;
-    if (!this->advanceWhile([](char c) -> bool { return c != ')'; })) {
+    if (!this->advanceWhile([](char c) -> bool { return c != ')' && c != '\"'; })) {
         return false;
     }
     *iri = SkSVGIRI(iriType, SkString(start, fCurPos - start));
@@ -585,11 +585,13 @@ bool SkSVGAttributeParser::parseParenthesized(const char* prefix, Func f, T* res
         return false;
     }
     this->parseWSToken();
+    this->parseExpectedStringToken("\"");
 
     if (!f(result)) {
         return false;
     }
 
+    this->parseExpectedStringToken("\"");
     this->parseWSToken();
     if (!this->parseExpectedStringToken(")")) {
         return false;
