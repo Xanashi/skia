@@ -10,7 +10,7 @@
 #include "modules/svg/include/SkSVGRenderContext.h"
 #include "modules/svg/include/SkSVGValue.h"
 
-SkSVGLine::SkSVGLine() : INHERITED(SkSVGTag::kLine) {}
+SkSVGLine::SkSVGLine() : INHERITED(SkSVGTag::kLine), fPath(SkPath()) {}
 
 bool SkSVGLine::parseAndSetAttribute(const char* n, const char* v) {
     return INHERITED::parseAndSetAttribute(n, v) ||

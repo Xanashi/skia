@@ -12,7 +12,7 @@
 #include "modules/svg/include/SkSVGRenderContext.h"
 #include "modules/svg/include/SkSVGValue.h"
 
-SkSVGPath::SkSVGPath() : INHERITED(SkSVGTag::kPath) { }
+SkSVGPath::SkSVGPath() : INHERITED(SkSVGTag::kPath) {}
 
 bool SkSVGPath::parseAndSetAttribute(const char* n, const char* v) {
     return INHERITED::parseAndSetAttribute(n, v) ||
