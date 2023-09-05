@@ -736,6 +736,9 @@ bool SkSVGAttributeParser::parse(SkSVGPaint* paint) {
     if (this->parseSVGColor(&c, SkSVGColor::Vars())) {
         *paint = SkSVGPaint(std::move(c));
         parsedValue = true;
+    } else if (this->parseExpectedStringToken("transparent")) {
+        *paint = SkSVGPaint(SkSVGColor(SK_ColorTRANSPARENT));
+        parsedValue = true;
     } else if (this->parseExpectedStringToken("none")) {
         *paint = SkSVGPaint(SkSVGPaint::Type::kNone);
         parsedValue = true;
