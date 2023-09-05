@@ -128,6 +128,7 @@ SkSVGTextContext::ScopedPosResolver::ScopedPosResolver(const SkSVGTextContainer&
     , fDx(ResolveLengths(lctx, txt.getDx(), SkSVGLengthContext::LengthType::kHorizontal))
     , fDy(ResolveLengths(lctx, txt.getDy(), SkSVGLengthContext::LengthType::kVertical))
     , fRotate(txt.getRotate())
+    , fLetterSpacing(lctx.resolve(txt.getLetterSpacing(), SkSVGLengthContext::LengthType::kVertical))
 {
     fTextContext->fPosResolver = this;
 }
@@ -152,7 +153,8 @@ SkSVGTextContext::PosAttrs SkSVGTextContext::ScopedPosResolver::resolve(size_t c
                                  localCharIndex < fY.size() &&
                                  localCharIndex < fDx.size() &&
                                  localCharIndex < fDy.size() &&
-                                 localCharIndex < fRotate.size();
+                                 localCharIndex < fRotate.size() &&
+                                 fLetterSpacing != 0;
         if (!hasAllLocal && fParent) {
             attrs = fParent->resolve(charIndex);
         }
@@ -168,6 +170,9 @@ SkSVGTextContext::PosAttrs SkSVGTextContext::ScopedPosResolver::resolve(size_t c
         }
         if (localCharIndex < fDy.size()) {
             attrs[PosAttrs::kDy] = fDy[localCharIndex];
+        }
+        if (fLetterSpacing != 0) {
+            attrs[PosAttrs::kLetterSpacing] = fLetterSpacing;
         }
 
         // Rotation semantics are interestingly different [1]:
@@ -338,6 +343,9 @@ void SkSVGTextContext::shapeFragment(const SkString& txt, const SkSVGRenderConte
         SkASSERT(fPosResolver);
         const auto pos = fPosResolver->resolve(fCurrentCharIndex++);
 
+        float dx = (pos.has(PosAttrs::kDx) ? pos[PosAttrs::kDx] : 0);
+        float dy = (pos.has(PosAttrs::kDy) ? pos[PosAttrs::kDy] : 0);
+
         // Absolute position adjustments define a new chunk.
         // (https://www.w3.org/TR/SVG11/text.html#TextLayoutIntroduction)
         if (pos.has(PosAttrs::kX) || pos.has(PosAttrs::kY)) {
@@ -353,15 +361,19 @@ void SkSVGTextContext::shapeFragment(const SkString& txt, const SkSVGRenderConte
             }
         }
 
+        auto letterSpacing = !firstChar && pos.has(PosAttrs::kLetterSpacing) ? 
+                             pos[PosAttrs::kLetterSpacing] : 0;
+
         fShapeBuffer.append(ch, {
             {
-                pos.has(PosAttrs::kDx) ? pos[PosAttrs::kDx] : 0,
-                pos.has(PosAttrs::kDy) ? pos[PosAttrs::kDy] : 0,
+                dx + letterSpacing,
+                dy
             },
             pos.has(PosAttrs::kRotate) ? SkDegreesToRadians(pos[PosAttrs::kRotate]) : 0,
         });
 
         fPrevCharSpace = (ch == ' ');
+        firstChar = false;
     }
 
     this->shapePendingBuffer(font);
@@ -554,8 +566,9 @@ bool SkSVGTextContainer::parseAndSetAttribute(const char* name, const char* valu
            this->setDx(SkSVGAttributeParser::parse<std::vector<SkSVGLength>>("dx", name, value)) ||
            this->setDy(SkSVGAttributeParser::parse<std::vector<SkSVGLength>>("dy", name, value)) ||
            this->setRotate(SkSVGAttributeParser::parse<std::vector<SkSVGNumberType>>("rotate",
-                                                                                     name,
-                                                                                     value)) ||
+                                                                                     name, value)) ||
+           this->setLetterSpacing(SkSVGAttributeParser::parse<SkSVGLength>("letter-spacing", 
+                                                                                     name, value)) ||
            this->setXmlSpace(SkSVGAttributeParser::parse<SkSVGXmlSpace>("xml:space", name, value));
 }
 

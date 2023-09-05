@@ -48,6 +48,7 @@ public:
             kDx     = 2,
             kDy     = 3,
             kRotate = 4,
+            kLetterSpacing = 5,
         };
 
         float  operator[](Attr a) const { return fStorage[a]; }
@@ -59,7 +60,8 @@ public:
                 || this->has(kY)
                 || this->has(kDx)
                 || this->has(kDy)
-                || this->has(kRotate);
+                || this->has(kRotate)
+                || this->has(kLetterSpacing);
         }
 
         void setImplicitRotate(bool imp) { fImplicitRotate = imp; }
@@ -68,7 +70,7 @@ public:
     private:
         inline static constexpr auto kNone = std::numeric_limits<float>::infinity();
 
-        float fStorage[5]     = { kNone, kNone, kNone, kNone, kNone };
+        float fStorage[6]     = { kNone, kNone, kNone, kNone, kNone, kNone };
         bool  fImplicitRotate = false;
     };
 
@@ -100,6 +102,7 @@ public:
                                   fDx,
                                   fDy;
         const std::vector<float>& fRotate;
+        const float               fLetterSpacing;
 
         // cache for the last known index with explicit positioning
         mutable size_t           fLastPosIndex = std::numeric_limits<size_t>::max();
