@@ -144,6 +144,7 @@ private:
         }
 
         void append(SkUnichar, PositionAdjustment);
+        void removeEnd();
     };
 
     struct RunRec {

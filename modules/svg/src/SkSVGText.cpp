@@ -223,6 +223,13 @@ void SkSVGTextContext::ShapeBuffer::append(SkUnichar ch, PositionAdjustment pos)
     fUtf8PosAdjust.push_back_n(utf8_len, pos);
 }
 
+void SkSVGTextContext::ShapeBuffer::removeEnd() {
+    if (fUtf8PosAdjust.empty()) { return; }
+
+    fUtf8.pop_back();
+    fUtf8PosAdjust.pop_back();
+}
+
 void SkSVGTextContext::shapePendingBuffer(const SkFont& font) {
     // TODO: directionality hints?
     const auto LTR  = true;
@@ -374,6 +381,10 @@ void SkSVGTextContext::shapeFragment(const SkString& txt, const SkSVGRenderConte
 
         fPrevCharSpace = (ch == ' ');
         firstChar = false;
+    }
+
+    if (fPrevCharSpace) {
+        fShapeBuffer.removeEnd();
     }
 
     this->shapePendingBuffer(font);
