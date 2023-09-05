@@ -588,6 +588,9 @@ void SkSVGText::onRender(const SkSVGRenderContext& ctx) const {
 SkRect SkSVGText::onObjectBoundingBox(const SkSVGRenderContext& ctx) const {
     SkRect bounds = SkRect::MakeEmpty();
 
+    SkSVGRenderContext localContext(ctx);
+    this->onPrepareToRender(&localContext);
+
     const SkSVGTextContext::ShapedTextCallback compute_bounds =
         [&bounds](const SkSVGRenderContext& ctx, const sk_sp<SkTextBlob>& blob, const SkPaint*,
                   const SkPaint*) {
@@ -611,8 +614,8 @@ SkRect SkSVGText::onObjectBoundingBox(const SkSVGRenderContext& ctx) const {
         };
 
     {
-        SkSVGTextContext tctx(ctx, compute_bounds);
-        this->onShapeText(ctx, &tctx, this->getXmlSpace());
+        SkSVGTextContext tctx(localContext, compute_bounds);
+        this->onShapeText(localContext, &tctx, this->getXmlSpace());
     }
 
     return bounds;
