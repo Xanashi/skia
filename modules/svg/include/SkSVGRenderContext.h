@@ -26,7 +26,7 @@ class SkSVGLength;
 
 class SK_API SkSVGLengthContext {
 public:
-    SkSVGLengthContext(const SkSize& viewport, SkScalar dpi = 90)
+    SkSVGLengthContext(const SkSize& viewport, SkScalar dpi = 96)
         : fViewport(viewport), fDPI(dpi) {}
 
     enum class LengthType {
