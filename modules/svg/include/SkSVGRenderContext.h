@@ -89,6 +89,7 @@ public:
     };
 
     void setPathLengthRatio(const SkScalar ratio) const;
+    void setContextColors(const SkSVGPaint fill, const SkSVGPaint stroke);
 
     void applyPresentationAttributes(const SkSVGPresentationAttributes&, uint32_t flags);
 

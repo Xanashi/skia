@@ -737,6 +737,12 @@ bool SkSVGAttributeParser::parse(SkSVGPaint* paint) {
     } else if (this->parseExpectedStringToken("none")) {
         *paint = SkSVGPaint(SkSVGPaint::Type::kNone);
         parsedValue = true;
+    } else if (this->parseExpectedStringToken("context-fill")) {
+        *paint = SkSVGPaint(SkSVGPaint::Type::kContextFill);
+        parsedValue = true;
+    } else if (this->parseExpectedStringToken("context-stroke")) {
+        *paint = SkSVGPaint(SkSVGPaint::Type::kContextStroke);
+        parsedValue = true;
     } else if (this->parseFuncIRI(&iri)) {
         // optional fallback color
         this->parseWSToken();

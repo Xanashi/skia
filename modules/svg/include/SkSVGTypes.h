@@ -228,6 +228,8 @@ public:
         kNone,
         kColor,
         kIRI,
+        kContextFill,
+        kContextStroke,
     };
 
     SkSVGPaint() : fType(Type::kNone), fColor(SK_ColorBLACK) {}

@@ -122,6 +122,9 @@ struct SkSVGPresentationAttributes {
     SkSVGProperty<SkSVGNumberType   , false> fFloodOpacity;
     SkSVGProperty<SkSVGColor        , false> fLightingColor;
                                     
+    // Marker                       
+    SkSVGProperty<SkSVGPaint        , true> fContextFill;
+    SkSVGProperty<SkSVGPaint        , true> fContextStroke;
 };
 
 #endif // SkSVGAttribute_DEFINED

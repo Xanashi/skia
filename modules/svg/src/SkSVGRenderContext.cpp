@@ -211,6 +211,11 @@ void SkSVGRenderContext::setPathLengthRatio(const SkScalar ratio) const {
     }
 }
 
+void SkSVGRenderContext::setContextColors(const SkSVGPaint fill, const SkSVGPaint stroke) {
+    fPresentationContext.writable()->fInherited.fContextFill.set(fill);
+    fPresentationContext.writable()->fInherited.fContextStroke.set(stroke);
+}
+
 void SkSVGRenderContext::applyPresentationAttributes(const SkSVGPresentationAttributes& attrs,
                                                      uint32_t flags) {
 
@@ -425,6 +430,12 @@ SkTLazy<SkPaint> SkSVGRenderContext::commonPaint(const SkSVGPaint& paint_selecto
     switch (paint_selector.type()) {
     case SkSVGPaint::Type::kColor:
         p->setColor(this->resolveSvgColor(paint_selector.color()));
+        break;
+    case SkSVGPaint::Type::kContextFill:
+        p->setColor(fPresentationContext->fInherited.fContextFill->color().color());
+        break;
+    case SkSVGPaint::Type::kContextStroke:
+        p->setColor(fPresentationContext->fInherited.fContextStroke->color().color());
         break;
     case SkSVGPaint::Type::kIRI: {
         // Our property inheritance is borked as it follows the render path and not the tree

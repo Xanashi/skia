@@ -51,5 +51,8 @@ SkSVGPresentationAttributes SkSVGPresentationAttributes::MakeInitial() {
     result.fFloodOpacity.set(SkSVGNumberType(1));
     result.fLightingColor.set(SkSVGColor(SK_ColorWHITE));
 
+    result.fContextFill.set(SkSVGPaint(SkSVGPaint::Type::kNone));
+    result.fContextStroke.set(SkSVGPaint(SkSVGPaint::Type::kNone));
+
     return result;
 }
