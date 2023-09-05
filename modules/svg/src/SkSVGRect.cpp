@@ -72,9 +72,6 @@ const SkPath* SkSVGRect::onResolvePath(const SkSVGRenderContext& ctx) const {
 
 void SkSVGRect::onDraw(SkCanvas* canvas, const SkSVGLengthContext& lctx,
                        const SkPaint& paint, SkPathFillType) const {
-    if (fWidth.value() == 0 || fHeight.value() == 0) {
-        return;
-    }
     canvas->drawRRect(fRect, paint);
 }
 
