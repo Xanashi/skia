@@ -50,7 +50,7 @@ void SkSVGShape::onRender(const SkSVGRenderContext& ctx) const {
     const auto fillPaint = ctx.fillPaint(),
              strokePaint = ctx.strokePaint();
 
-    if (fillPaint.isValid()) {
+    if (fillPaint.isValid() && this->tag() != SkSVGTag::kLine) {
         this->onDraw(ctx.canvas(), ctx.lengthContext(), *fillPaint, fillType);
     }
 
