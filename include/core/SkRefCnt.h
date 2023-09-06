@@ -372,6 +372,11 @@ sk_sp<T> sk_make_sp(Args&&... args) {
     return sk_sp<T>(new T(std::forward<Args>(args)...));
 }
 
+template <typename To, typename From>
+inline sk_sp<To> sk_pointer_cast(sk_sp<From> const& sp) noexcept {
+    return sk_sp<To>(SkSafeRef(reinterpret_cast<To*>(sp.get())));
+}
+
 /*
  *  Returns a sk_sp wrapping the provided ptr AND calls ref on it (if not null).
  *
