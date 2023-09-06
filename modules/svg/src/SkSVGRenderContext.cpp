@@ -193,6 +193,17 @@ SkSVGRenderContext::SkSVGRenderContext(const SkSVGRenderContext& other, const Sk
                          *other.fPresentationContext,
                          OBBScope{node, this}) {}
 
+SkSVGRenderContext::SkSVGRenderContext(const SkSVGRenderContext& other,
+                                       const SkSVGPresentationContext& pctx,
+                                       const SkSVGNode* node)
+    : SkSVGRenderContext(other.fCanvas,
+                         other.fFontMgr,
+                         other.fResourceProvider,
+                         other.fIDMapper,
+                         *other.fLengthContext,
+                         pctx,
+                         OBBScope{node, this}) {}
+
 SkSVGRenderContext::~SkSVGRenderContext() {
     fCanvas->restoreToCount(fCanvasSaveCount);
 }

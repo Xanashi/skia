@@ -74,6 +74,7 @@ public:
     SkSVGRenderContext(const SkSVGRenderContext&, SkCanvas*);
     // Establish a new OBB scope.  Normally used when entering a node's render scope.
     SkSVGRenderContext(const SkSVGRenderContext&, const SkSVGNode*);
+    SkSVGRenderContext(const SkSVGRenderContext&, const SkSVGPresentationContext&, const SkSVGNode*);
     ~SkSVGRenderContext();
 
     const SkSVGLengthContext& lengthContext() const { return *fLengthContext; }
