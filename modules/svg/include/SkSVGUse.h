@@ -8,6 +8,8 @@
 #ifndef SkSVGUse_DEFINED
 #define SkSVGUse_DEFINED
 
+#include "src/core/SkTHash.h"
+#include "include/core/SkString.h"
 #include "modules/svg/include/SkSVGTransformableNode.h"
 #include "modules/svg/include/SkSVGTypes.h"
 
@@ -41,6 +43,8 @@ private:
         , fX(other.fX), fY(other.fY), fHref(other.fHref) {}
 
     bool parseAndSetAttribute(const char*, const char*) override;
+
+    skia_private::THashMap<SkString, SkString> attrs;
 
     using INHERITED = SkSVGTransformableNode;
 };

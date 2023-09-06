@@ -29,11 +29,17 @@ void SkSVGUse::appendChild(sk_sp<SkSVGNode> node) {
 }
 
 bool SkSVGUse::parseAndSetAttribute(const char* n, const char* v) {
-    return INHERITED::parseAndSetAttribute(n, v) ||
+    bool parsed = INHERITED::parseAndSetAttribute(n, v) ||
            this->setX(SkSVGAttributeParser::parse<SkSVGLength>("x", n, v)) ||
            this->setY(SkSVGAttributeParser::parse<SkSVGLength>("y", n, v)) ||
            this->setHref(SkSVGAttributeParser::parse<SkSVGIRI>("href", n, v)) ||
            this->setHref(SkSVGAttributeParser::parse<SkSVGIRI>("xlink:href", n, v));
+
+    if (!parsed) {
+        attrs[SkString(n)] = SkString(v);  // Apply any non-inherited attributes to the child elements
+    }
+
+    return parsed;
 }
 
 bool SkSVGUse::onPrepareToRender(SkSVGRenderContext* ctx) const {
@@ -58,7 +64,12 @@ void SkSVGUse::onRender(const SkSVGRenderContext& ctx) const {
         return;
     }
 
-    ref->render(ctx);
+    auto clone = ref->makeShallowClone();
+    for (const auto& a : attrs) {
+        clone->parseAndSetAttribute(a.first.c_str(), a.second.c_str());
+    }
+
+        clone->render(ctx);
 }
 
 SkPath SkSVGUse::onAsPath(const SkSVGRenderContext& ctx) const {
