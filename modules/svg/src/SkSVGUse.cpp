@@ -11,6 +11,7 @@
 #include "modules/svg/include/SkSVGRenderContext.h"
 #include "modules/svg/include/SkSVGValue.h"
 #include "modules/svg/include/SkSVGAnimate.h"
+#include "modules/svg/include/SkSVGSymbol.h"
 
 SkSVGUse::SkSVGUse() : INHERITED(SkSVGTag::kUse) {}
 
@@ -69,7 +70,11 @@ void SkSVGUse::onRender(const SkSVGRenderContext& ctx) const {
         clone->parseAndSetAttribute(a.first.c_str(), a.second.c_str());
     }
 
+    if (clone->tag() == SkSVGTag::kSymbol) {
+        static_cast<const SkSVGSymbol*>(clone.get())->renderSymbol(ctx);
+    } else {
         clone->render(ctx);
+    }
 }
 
 SkPath SkSVGUse::onAsPath(const SkSVGRenderContext& ctx) const {

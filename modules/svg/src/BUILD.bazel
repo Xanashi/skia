@@ -56,6 +56,7 @@ skia_filegroup(
         "SkSVGSVG.cpp",
         "SkSVGShape.cpp",
         "SkSVGStop.cpp",
+        "SkSVGSymbol.cpp",
         "SkSVGText.cpp",
         "SkSVGTransformableNode.cpp",
         "SkSVGUse.cpp",

@@ -46,6 +46,7 @@
 #include "modules/svg/include/SkSVGRenderContext.h"
 #include "modules/svg/include/SkSVGSVG.h"
 #include "modules/svg/include/SkSVGStop.h"
+#include "modules/svg/include/SkSVGSymbol.h"
 #include "modules/svg/include/SkSVGText.h"
 #include "modules/svg/include/SkSVGTypes.h"
 #include "modules/svg/include/SkSVGUse.h"
@@ -279,6 +280,7 @@ SortedDictionaryEntry<sk_sp<SkSVGNode>(*)()> gTagFactories[] = {
     { "radialGradient"    , []() -> sk_sp<SkSVGNode> { return SkSVGRadialGradient::Make();     }},
     { "rect"              , []() -> sk_sp<SkSVGNode> { return SkSVGRect::Make();               }},
     { "stop"              , []() -> sk_sp<SkSVGNode> { return SkSVGStop::Make();               }},
+    { "symbol"            , []() -> sk_sp<SkSVGNode> { return SkSVGSymbol::Make();             }},
 //    "svg" handled explicitly
     { "text"              , []() -> sk_sp<SkSVGNode> { return SkSVGText::Make();               }},
     { "textPath"          , []() -> sk_sp<SkSVGNode> { return SkSVGTextPath::Make();           }},

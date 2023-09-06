@@ -54,6 +54,7 @@ skia_filegroup(
         "SkSVGSVG.h",
         "SkSVGShape.h",
         "SkSVGStop.h",
+        "SkSVGSymbol.h",
         "SkSVGText.h",
         "SkSVGTools.h",
         "SkSVGTransformableNode.h",
