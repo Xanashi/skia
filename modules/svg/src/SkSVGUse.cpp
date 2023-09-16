@@ -49,9 +49,13 @@ bool SkSVGUse::onPrepareToRender(SkSVGRenderContext* ctx) const {
     }
 
     if (fX.value() || fY.value()) {
+        const SkSVGLengthContext& lctx = ctx->lengthContext();
+        const SkScalar x = lctx.resolve(fX, SkSVGLengthContext::LengthType::kHorizontal);
+        const SkScalar y = lctx.resolve(fY, SkSVGLengthContext::LengthType::kVertical);
+
         // Restored when the local SkSVGRenderContext leaves scope.
         ctx->saveOnce();
-        ctx->canvas()->translate(fX.value(), fY.value());
+        ctx->canvas()->translate(x, y);
     }
 
     // TODO: width/height override for <svg> targets.
