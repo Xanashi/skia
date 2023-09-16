@@ -163,7 +163,7 @@ SkSVGRenderContext::SkSVGRenderContext(SkCanvas* canvas,
     , fLengthContext(lctx)
     , fPresentationContext(pctx)
     , fCanvas(canvas)
-    , fCanvasSaveCount(canvas->getSaveCount())
+    , fCanvasSaveCount(canvas ? canvas->getSaveCount() : 0)
     , fOBBScope(obbs) {}
 
 SkSVGRenderContext::SkSVGRenderContext(const SkSVGRenderContext& other)
@@ -205,7 +205,9 @@ SkSVGRenderContext::SkSVGRenderContext(const SkSVGRenderContext& other,
                          OBBScope{node, this}) {}
 
 SkSVGRenderContext::~SkSVGRenderContext() {
-    fCanvas->restoreToCount(fCanvasSaveCount);
+    if (fCanvas) {
+        fCanvas->restoreToCount(fCanvasSaveCount);
+    }
 }
 
 SkSVGRenderContext::BorrowedNode SkSVGRenderContext::findNodeById(const SkSVGIRI& iri) const {
