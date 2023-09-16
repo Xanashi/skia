@@ -223,8 +223,10 @@ private:
 
 #define SVG_ATTR(attr_name, attr_type, attr_default)                        \
     private:                                                                \
+        attr_type fDef##attr_name = attr_default;                           \
         attr_type f##attr_name = attr_default;                              \
     public:                                                                 \
+        const attr_type& getDefault##attr_name() const { return fDef##attr_name; } \
         const attr_type& get##attr_name() const { return f##attr_name; }    \
     _SVG_ATTR_SETTERS(                                                      \
             attr_name, attr_type, attr_default,                             \
