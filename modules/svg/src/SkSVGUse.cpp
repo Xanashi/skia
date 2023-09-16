@@ -83,7 +83,17 @@ SkPath SkSVGUse::onAsPath(const SkSVGRenderContext& ctx) const {
         return SkPath();
     }
 
-    return ref->asPath(ctx);
+    auto path = ref->asPath(ctx);
+
+    const SkSVGLengthContext& lctx = ctx.lengthContext();
+    const SkScalar x = lctx.resolve(fX, SkSVGLengthContext::LengthType::kHorizontal);
+    const SkScalar y = lctx.resolve(fY, SkSVGLengthContext::LengthType::kVertical);
+
+    if (x != 0 || y != 0) {
+        path.offset(x, y);
+    }
+
+    return path;
 }
 
 SkRect SkSVGUse::onObjectBoundingBox(const SkSVGRenderContext& ctx) const {
