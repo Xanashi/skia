@@ -483,6 +483,17 @@ void SkSVGDOM::setContainerSize(const SkSize& containerSize) {
     fContainerSize = containerSize;
 }
 
+SkRect SkSVGDOM::getRootBoundingBox() const {
+    if (fRoot) {
+        SkSVGLengthContext lctx(fContainerSize);
+        SkSVGPresentationContext pctx;
+        return fRoot->objectBoundingBox(SkSVGRenderContext(nullptr, fFontMgr,
+            fResourceProvider, fIDMapper, lctx, pctx, {nullptr, nullptr}));
+    }
+
+    return SkRect::MakeEmpty();
+}
+
 sk_sp<SkSVGNode>* SkSVGDOM::findNodeById(const char* id) {
     SkString idStr(id);
     return this->fIDMapper.find(idStr);
