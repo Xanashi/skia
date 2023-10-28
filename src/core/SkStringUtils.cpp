@@ -138,3 +138,47 @@ SkString SkStrTrim(SkString& s) {
 
     return s;
 }
+
+SkString SkStrBetweenChars(SkString s, char startChar, char endChar) {
+    std::string result;
+
+    const char* startPos = strchr(s.c_str(), startChar);
+    if (startPos != nullptr) {
+        const char* endPos = strchr(startPos + 1, endChar);
+        if (endPos != nullptr) {
+            size_t substringLength = endPos - (startPos + 1);
+            result = std::string(startPos + 1, substringLength);
+        }
+    }
+
+    return SkString(result);
+}
+
+std::string SkStrBetweenChars(const std::string& strValue, char startChar, char endChar) {
+    std::string str = "";
+    size_t pos1 = strValue.find(startChar);
+    if (pos1 != std::string::npos) {
+        size_t pos2 = strValue.find(endChar, pos1 + 1);
+        if (pos2 != std::string::npos) {
+            str = strValue.substr(pos1 + 1, pos2 - pos1 - 1);
+        }
+    }
+    return str;
+}
+
+bool SkStrStrI(const char* haystack, const char* needle) {
+    size_t haystackLength = std::strlen(haystack);
+    size_t needleLength = std::strlen(needle);
+
+    for (size_t i = 0; i <= haystackLength - needleLength; ++i) {
+        size_t j = 0;
+        while (j < needleLength && std::tolower(haystack[i + j]) == std::tolower(needle[j])) {
+            ++j;
+        }
+        if (j == needleLength) {
+            return true;
+        }
+    }
+
+    return false;
+}

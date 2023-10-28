@@ -34,6 +34,12 @@ SkString SkStringFromUTF16(const uint16_t* src, size_t count);
 
 SkString SkStrTrim(SkString& s);
 
+SkString SkStrBetweenChars(SkString s, char startChar, char endChar);
+
+std::string SkStrBetweenChars(const std::string& strValue, char startChar, char endChar);
+
+bool SkStrStrI(const char* haystack, const char* needle);
+
 #if defined(SK_BUILD_FOR_WIN)
     #define SK_strcasecmp   _stricmp
 #else
