@@ -236,9 +236,7 @@ SkSVGRenderContext::BorrowedNode SkSVGRenderContext::findNodeById(const SkSVGIRI
 }
 
 void SkSVGRenderContext::setPathLengthRatio(const SkScalar ratio) const {
-    if (ratio != 1) {
-        fPathLengthRatio = ratio;
-    }
+    fPathLengthRatio = ratio;
 }
 
 void SkSVGRenderContext::setContextColors(const SkSVGPaint fill, const SkSVGPaint stroke) {
