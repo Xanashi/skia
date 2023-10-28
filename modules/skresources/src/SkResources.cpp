@@ -319,7 +319,10 @@ sk_sp<ImageAsset> DataURIResourceProviderProxy::loadImageAsset(const char rpath[
 
 sk_sp<SkTypeface> DataURIResourceProviderProxy::loadTypeface(const char name[],
                                                              const char url[]) const {
-    if (auto data = decode_datauri("data:font/", url)) {
+    sk_sp<SkData> data = nullptr;
+    if ((data = decode_datauri("data:font/", url)) || 
+        (data = decode_datauri("data:application/font", url)) ||
+        (data = decode_datauri("data:aplication/font", url))) {
         return SkTypeface::MakeFromData(std::move(data));
     }
 
