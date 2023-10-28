@@ -12,6 +12,7 @@
 #include "include/core/SkFontStyle.h"
 #include "include/core/SkRefCnt.h"
 #include "include/core/SkTypes.h"
+#include "src/core/SkTypefaceCache.h"
 
 #include <memory>
 
@@ -20,6 +21,7 @@ class SkFontData;
 class SkStreamAsset;
 class SkString;
 class SkTypeface;
+class SkTypefaceCache;
 
 class SK_API SkFontStyleSet : public SkRefCnt {
 public:
@@ -113,6 +115,10 @@ public:
 
     sk_sp<SkTypeface> legacyMakeTypeface(const char familyName[], SkFontStyle style) const;
 
+    /** For SVG embedded fonts */
+    void addEmbeddedFont(sk_sp<SkTypeface> typeface);
+    sk_sp<SkTypeface> lookupEmbeddedFont(const char familyName[], SkFontStyle style) const;
+
     /** Return the default fontmgr. */
     static sk_sp<SkFontMgr> RefDefault();
 
@@ -146,6 +152,9 @@ protected:
 private:
     /** Implemented by porting layer to return the default factory. */
     static sk_sp<SkFontMgr> Factory();
+
+    /** For SVG embedded fonts */
+    mutable SkTypefaceCache fTFCache;
 };
 
 #endif

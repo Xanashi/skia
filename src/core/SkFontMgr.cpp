@@ -10,6 +10,7 @@
 #include "include/core/SkTypes.h"
 #include "include/private/base/SkOnce.h"
 #include "src/core/SkFontDescriptor.h"
+#include "src/core/SkStringUtils.h"
 
 class SkFontStyle;
 class SkTypeface;
@@ -146,6 +147,37 @@ sk_sp<SkTypeface> SkFontMgr::makeFromFile(const char path[], int ttcIndex) const
 
 sk_sp<SkTypeface> SkFontMgr::legacyMakeTypeface(const char familyName[], SkFontStyle style) const {
     return this->onLegacyMakeTypeface(familyName, style);
+}
+
+/** For SVG embedded fonts */
+void SkFontMgr::addEmbeddedFont(sk_sp<SkTypeface> typeface) {
+    fTFCache.add(typeface);
+}
+
+sk_sp<SkTypeface> SkFontMgr::lookupEmbeddedFont(const char familyName[], SkFontStyle style) const {
+    if (familyName) {
+        skia_private::TArray<SkString> fontFamilies;
+        SkStrSplit(familyName, ",", &fontFamilies);
+
+        for (auto&& fam : fontFamilies) {
+            familyName = SkStrTrim(fam).c_str();
+
+            auto typeface = fTFCache.findByProcAndRef(
+                    [](SkTypeface* cached, void* ctx) -> bool {
+                        const char* dstFamName = reinterpret_cast<const char*>(ctx);
+                        SkString srcFamName;
+                        cached->getFamilyName(&srcFamName);
+                        return srcFamName.equals(dstFamName);
+                    },
+                    (void *)familyName);
+
+            if (typeface) {
+                return typeface;
+            }
+        }
+    }
+
+    return nullptr;
 }
 
 sk_sp<SkFontMgr> SkFontMgr::RefEmpty() {

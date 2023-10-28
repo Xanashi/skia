@@ -75,9 +75,12 @@ static SkFont ResolveFont(const SkSVGRenderContext& ctx) {
             ctx.lengthContext().resolve(ctx.presentationContext().fInherited.fFontSize->size(),
                                         SkSVGLengthContext::LengthType::kVertical);
 
-    // TODO: we likely want matchFamilyStyle here, but switching away from legacyMakeTypeface
-    // changes all the results when using the default fontmgr.
-    auto tf = ctx.fontMgr()->legacyMakeTypeface(family.c_str(), style);
+    auto tf = ctx.fontMgr()->lookupEmbeddedFont(family.c_str(), style);
+    if (!tf) {
+        // TODO: we likely want matchFamilyStyle here, but switching away from legacyMakeTypeface
+        // changes all the results when using the default fontmgr.
+        tf = ctx.fontMgr()->legacyMakeTypeface(family.c_str(), style);
+    }
 
     SkFont font(std::move(tf), size);
     font.setHinting(SkFontHinting::kNone);
