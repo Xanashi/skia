@@ -218,15 +218,16 @@ bool SkSVGAttributeParser::parseLengthUnitToken(SkSVGLength::Unit* unit) {
         const char*       fUnitName;
         SkSVGLength::Unit fUnit;
     } gUnitInfo[] = {
-        { "%" , SkSVGLength::Unit::kPercentage },
-        { "em", SkSVGLength::Unit::kEMS        },
-        { "ex", SkSVGLength::Unit::kEXS        },
-        { "px", SkSVGLength::Unit::kPX         },
-        { "cm", SkSVGLength::Unit::kCM         },
-        { "mm", SkSVGLength::Unit::kMM         },
-        { "in", SkSVGLength::Unit::kIN         },
-        { "pt", SkSVGLength::Unit::kPT         },
-        { "pc", SkSVGLength::Unit::kPC         },
+        { "%" ,  SkSVGLength::Unit::kPercentage },
+        { "em",  SkSVGLength::Unit::kEMS        },
+        { "rem", SkSVGLength::Unit::kREMS       },
+        { "ex",  SkSVGLength::Unit::kEXS        },
+        { "px",  SkSVGLength::Unit::kPX         },
+        { "cm",  SkSVGLength::Unit::kCM         },
+        { "mm",  SkSVGLength::Unit::kMM         },
+        { "in",  SkSVGLength::Unit::kIN         },
+        { "pt",  SkSVGLength::Unit::kPT         },
+        { "pc",  SkSVGLength::Unit::kPC         },
     };
 
     for (size_t i = 0; i < std::size(gUnitInfo); ++i) {

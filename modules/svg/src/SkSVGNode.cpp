@@ -16,7 +16,8 @@
 
 #include <regex>
 
-SkSVGNode::SkSVGNode(SkSVGTag t) : fTag(t) {
+SkSVGNode::SkSVGNode(SkSVGTag t) : 
+    fTag(t), fComputedFontSize(16) {
     // Uninherited presentation attributes need a non-null default value.
     fPresentationAttributes.fStopColor.set(SkSVGColor(SK_ColorBLACK));
     fPresentationAttributes.fStopOpacity.set(SkSVGNumberType(1.0f));
@@ -26,7 +27,7 @@ SkSVGNode::SkSVGNode(SkSVGTag t) : fTag(t) {
 }
 
 SkSVGNode::SkSVGNode(const SkSVGNode& other) 
-    : fTag(other.fTag) {
+    : fTag(other.fTag), fComputedFontSize(other.fComputedFontSize) {
     auto pa = other.fPresentationAttributes;
 
     this->setClass(pa.fClass);
@@ -104,8 +105,27 @@ SkRect SkSVGNode::objectBoundingBox(const SkSVGRenderContext& ctx) const {
     return this->onObjectBoundingBox(ctx);
 }
 
+void SkSVGNode::resolveFontSizes(SkSVGRenderContext* ctx) const {
+    if (fParent) {
+        ctx->writableLengthContext()->setParentFontSize(fParent->getComputedFontSize());
+    }
+
+    auto fontSize = fPresentationAttributes.fFontSize.isValue()
+                    ? fPresentationAttributes.fFontSize
+                    : ctx->presentationContext().fInherited.fFontSize;
+
+    this->fComputedFontSize =
+            ctx->lengthContext().resolve(fontSize->size(), SkSVGLengthContext::LengthType::kFont);
+
+    ctx->writableLengthContext()->setFontSize(this->fComputedFontSize);
+}
+
 bool SkSVGNode::onPrepareToRender(SkSVGRenderContext* ctx) const {
+    // Resolve font attributes now to use in lengthContext resolution calculations
+    resolveFontSizes(ctx);
+
     ctx->applyPresentationAttributes(fPresentationAttributes,
+                                     SkSVGLength(this->fComputedFontSize),
                                      this->hasChildren() ? 0 : SkSVGRenderContext::kLeaf);
 
     // visibility:hidden and display:none disable rendering.

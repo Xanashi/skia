@@ -192,6 +192,10 @@ protected:
     }
 
     bool setFontAttribute(const char* stringValue);
+    void resolveFontSizes(SkSVGRenderContext* ctx) const;
+
+    SkScalar getComputedFontSize() const { return fComputedFontSize; }
+
 private:
     SkSVGTag                    fTag;
 
@@ -199,6 +203,7 @@ private:
 
     // FIXME: this should be sparse
     SkSVGPresentationAttributes fPresentationAttributes;
+    mutable SkScalar            fComputedFontSize; // Needed for size calculations
 
     using INHERITED = SkRefCnt;
 };

@@ -38,6 +38,8 @@ SkScalar length_size_for_type(const SkSize& viewport, SkSVGLengthContext::Length
         const SkScalar w = viewport.width(), h = viewport.height();
         return rsqrt2 * SkScalarSqrt(w * w + h * h);
     }
+    case SkSVGLengthContext::LengthType::kFont:
+        SkDebugf("Length type: <%d> should be handled separately\n", (int)t);
     }
 
     SkASSERT(false);  // Not reached.
@@ -60,7 +62,22 @@ SkScalar SkSVGLengthContext::resolve(const SkSVGLength& l, LengthType t) const {
     case SkSVGLength::Unit::kPX:
         return l.value();
     case SkSVGLength::Unit::kPercentage:
-        return l.value() * length_size_for_type(fViewport, t) / 100;
+        if (t == SkSVGLengthContext::LengthType::kFont) {
+            return l.value() * fParentFontSize / 100;
+        } else {
+            return l.value() * length_size_for_type(fViewport, t) / 100;
+        }
+    case SkSVGLength::Unit::kEMS:
+        if (t == SkSVGLengthContext::LengthType::kFont) {
+            return l.value() * fParentFontSize;
+        } else {
+            return l.value() * fFontSize;
+        }
+    case SkSVGLength::Unit::kREMS:
+        return l.value() * fRootFontSize; 
+    case SkSVGLength::Unit::kEXS:
+        // TODO: Replace "fFontSize * 0.6" with the actual height of 'x' in the current typeface
+        return l.value() * fFontSize * 0.6; 
     case SkSVGLength::Unit::kCM:
         return l.value() * fDPI * kCMMultiplier;
     case SkSVGLength::Unit::kMM:
@@ -230,7 +247,7 @@ void SkSVGRenderContext::setContextColors(const SkSVGPaint fill, const SkSVGPain
 }
 
 void SkSVGRenderContext::applyPresentationAttributes(const SkSVGPresentationAttributes& attrs,
-                                                     uint32_t flags) {
+                                                     SkSVGLength fontSize, uint32_t flags) {
 
 #define ApplyLazyInheritedAttribute(ATTR)                                               \
     do {                                                                                \
@@ -247,7 +264,6 @@ void SkSVGRenderContext::applyPresentationAttributes(const SkSVGPresentationAttr
     ApplyLazyInheritedAttribute(FillOpacity);
     ApplyLazyInheritedAttribute(FillRule);
     ApplyLazyInheritedAttribute(FontFamily);
-    ApplyLazyInheritedAttribute(FontSize);
     ApplyLazyInheritedAttribute(FontStyle);
     ApplyLazyInheritedAttribute(FontWeight);
     ApplyLazyInheritedAttribute(ClipRule);
@@ -268,11 +284,16 @@ void SkSVGRenderContext::applyPresentationAttributes(const SkSVGPresentationAttr
     ApplyLazyInheritedAttribute(ColorInterpolationFilters);
     ApplyLazyInheritedAttribute(CornerRadius);
 
+    // Use the computed font size for the inherited value
+    // as inheriting variable font sizes (%,em,ex,rem) produce wrong results
+    fPresentationContext.writable()->fInherited.fFontSize.set(SkSVGFontSize(fontSize));
+
 #undef ApplyLazyInheritedAttribute
 
     // Uninherited attributes.  Only apply to the current context.
 
     const bool hasFilter = attrs.fFilter.isValue();
+
     if (attrs.fOpacity.isValue()) {
         this->applyOpacity(*attrs.fOpacity, flags, hasFilter);
     }

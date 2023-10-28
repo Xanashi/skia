@@ -71,9 +71,7 @@ static SkFont ResolveFont(const SkSVGRenderContext& ctx) {
                             SkFontStyle::kNormal_Width,
                             slant(*ctx.presentationContext().fInherited.fFontStyle));
 
-    const auto size =
-            ctx.lengthContext().resolve(ctx.presentationContext().fInherited.fFontSize->size(),
-                                        SkSVGLengthContext::LengthType::kVertical);
+    const auto size = ctx.lengthContext().fontSize();  // Resolved in SkSVGNode::OnRender
 
     auto tf = ctx.fontMgr()->lookupEmbeddedFont(family.c_str(), style);
     if (!tf) {

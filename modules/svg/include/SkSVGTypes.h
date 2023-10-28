@@ -121,6 +121,7 @@ public:
         kNumber,
         kPercentage,
         kEMS,
+        kREMS,
         kEXS,
         kPX,
         kCM,

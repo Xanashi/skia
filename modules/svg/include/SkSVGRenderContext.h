@@ -27,16 +27,21 @@ class SkSVGLength;
 class SK_API SkSVGLengthContext {
 public:
     SkSVGLengthContext(const SkSize& viewport, SkScalar dpi = 96)
-        : fViewport(viewport), fDPI(dpi) {}
+        : fViewport(viewport), fDPI(dpi), fFontSize(16.0)
+        , fParentFontSize(16.0), fRootFontSize(16.0) {}
 
     enum class LengthType {
         kHorizontal,
         kVertical,
         kOther,
+        kFont
     };
 
     const SkSize& viewPort() const { return fViewport; }
+    const SkScalar& fontSize() const { return fFontSize; }
     void setViewPort(const SkSize& viewport) { fViewport = viewport; }
+    void setFontSize(const SkScalar& fontSize) { fFontSize = fontSize; }
+    void setParentFontSize(const SkScalar& fontSize) { fParentFontSize = fontSize; }
 
     SkScalar resolve(const SkSVGLength&, LengthType) const;
     SkRect   resolveRect(const SkSVGLength& x, const SkSVGLength& y,
@@ -45,6 +50,10 @@ public:
 private:
     SkSize   fViewport;
     SkScalar fDPI;
+
+    SkScalar fFontSize;       // Used for EX/EM length resolution
+    SkScalar fParentFontSize; // Used for Font variable size resolution
+    SkScalar fRootFontSize;   // Used for REM length resolution
 };
 
 struct SK_API SkSVGPresentationContext {
@@ -92,7 +101,8 @@ public:
     void setPathLengthRatio(const SkScalar ratio) const;
     void setContextColors(const SkSVGPaint fill, const SkSVGPaint stroke);
 
-    void applyPresentationAttributes(const SkSVGPresentationAttributes&, uint32_t flags);
+    void applyPresentationAttributes(const SkSVGPresentationAttributes&, SkSVGLength fontSize, 
+                                     uint32_t flags);
 
     // Scoped wrapper that temporarily clears the original node reference.
     class BorrowedNode {
