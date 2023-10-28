@@ -17,6 +17,7 @@
 #include "include/core/SkTypes.h"
 #include "modules/skcms/skcms.h"
 #include "src/codec/SkSwizzler.h"
+#include "src/core/SkSwizzlePriv.h"
 #include "src/core/SkStreamPriv.h"
 
 #include <cstdint>
