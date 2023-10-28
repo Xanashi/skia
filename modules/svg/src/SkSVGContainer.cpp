@@ -19,6 +19,7 @@ SkSVGContainer::SkSVGContainer(const SkSVGContainer& other) : INHERITED(other) {
 
 void SkSVGContainer::appendChild(sk_sp<SkSVGNode> node) {
     SkASSERT(node);
+    node->setIndexInParent(fChildren.size());
     fChildren.push_back(std::move(node));
 }
 

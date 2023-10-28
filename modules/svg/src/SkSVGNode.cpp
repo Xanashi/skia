@@ -14,10 +14,12 @@
 #include "modules/svg/include/SkSVGValue.h"
 #include "src/base/SkTLazy.h"
 
+#include <third_party/externals/cssparser/CssParser/include/utils/StringUtil.h>
+
 #include <regex>
 
 SkSVGNode::SkSVGNode(SkSVGTag t) : 
-    fTag(t), fComputedFontSize(16) {
+    fTag(t), fParent(nullptr), fIndexWithinParent(0), fComputedFontSize(16) {
     // Uninherited presentation attributes need a non-null default value.
     fPresentationAttributes.fStopColor.set(SkSVGColor(SK_ColorBLACK));
     fPresentationAttributes.fStopOpacity.set(SkSVGNumberType(1.0f));
@@ -27,7 +29,9 @@ SkSVGNode::SkSVGNode(SkSVGTag t) :
 }
 
 SkSVGNode::SkSVGNode(const SkSVGNode& other) 
-    : fTag(other.fTag), fComputedFontSize(other.fComputedFontSize) {
+    : fTag(other.fTag), fTagName(other.fTagName), fParent(other.fParent)
+    , fIndexWithinParent(other.fIndexWithinParent)
+    , fComputedFontSize(other.fComputedFontSize) {
     auto pa = other.fPresentationAttributes;
 
     this->setClass(pa.fClass);
@@ -194,6 +198,7 @@ bool SkSVGNode::parseAndSetAttribute(const char* n, const char* v) {
             SkSVGAttributeParser::parseProperty<decltype(fPresentationAttributes.f##attrName)>( \
                     svgName, n, v))
 
+    this->fAttributes[n] = v;
 
     if (!strcmp(n, "class")) {
         this->fClasses = future::StringUtil::split(v, ' ');

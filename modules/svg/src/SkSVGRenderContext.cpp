@@ -359,7 +359,7 @@ void SkSVGRenderContext::applyFilter(const SkSVGFuncIRI& filter) {
         return;
     }
 
-    const SkSVGFilter* filterNode = reinterpret_cast<const SkSVGFilter*>(node.get());
+    const auto filterNode = reinterpret_cast<const SkSVGFilter*>(node.get());
     sk_sp<SkImageFilter> imageFilter = filterNode->buildFilterDAG(*this);
     if (imageFilter) {
         SkPaint filterPaint;

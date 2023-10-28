@@ -8,9 +8,14 @@
 #ifndef SkSVGNode_DEFINED
 #define SkSVGNode_DEFINED
 
+#include <map>
+
 #include "include/core/SkRefCnt.h"
+#include "include/private/base/SkTArray.h"
 #include "modules/svg/include/SkSVGAttribute.h"
 #include "modules/svg/include/SkSVGAttributeParser.h"
+
+#include <third_party/externals/cssparser/CssParser/include/resolvers/INodeSelector.h>
 
 class SkCanvas;
 class SkMatrix;
@@ -60,6 +65,7 @@ enum class SkSVGTag {
     kRadialGradient,
     kRect,
     kStop,
+    kStyle,
     kSvg,
     kSymbol,
     kText,
@@ -100,11 +106,15 @@ public:                                                                      \
         }                                                                    \
     }
 
-class SK_API SkSVGNode : public SkRefCnt {
+class SK_API SkSVGNode : public SkRefCnt, public INodeSelector {
 public:
     ~SkSVGNode() override;
 
     SkSVGTag tag() const { return fTag; }
+    SkString tagName() const { return fTagName; }
+
+    // TODO: This value should be set by the child classes themselves
+    void setTagName(const char* name) { fTagName = SkString(name); }
 
     virtual void appendChild(sk_sp<SkSVGNode>) = 0;
 
@@ -163,6 +173,39 @@ public:
     SVG_PRES_ATTR(Id                       , SkSVGStringType   , false)
     SVG_PRES_ATTR(Style                    , SkSVGStringType   , false)
 
+public:
+    // INodeSelector Implementation 
+    // For CSS styling
+
+    #define GET_ATTR_STR(attr_name)                            \
+        auto strAttr = &fPresentationAttributes.f##attr_name;  \
+        return (strAttr->isValue() ? (*strAttr)->c_str() : "")
+
+    virtual std::string GetTag()     override { return fTagName.c_str(); }
+    virtual std::string GetId()      override { GET_ATTR_STR(Id); }
+    virtual std::vector<std::string> GetClasses() override { return fClasses; }
+
+    virtual std::pair<std::string, std::string> GetAttribute(std::string key) override {
+        return fAttributes.find(key) != fAttributes.end() ? 
+            std::make_pair(key, fAttributes[key]) : std::make_pair("", "");
+    }
+
+    virtual INodeSelector* GetParent() override { return fParent; }
+
+    virtual std::vector<INodeSelector*> GetChildren() override {
+        return std::vector<INodeSelector*>(); // Return empty vector 
+    }
+
+    virtual int GetIndexWithinParent() override { return fIndexWithinParent; }
+
+    // Additional CSS accessors
+    void setParent(SkSVGNode* parent) { fParent = parent; }
+    void setIndexInParent(int idx) { fIndexWithinParent = idx; }
+    std::string GetInlineStyle() { GET_ATTR_STR(Style); }
+    virtual skia_private::STArray<1, sk_sp<SkSVGNode>, true> GetChildrenDirect() {
+        return skia_private::STArray<1, sk_sp<SkSVGNode>, true>();
+    }
+
 protected:
     SkSVGNode(SkSVGTag);
     SkSVGNode(const SkSVGNode&);
@@ -198,8 +241,12 @@ protected:
 
 private:
     SkSVGTag                    fTag;
+    SkString                    fTagName;
+    SkSVGNode*                  fParent;
+    int                         fIndexWithinParent;
 
     std::vector<std::string> fClasses;
+    std::map<std::string, std::string> fAttributes;
 
     // FIXME: this should be sparse
     SkSVGPresentationAttributes fPresentationAttributes;

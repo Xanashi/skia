@@ -20,6 +20,7 @@ skia_filegroup(
         "SkSVGCircle.cpp",
         "SkSVGClipPath.cpp",
         "SkSVGContainer.cpp",
+        "SkSVGCss.cpp",
         "SkSVGDOM.cpp",
         "SkSVGEllipse.cpp",
         "SkSVGFe.cpp",

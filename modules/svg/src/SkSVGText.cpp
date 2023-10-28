@@ -545,8 +545,7 @@ void SkSVGTextContainer::appendChild(sk_sp<SkSVGNode> child) {
     case SkSVGTag::kTextLiteral:
     case SkSVGTag::kTextPath:
     case SkSVGTag::kTSpan:
-        fChildren.push_back(
-            sk_sp<SkSVGTextFragment>(static_cast<SkSVGTextFragment*>(child.release())));
+        fChildren.push_back(std::move(child));
         break;
     default:
         break;
@@ -561,7 +560,7 @@ void SkSVGTextContainer::onShapeText(const SkSVGRenderContext& ctx, SkSVGTextCon
 
     for (const auto& frag : fChildren) {
         // Containers always override xml:space with the local value.
-        frag->renderText(ctx, tctx, this->getXmlSpace());
+        static_cast<SkSVGTextFragment*>(frag.get())->renderText(ctx, tctx, this->getXmlSpace());
     }
 }
 

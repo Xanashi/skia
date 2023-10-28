@@ -49,6 +49,21 @@ public:
 
     void appendChild(sk_sp<SkSVGNode>) final;
 
+public:
+    // INodeSelector Implementation
+    // For CSS styling
+    std::vector<INodeSelector*> GetChildren() override {
+        std::vector<INodeSelector*> convertedChildren;
+        for (const auto& child : fChildren) {
+            convertedChildren.push_back(child.get());
+        }
+        return convertedChildren;
+    }
+
+    skia_private::STArray<1, sk_sp<SkSVGNode>, true> GetChildrenDirect() override {
+        return fChildren;
+    }
+
 protected:
     explicit SkSVGTextContainer(SkSVGTag t) : INHERITED(t) {}
     SkSVGTextContainer(const SkSVGTextContainer& other) : INHERITED(other)
@@ -64,7 +79,7 @@ protected:
     bool parseAndSetAttribute(const char*, const char*) override;
 
 private:
-    std::vector<sk_sp<SkSVGTextFragment>> fChildren;
+    skia_private::STArray<1, sk_sp<SkSVGNode>, true> fChildren;
 
     using INHERITED = SkSVGTextFragment;
 };

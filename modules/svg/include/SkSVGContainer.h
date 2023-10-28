@@ -8,12 +8,31 @@
 #ifndef SkSVGContainer_DEFINED
 #define SkSVGContainer_DEFINED
 
+#include <vector>
+
 #include "include/private/base/SkTArray.h"
 #include "modules/svg/include/SkSVGTransformableNode.h"
+
+class INodeSelector;
 
 class SK_API SkSVGContainer : public SkSVGTransformableNode {
 public:
     void appendChild(sk_sp<SkSVGNode>) override;
+
+public:
+    // INodeSelector Implementation
+    // For CSS styling
+    virtual std::vector<INodeSelector*> GetChildren() override {
+        std::vector<INodeSelector*> convertedChildren;
+        for (const auto& child : fChildren) {
+            convertedChildren.push_back(child.get());
+        }
+        return convertedChildren;
+    }
+
+    skia_private::STArray<1, sk_sp<SkSVGNode>, true> GetChildrenDirect() override { 
+        return fChildren;
+    }
 
 protected:
     explicit SkSVGContainer(SkSVGTag);

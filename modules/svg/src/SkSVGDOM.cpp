@@ -13,6 +13,7 @@
 #include "modules/svg/include/SkSVGAttributeParser.h"
 #include "modules/svg/include/SkSVGCircle.h"
 #include "modules/svg/include/SkSVGClipPath.h"
+#include "modules/svg/include/SkSVGCss.h"
 #include "modules/svg/include/SkSVGDOM.h"
 #include "modules/svg/include/SkSVGDefs.h"
 #include "modules/svg/include/SkSVGEllipse.h"
@@ -53,9 +54,28 @@
 #include "modules/svg/include/SkSVGValue.h"
 #include "src/base/SkTSearch.h"
 #include "src/core/SkTraceEvent.h"
+#include "src/core/SkStringUtils.h"
 #include "src/xml/SkDOM.h"
 
 namespace {
+
+struct ConstructionContext {
+    ConstructionContext(SkSVGIDMapper* mapper, SkString* cssStyleSheet, SkFontMgr* fontMgr, 
+        skresources::ResourceProvider* resourceProvider)
+            : fParent(nullptr), fIDMapper(mapper), fCssStyleSheet(cssStyleSheet), 
+              fFontMgr(fontMgr), fResourceProvider(resourceProvider) {}
+
+    ConstructionContext(const ConstructionContext& other, const sk_sp<SkSVGNode>& newParent)
+        : fParent(newParent.get()), fIDMapper(other.fIDMapper), fCssStyleSheet(other.fCssStyleSheet), 
+          fFontMgr(other.fFontMgr), fResourceProvider(other.fResourceProvider) {}
+
+    SkSVGNode*     fParent;
+    SkSVGIDMapper* fIDMapper;
+    SkString*      fCssStyleSheet;
+    SkFontMgr*     fFontMgr;
+
+    skresources::ResourceProvider* fResourceProvider;
+};
 
 bool SetIRIAttribute(const sk_sp<SkSVGNode>& node, SkSVGAttribute attr,
                       const char* stringValue) {
@@ -134,72 +154,6 @@ bool SetPreserveAspectRatioAttribute(const sk_sp<SkSVGNode>& node, SkSVGAttribut
     return true;
 }
 
-SkString TrimmedString(const char* first, const char* last) {
-    SkASSERT(first);
-    SkASSERT(last);
-    SkASSERT(first <= last);
-
-    while (first <= last && *first <= ' ') { first++; }
-    while (first <= last && *last  <= ' ') { last--; }
-
-    SkASSERT(last - first + 1 >= 0);
-    return SkString(first, SkTo<size_t>(last - first + 1));
-}
-
-// Breaks a "foo: bar; baz: ..." string into key:value pairs.
-class StyleIterator {
-public:
-    StyleIterator(const char* str) : fPos(str) { }
-
-    std::tuple<SkString, SkString> next() {
-        SkString name, value;
-
-        if (fPos) {
-            const char* sep = this->nextSeparator();
-            SkASSERT(*sep == ';' || *sep == '\0');
-
-            const char* valueSep = strchr(fPos, ':');
-            if (valueSep && valueSep < sep) {
-                name  = TrimmedString(fPos, valueSep - 1);
-                value = TrimmedString(valueSep + 1, sep - 1);
-            }
-
-            fPos = *sep ? sep + 1 : nullptr;
-        }
-
-        return std::make_tuple(name, value);
-    }
-
-private:
-    const char* nextSeparator() const {
-        const char* sep = fPos;
-        while (*sep != ';' && *sep != '\0') {
-            sep++;
-        }
-        return sep;
-    }
-
-    const char* fPos;
-};
-
-bool set_string_attribute(const sk_sp<SkSVGNode>& node, const char* name, const char* value);
-
-bool SetStyleAttributes(const sk_sp<SkSVGNode>& node, SkSVGAttribute,
-                        const char* stringValue) {
-
-    SkString name, value;
-    StyleIterator iter(stringValue);
-    for (;;) {
-        std::tie(name, value) = iter.next();
-        if (name.isEmpty()) {
-            break;
-        }
-        set_string_attribute(node, name.c_str(), value.c_str());
-    }
-
-    return true;
-}
-
 template<typename T>
 struct SortedDictionaryEntry {
     const char* fKey;
@@ -225,7 +179,7 @@ SortedDictionaryEntry<AttrParseInfo> gAttributeParseInfo[] = {
     { "r"                  , { SkSVGAttribute::kR                , SetLengthAttribute       }},
     { "rx"                 , { SkSVGAttribute::kRx               , SetLengthAttribute       }},
     { "ry"                 , { SkSVGAttribute::kRy               , SetLengthAttribute       }},
-    { "style"              , { SkSVGAttribute::kUnknown          , SetStyleAttributes       }},
+    //{ "style"              , { SkSVGAttribute::kUnknown          , SetStyleAttributes       }},
     { "text"               , { SkSVGAttribute::kText             , SetStringAttribute       }},
     { "transform"          , { SkSVGAttribute::kTransform        , SetTransformAttribute    }},
     { "viewBox"            , { SkSVGAttribute::kViewBox          , SetViewBoxAttribute      }},
@@ -288,15 +242,6 @@ SortedDictionaryEntry<sk_sp<SkSVGNode>(*)()> gTagFactories[] = {
     { "use"               , []() -> sk_sp<SkSVGNode> { return SkSVGUse::Make();                }},
 };
 
-struct ConstructionContext {
-    ConstructionContext(SkSVGIDMapper* mapper) : fParent(nullptr), fIDMapper(mapper) {}
-    ConstructionContext(const ConstructionContext& other, const sk_sp<SkSVGNode>& newParent)
-        : fParent(newParent.get()), fIDMapper(other.fIDMapper) {}
-
-    SkSVGNode*     fParent;
-    SkSVGIDMapper* fIDMapper;
-};
-
 bool set_string_attribute(const sk_sp<SkSVGNode>& node, const char* name, const char* value) {
     if (node->parseAndSetAttribute(name, value)) {
         // Handled by new code path
@@ -355,8 +300,17 @@ sk_sp<SkSVGNode> construct_svg_node(const SkDOM& dom, const ConstructionContext&
         SkASSERT(dom.countChildren(xmlNode) == 0);
         auto txt = SkSVGTextLiteral::Make();
         txt->setText(SkString(dom.getName(xmlNode)));
+
         ctx.fParent->appendChild(std::move(txt));
 
+        return nullptr;
+    }
+
+    if (strcmp(elem, "style") == 0) {
+        auto styleContent = dom.getFirstChild(xmlNode);
+        if (styleContent) {
+            ctx.fCssStyleSheet->append(dom.getName(styleContent));
+        }
         return nullptr;
     }
 
@@ -387,6 +341,9 @@ sk_sp<SkSVGNode> construct_svg_node(const SkDOM& dom, const ConstructionContext&
     if (!node) {
         return nullptr;
     }
+
+    node->setTagName(elem);
+    node->setParent(ctx.fParent);
 
     apply_group_attributes(node, ctx.fParent);
     parse_node_attributes(dom, xmlNode, node, ctx.fIDMapper);
@@ -422,23 +379,29 @@ sk_sp<SkSVGDOM> SkSVGDOM::Builder::make(SkStream& str) const {
         return nullptr;
     }
 
+    class NullResourceProvider final : public skresources::ResourceProvider {
+        sk_sp<SkData> load(const char[], const char[]) const override { return nullptr; }
+    };
+
+    auto fontMgr = fFontMgr ? fFontMgr : SkFontMgr::RefDefault();
+    auto resource_provider = fResourceProvider ? fResourceProvider
+                                               : sk_make_sp<NullResourceProvider>();
+
     SkSVGIDMapper mapper;
-    ConstructionContext ctx(&mapper);
+    SkString cssStyleSheet;
+    ConstructionContext ctx(&mapper, &cssStyleSheet, fontMgr.get(), resource_provider.get());
 
     auto root = construct_svg_node(xmlDom, ctx, xmlDom.getRootNode());
     if (!root || root->tag() != SkSVGTag::kSvg) {
         return nullptr;
     }
 
-    class NullResourceProvider final : public skresources::ResourceProvider {
-        sk_sp<SkData> load(const char[], const char[]) const override { return nullptr; }
-    };
-
-    auto resource_provider = fResourceProvider ? fResourceProvider
-                                               : sk_make_sp<NullResourceProvider>();
+    SkSVGCss cssParser;
+    FontContext fctx(fontMgr.get(), resource_provider.get());
+    cssParser.applyCssToNodeTree(fctx, root, cssStyleSheet);
 
     return sk_sp<SkSVGDOM>(new SkSVGDOM(sk_sp<SkSVGSVG>(static_cast<SkSVGSVG*>(root.release())),
-                                        std::move(fFontMgr), std::move(resource_provider),
+                                        std::move(fontMgr), std::move(resource_provider),
                                         std::move(mapper)));
 }
 

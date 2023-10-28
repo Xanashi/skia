@@ -1,0 +1,40 @@
+# Copyright 2022 The Chromium Authors. All rights reserved.
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+import("../third_party.gni")
+
+third_party("cssparser") {
+  configs = [
+    "//gn/portable:add_rtti",
+  ]
+
+  public_include_dirs = [
+    ".",
+    "../externals/cssparser/cssparser/include",
+  ]
+
+  include_dirs = [ "../externals/cssparser/cssparser" ]
+
+  sources = [
+    "../externals/cssparser/cssparser/src/cssparser/CSSLex.cpp",
+    "../externals/cssparser/cssparser/src/cssparser/CSSParser.cpp",
+    "../externals/cssparser/cssparser/src/cssparser/KeywordItem.cpp",
+    "../externals/cssparser/cssparser/src/resolvers/NodePseudoSelectorResolver.cpp",
+    "../externals/cssparser/cssparser/src/resolvers/NodeSelectorResolver.cpp",
+    "../externals/cssparser/cssparser/src/selectors/AttributeSelector.cpp",
+    "../externals/cssparser/cssparser/src/selectors/ClassSelector.cpp",
+    "../externals/cssparser/cssparser/src/selectors/CombineSelector.cpp",
+    "../externals/cssparser/cssparser/src/selectors/IdSelector.cpp",
+    "../externals/cssparser/cssparser/src/selectors/PseudoSelector.cpp",
+    "../externals/cssparser/cssparser/src/selectors/Selector.cpp",
+    "../externals/cssparser/cssparser/src/selectors/SelectorGroup.cpp",
+    "../externals/cssparser/cssparser/src/selectors/SelectorSequence.cpp",
+    "../externals/cssparser/cssparser/src/selectors/SignSelector.cpp",
+    "../externals/cssparser/cssparser/src/selectors/TypeSelector.cpp",
+    "../externals/cssparser/cssparser/src/selectors/UniversalSelector.cpp",
+    "../externals/cssparser/cssparser/src/utils/CSSUtil.cpp",
+    "../externals/cssparser/cssparser/src/utils/ContainerUtil.cpp",
+    "../externals/cssparser/cssparser/src/utils/StringUtil.cpp"
+  ]
+}
