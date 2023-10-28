@@ -1562,6 +1562,20 @@ static void test_convexity_doubleback(skiatest::Reporter* reporter) {
     check_convexity(reporter, doubleback, true);
     doubleback.quadTo(1, 0, 0, 0);
     check_convexity(reporter, doubleback, true);
+
+    doubleback.reset();
+    doubleback.lineTo(1, 0);
+    doubleback.lineTo(1, 0);
+    doubleback.lineTo(1, 1);
+    doubleback.lineTo(1, 1);
+    doubleback.lineTo(1, 0);
+    check_convexity(reporter, doubleback, false);
+
+    doubleback.reset();
+    doubleback.lineTo(-1, 0);
+    doubleback.lineTo(-1, 1);
+    doubleback.lineTo(-1, 0);
+    check_convexity(reporter, doubleback, false);
 }
 
 static void check_convex_bounds(skiatest::Reporter* reporter, const SkPath& p,
@@ -2624,7 +2638,7 @@ static void test_isNestedFillRects(skiatest::Reporter* reporter) {
 
 static void write_and_read_back(skiatest::Reporter* reporter,
                                 const SkPath& p) {
-    SkBinaryWriteBuffer writer;
+    SkBinaryWriteBuffer writer({});
     writer.writePath(p);
     size_t size = writer.bytesWritten();
     SkAutoMalloc storage(size);

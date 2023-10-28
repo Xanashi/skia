@@ -14,7 +14,8 @@
 #include "include/core/SkCanvas.h"
 #include "include/core/SkData.h"
 #include "include/core/SkPicture.h"
-#include "src/utils/SkMultiPictureDocument.h"
+#include "include/gpu/graphite/ContextOptions.h"
+#include "include/docs/SkMultiPictureDocument.h"
 #include "tools/flags/CommonFlagsConfig.h"
 #include "tools/gpu/MemoryCache.h"
 
@@ -108,11 +109,6 @@ struct Src {
     virtual SkISize size([[maybe_unused]] int page) const { return this->size(); }
     // Force Tasks using this Src to run on the main thread?
     virtual bool serial() const { return false; }
-
-    /** Return a list of verifiers for the src, or null if no verifiers should be run .*/
-    virtual std::unique_ptr<skiagm::verifiers::VerifierList> getVerifiers() const {
-        return nullptr;
-    }
 };
 
 struct Sink {
@@ -148,8 +144,6 @@ public:
 #if defined(SK_GRAPHITE)
     void modifyGraphiteContextOptions(skgpu::graphite::ContextOptions*) const override;
 #endif
-
-    std::unique_ptr<skiagm::verifiers::VerifierList> getVerifiers() const override;
 
 private:
     skiagm::GMFactory fFactory;
@@ -380,7 +374,7 @@ public:
                   std::function<void(GrDirectContext*)> initContext = nullptr,
                   std::function<SkCanvas*(SkCanvas*)> wrapCanvas = nullptr) const;
 
-    sk_gpu_test::GrContextFactory::ContextType contextType() const { return fContextType; }
+    skgpu::ContextType contextType() const { return fContextType; }
     const sk_gpu_test::GrContextFactory::ContextOverrides& contextOverrides() const {
         return fContextOverrides;
     }
@@ -403,7 +397,7 @@ protected:
     bool readBack(SkSurface*, SkBitmap* dst) const;
 
 private:
-    sk_gpu_test::GrContextFactory::ContextType        fContextType;
+    skgpu::ContextType                                fContextType;
     sk_gpu_test::GrContextFactory::ContextOverrides   fContextOverrides;
     SkCommandLineConfigGpu::SurfType                  fSurfType;
     int                                               fSampleCount;
@@ -572,21 +566,20 @@ private:
 
 class GraphiteSink : public Sink {
 public:
-    using ContextType = sk_gpu_test::GrContextFactory::ContextType;
-
     GraphiteSink(const SkCommandLineConfigGraphite*);
 
     Result draw(const Src&, SkBitmap*, SkWStream*, SkString*) const override;
     bool serial() const override { return true; }
     const char* fileExtension() const override { return "png"; }
-    SinkFlags flags() const override { return SinkFlags{ SinkFlags::kGPU, SinkFlags::kDirect }; }
+    SinkFlags flags() const override { return SinkFlags{SinkFlags::kGPU, SinkFlags::kDirect}; }
     void setColorSpace(sk_sp<SkColorSpace> colorSpace) override { fColorSpace = colorSpace; }
     SkColorInfo colorInfo() const override {
         return SkColorInfo(fColorType, fAlphaType, fColorSpace);
     }
 
 private:
-    ContextType fContextType;
+    skgpu::graphite::ContextOptions fBaseContextOptions;
+    skgpu::ContextType fContextType;
     SkColorType fColorType;
     SkAlphaType fAlphaType;
     sk_sp<SkColorSpace> fColorSpace;

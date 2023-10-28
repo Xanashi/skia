@@ -239,11 +239,11 @@ const TextBlob::Key& TextBlob::key() const { return fKey; }
 void TextBlob::draw(SkCanvas* canvas,
                     SkPoint drawOrigin,
                     const SkPaint& paint,
-                    AtlasDrawDelegate atlasDelegate) {
+                    const AtlasDrawDelegate& atlasDelegate) {
     fSubRuns->draw(canvas, drawOrigin, paint, this, atlasDelegate);
 }
 
-#if GR_TEST_UTILS
+#if defined(GR_TEST_UTILS)
 struct SubRunContainerPeer {
     static const AtlasSubRun* getAtlasSubRun(const SubRunContainer& subRuns) {
         if (subRuns.isEmpty()) {
@@ -255,7 +255,7 @@ struct SubRunContainerPeer {
 #endif
 
 const AtlasSubRun* TextBlob::testingOnlyFirstSubRun() const {
-#if GR_TEST_UTILS
+#if defined(GR_TEST_UTILS)
     return SubRunContainerPeer::getAtlasSubRun(*fSubRuns);
 #else
     return nullptr;

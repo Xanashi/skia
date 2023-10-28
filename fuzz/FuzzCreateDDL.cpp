@@ -25,7 +25,7 @@
  * The fuzzer aims to fuzz the use of GrDeferredDisplayList. It mainly consists of
  * three parts.
  * 1. In create_surface_characterization, (make_characterization) Create GrSurfaceCharacterization
- * by using GrDirectContext of kGL_ContextType as it can be applied on all platform, and
+ * by using GrDirectContext of ContextType::kGL as it can be applied on all platform, and
  * (make_surface) create a GPU backend surface of the same GrDirectContext
  * 2. (make_ddl) Create GrDeferredDisplayListRecorder from the GrSurfaceCharacterization, and test
  * the recoder's corresponding canvas.
@@ -182,7 +182,7 @@ static sk_sp<SkSurface> make_surface(Fuzz* fuzz, GrDirectContext* dContext, cons
 }
 
 static bool draw_ddl(sk_sp<SkSurface> surface, sk_sp<const GrDeferredDisplayList> ddl) {
-    return skgpu::ganesh::DrawDDL(surface, ddl);
+    return skgpu::ganesh::DrawDDL(std::move(surface), std::move(ddl));
 }
 
 using SurfaceAndChar = std::tuple<sk_sp<SkSurface>, GrSurfaceCharacterization>;
@@ -209,7 +209,7 @@ DEF_FUZZ(CreateDDL, fuzz) {
     fuzz->nextEnum(&origin, GrSurfaceOrigin::kTopLeft_GrSurfaceOrigin);
 
     sk_gpu_test::GrContextFactory factory;
-    auto ctxInfo = factory.getContextInfo(sk_gpu_test::GrContextFactory::kGL_ContextType);
+    auto ctxInfo = factory.getContextInfo(skgpu::ContextType::kGL);
 
     GrDirectContext* dContext = ctxInfo.directContext();
     if (!dContext) {

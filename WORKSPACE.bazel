@@ -1,5 +1,9 @@
 workspace(name = "skia")
 
+load("//bazel:deps.bzl", "bazel_deps", "c_plus_plus_deps")
+
+bazel_deps()
+
 load("//toolchain:download_toolchains.bzl", "download_toolchains_for_skia")
 
 download_toolchains_for_skia("clang_linux_amd64", "clang_mac", "ndk_linux_amd64")
@@ -28,32 +32,22 @@ load("@emsdk//:emscripten_deps.bzl", emsdk_emscripten_deps = "emscripten_deps")
 
 emsdk_emscripten_deps(emscripten_version = "3.1.44")
 
-http_archive(
-    name = "bazel_skylib",
-    sha256 = "c6966ec828da198c5d9adbaa94c05e3a1c7f21bd012a0b29ba8ddbccb2c93b0d",
-    urls = gcs_mirror_url(
-        sha256 = "c6966ec828da198c5d9adbaa94c05e3a1c7f21bd012a0b29ba8ddbccb2c93b0d",
-        url = "https://github.com/bazelbuild/bazel-skylib/releases/download/1.1.1/bazel-skylib-1.1.1.tar.gz",
-    ),
-)
-
-load("@bazel_skylib//:workspace.bzl", "bazel_skylib_workspace")
-
-bazel_skylib_workspace()
-
-http_archive(
-    name = "bazel_toolchains",
-    sha256 = "e52789d4e89c3e2dc0e3446a9684626a626b6bec3fde787d70bae37c6ebcc47f",
-    strip_prefix = "bazel-toolchains-5.1.1",
-    urls = gcs_mirror_url(
-        sha256 = "e52789d4e89c3e2dc0e3446a9684626a626b6bec3fde787d70bae37c6ebcc47f",
-        url = "https://github.com/bazelbuild/bazel-toolchains/archive/refs/tags/v5.1.1.tar.gz",
-    ),
-)
-
 load("@bazel_toolchains//repositories:repositories.bzl", bazel_toolchains_repositories = "repositories")
 
 bazel_toolchains_repositories()
+
+http_archive(
+    name = "rules_pkg",
+    sha256 = "8f9ee2dc10c1ae514ee599a8b42ed99fa262b757058f65ad3c384289ff70c4b8",
+    urls = gcs_mirror_url(
+        sha256 = "8f9ee2dc10c1ae514ee599a8b42ed99fa262b757058f65ad3c384289ff70c4b8",
+        url = "https://github.com/bazelbuild/rules_pkg/releases/download/0.9.1/rules_pkg-0.9.1.tar.gz",
+    ),
+)
+
+load("@rules_pkg//:deps.bzl", "rules_pkg_dependencies")
+
+rules_pkg_dependencies()
 
 #######################################################################################
 # Python
@@ -375,8 +369,6 @@ local_repository(
     path = "include/config",
 )
 
-load("//bazel:deps.bzl", "git_repos_from_deps")
-
 # This are two lists of Bazel repository names, which is brought in by the following macro.
 # It is here for easier grepping, i.e. someone trying to find where a label like @brotli//:brotlidec
 # was defined. If a dep has its own BUILD rules, then one will need to go to its git repository
@@ -411,11 +403,12 @@ load("//bazel:deps.bzl", "git_repos_from_deps")
 # @vello - //bazel/external/vello:BUILD.bazel
 # @vulkan_headers - //bazel/external/vulkan_headers:BUILD.bazel
 # @vulkan_tools - //bazel/external/vulkan_tools:BUILD.bazel
+# @vulkan_utility_libraries - //bazel/external/vulkan_utility_libraries:BUILD.bazel
 # @vulkanmemoryallocator - //bazel/external/vulkanmemoryallocator:BUILD.bazel
 # @wuffs - //bazel/external/wuffs:BUILD.bazel
 # @zlib_skia - //bazel/external/zlib_skia:BUILD.bazel
 #### END GENERATED LIST OF THIRD_PARTY DEPS
-git_repos_from_deps()
+c_plus_plus_deps()
 
 # In order to copy the Freetype configurations into the checked out Freetype folder,
 # it is easiest to treat them as a third-party dependency from the perspective of Freetype.
@@ -443,6 +436,38 @@ local_repository(
 )
 
 load("//bazel:cipd_install.bzl", "cipd_install")
+
+cipd_install(
+    name = "git_linux_amd64",
+    build_file_content = """
+filegroup(
+  name = "all_files",
+  # The exclude pattern prevents files with spaces in their names from tripping up Bazel.
+  srcs = glob(include=["**/*"], exclude=["**/* *"]),
+  visibility = ["//visibility:public"],
+)
+""",
+    cipd_package = "infra/3pp/tools/git/linux-amd64",
+    # Based on
+    # https://skia.googlesource.com/buildbot/+/f1d21dc58818cd6aba0a7822e59d37636aefe936/WORKSPACE#391.
+    #
+    # Note that the below "git config" commands do not affect the user's Git configuration. These
+    # settings are only visible to Bazel targets that depend on @git_linux_amd64//:all_files via
+    # the "data" attribute. The result of these commands can be examined as follows:
+    #
+    #     $ cat $(bazel info output_base)/external/git_linux_amd64/etc/gitconfig
+    #     [user]
+    #             name = Bazel Test User
+    #             email = bazel-test-user@example.com
+    postinstall_cmds_posix = [
+        "mkdir etc",
+        "bin/git config --system user.name \"Bazel Test User\"",
+        "bin/git config --system user.email \"bazel-test-user@example.com\"",
+    ],
+    # From https://chrome-infra-packages.appspot.com/p/infra/3pp/tools/git/linux-amd64/+/version:2.29.2.chromium.6
+    sha256 = "36cb96051827d6a3f6f59c5461996fe9490d997bcd2b351687d87dcd4a9b40fa",
+    tag = "version:2.29.2.chromium.6",
+)
 
 cipd_install(
     name = "gn_linux_amd64",
@@ -532,7 +557,7 @@ load(
 # Pulls the gcr.io/skia-public/debugger-app-base container.
 container_pull(
     name = "debugger-app-base",
-    digest = "sha256:24c6e5d875d298c741e8c2917a94e1d548400eb8a9517d2a90f93833cbba5469",
+    digest = "sha256:b842291db7bb2b62dd339a6a5fa62b0f73982e2677a4b48f253fa5862d6deeaa",
     registry = "gcr.io",
     repository = "skia-public/debugger-app-base",
 )
@@ -540,7 +565,7 @@ container_pull(
 # Pulls the gcr.io/skia-public/jsfiddle-base container.
 container_pull(
     name = "jsfiddle-base",
-    digest = "sha256:2e999b8eedf768b6deae7405789ccdac92dcc01c36720f268c9d1b58fcd8ec1b",
+    digest = "sha256:b8b6ef8feccd98acbf71cefa1fb982fab5fa61d03e375744d279acf505e59f12",
     registry = "gcr.io",
     repository = "skia-public/jsfiddle-base",
 )
@@ -548,7 +573,15 @@ container_pull(
 # Pulls the gcr.io/skia-public/shaders-base container.
 container_pull(
     name = "shaders-base",
-    digest = "sha256:94dcae54daa5be93632e8fc2998458cc8acf6341701447e723a240e0abc55080",
+    digest = "sha256:a536f59bdab001ceb91c859f84fa2645d884825761b85939669bd5398a88322c",
     registry = "gcr.io",
     repository = "skia-public/shaders-base",
+)
+
+# Pulls the gcr.io/skia-public/skottie-base container.
+container_pull(
+    name = "skottie-base",
+    digest = "sha256:b9465588c600f8e525466ba2692f2a05e689afd698ff8ed0ed984767c9b5b0f7",
+    registry = "gcr.io",
+    repository = "skia-public/skottie-base",
 )

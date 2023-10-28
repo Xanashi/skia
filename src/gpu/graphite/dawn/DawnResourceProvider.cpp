@@ -10,6 +10,8 @@
 #include "include/gpu/graphite/BackendTexture.h"
 #include "src/gpu/graphite/ComputePipeline.h"
 #include "src/gpu/graphite/dawn/DawnBuffer.h"
+#include "src/gpu/graphite/dawn/DawnComputePipeline.h"
+#include "src/gpu/graphite/dawn/DawnErrorChecker.h"
 #include "src/gpu/graphite/dawn/DawnGraphicsPipeline.h"
 #include "src/gpu/graphite/dawn/DawnSampler.h"
 #include "src/gpu/graphite/dawn/DawnSharedContext.h"
@@ -77,14 +79,21 @@ wgpu::RenderPipeline create_blit_render_pipeline(const wgpu::Device& device,
     descriptor.multisample.mask = 0xFFFFFFFF;
     descriptor.multisample.alphaToCoverageEnabled = false;
 
-    return device.CreateRenderPipeline(&descriptor);
+    DawnErrorChecker errorChecker(device);
+    auto pipeline = device.CreateRenderPipeline(&descriptor);
+    if (errorChecker.popErrorScopes() != DawnErrorType::kNoError) {
+        return nullptr;
+    }
+
+    return pipeline;
 }
-}
+}  // namespace
 
 DawnResourceProvider::DawnResourceProvider(SharedContext* sharedContext,
                                            SingleOwner* singleOwner,
-                                           uint32_t recorderID)
-        : ResourceProvider(sharedContext, singleOwner, recorderID) {}
+                                           uint32_t recorderID,
+                                           size_t resourceBudget)
+        : ResourceProvider(sharedContext, singleOwner, recorderID, resourceBudget) {}
 
 DawnResourceProvider::~DawnResourceProvider() = default;
 
@@ -197,9 +206,9 @@ sk_sp<GraphicsPipeline> DawnResourceProvider::createGraphicsPipeline(
                                       renderPassDesc);
 }
 
-sk_sp<ComputePipeline> DawnResourceProvider::createComputePipeline(const ComputePipelineDesc&) {
-    SkASSERT(false);
-    return nullptr;
+sk_sp<ComputePipeline> DawnResourceProvider::createComputePipeline(
+        const ComputePipelineDesc& desc) {
+    return DawnComputePipeline::Make(this->dawnSharedContext(), desc);
 }
 
 sk_sp<Texture> DawnResourceProvider::createTexture(SkISize dimensions,
@@ -232,7 +241,7 @@ BackendTexture DawnResourceProvider::onCreateBackendTexture(SkISize dimensions,
     return BackendTexture(texture.MoveToCHandle());
 }
 
-void DawnResourceProvider::onDeleteBackendTexture(BackendTexture& texture) {
+void DawnResourceProvider::onDeleteBackendTexture(const BackendTexture& texture) {
     SkASSERT(texture.isValid());
     SkASSERT(texture.backend() == BackendApi::kDawn);
 

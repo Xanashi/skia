@@ -12,13 +12,12 @@
 #include "include/gpu/GrTypes.h"
 #include "include/gpu/gl/GrGLTypes.h"
 #include "include/private/base/SkAssert.h"
-#include "include/private/base/SkTo.h"
-#include "include/private/gpu/ganesh/GrGLTypesPriv.h"
 #include "include/private/gpu/ganesh/GrTypesPriv.h"
 #include "src/gpu/MutableTextureStateRef.h"  // IWYU pragma: keep
 #include "src/gpu/ganesh/GrBackendSurfacePriv.h"
 #include "src/gpu/ganesh/gl/GrGLBackendSurfacePriv.h"
 #include "src/gpu/ganesh/gl/GrGLDefines.h"
+#include "src/gpu/ganesh/gl/GrGLTypesPriv.h"
 #include "src/gpu/ganesh/gl/GrGLUtil.h"
 
 #include <algorithm>
@@ -72,7 +71,7 @@ private:
     }
 
     std::string toString() const override {
-#if defined(SK_DEBUG) || GR_TEST_UTILS
+#if defined(SK_DEBUG) || defined(GR_TEST_UTILS)
         return GrGLFormatToStr(fGLFormat);
 #else
         return "";
@@ -238,11 +237,6 @@ public:
     GrGLFramebufferInfo info() const { return fGLInfo; }
 
 private:
-    bool isValid() const override {
-        // the glInfo must have a valid format
-        return SkToBool(fGLInfo.fFormat);
-    }
-
     GrBackendFormat getBackendFormat() const override {
         return GrBackendFormats::MakeGL(fGLInfo.fFormat, GR_GL_TEXTURE_NONE);
     }

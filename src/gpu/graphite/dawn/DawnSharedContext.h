@@ -8,7 +8,7 @@
 #ifndef skgpu_graphite_DawnSharedContext_DEFINED
 #define skgpu_graphite_DawnSharedContext_DEFINED
 
-#include "webgpu/webgpu_cpp.h"
+#include "webgpu/webgpu_cpp.h"  // NO_G3_REWRITE
 
 #include "src/gpu/graphite/SharedContext.h"
 #include "src/gpu/graphite/dawn/DawnCaps.h"
@@ -24,7 +24,8 @@ public:
     ~DawnSharedContext() override;
 
     std::unique_ptr<ResourceProvider> makeResourceProvider(SingleOwner*,
-                                                           uint32_t recorderID) override;
+                                                           uint32_t recorderID,
+                                                           size_t resourceBudget) override;
 
     const DawnCaps* dawnCaps() const { return static_cast<const DawnCaps*>(this->caps()); }
     const wgpu::Device& device() const { return fDevice; }

@@ -1,5 +1,5 @@
-load("//bazel:skia_rules.bzl", "exports_files_legacy", "select_multi", "skia_cc_deps", "skia_filegroup", "split_srcs_and_hdrs")
 load("//bazel:flags.bzl", "bool_flag", "selects", "string_flag_with_values")
+load("//bazel:skia_rules.bzl", "exports_files_legacy", "select_multi", "skia_cc_deps", "skia_filegroup", "split_srcs_and_hdrs")
 
 licenses(["notice"])
 
@@ -14,6 +14,8 @@ SHARED_FILES = [
     "Blend.h",
     "BlendFormula.cpp",
     "BlendFormula.h",
+    "BlurUtils.cpp",
+    "BlurUtils.h",
     "BufferWriter.h",
     "DitherUtils.cpp",
     "DitherUtils.h",
@@ -56,7 +58,6 @@ string_flag_with_values(
     name = "gpu_backend",
     multiple = True,
     values = [
-        "dawn_ganesh",
         "gl_ganesh",
         "metal_ganesh",
         "vulkan_ganesh",
@@ -78,7 +79,6 @@ string_flag_with_values(
 selects.config_setting_group(
     name = "has_ganesh_backend",
     match_any = [
-        ":dawn_ganesh",
         ":gl_ganesh",
         ":metal_ganesh",
         ":vulkan_ganesh",
@@ -106,9 +106,9 @@ selects.config_setting_group(
 )
 
 bool_flag(
+    # Users should use :vulkan_with_vma directly
     name = "use_vulkan_memory_allocator",
     default = True,
-    public = False,  # Users should use :vulkan_with_vma
 )
 
 bool_flag(
@@ -119,7 +119,6 @@ bool_flag(
 selects.config_setting_group(
     name = "has_dawn",
     match_any = [
-        ":dawn_ganesh",
         ":dawn_graphite",
     ],
 )

@@ -242,8 +242,8 @@ void DoFinalizationChecks(const Program& program);
 /**
  * Error checks compute shader in/outs and returns a vector containing them ordered by location.
  */
-skia_private::TArray<const SkSL::Variable*> GetComputeShaderMainParams(
-        const Context& context, const Program& program);
+skia_private::TArray<const SkSL::Variable*> GetComputeShaderMainParams(const Context& context,
+                                                                       const Program& program);
 
 /**
  * Tracks the symbol table stack, in conjunction with a ProgramVisitor. Inside `visitStatement`,
@@ -258,6 +258,11 @@ public:
 
     // If a symbol table was added to the stack earlier, removes it from the stack.
     ~SymbolTableStackBuilder();
+
+    // Returns true if an entry was added to the symbol-table stack.
+    bool foundSymbolTable() {
+        return fStackToPop != nullptr;
+    }
 
 private:
     std::vector<std::shared_ptr<SymbolTable>>* fStackToPop = nullptr;

@@ -67,7 +67,6 @@ public:
         kANGLE_BackendType,
 #endif
 #ifdef SK_DAWN
-        kDawn_BackendType,
 #if defined(SK_GRAPHITE)
         kGraphiteDawn_BackendType,
 #endif
@@ -179,8 +178,8 @@ protected:
 
     bool fIsContentInvalidated = false;  // use this to avoid duplicate invalidate events
 
-    void visitLayers(std::function<void(Layer*)> visitor);
-    bool signalLayers(std::function<bool(Layer*)> visitor);
+    void visitLayers(const std::function<void(Layer*)>& visitor);
+    bool signalLayers(const std::function<bool(Layer*)>& visitor);
 };
 
 }   // namespace sk_app

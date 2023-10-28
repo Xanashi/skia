@@ -22,6 +22,7 @@
 #include "src/sksl/ir/SkSLModifierFlags.h"
 #include "src/sksl/ir/SkSLProgramElement.h"
 #include "src/sksl/ir/SkSLStatement.h"
+#include "src/sksl/ir/SkSLType.h"
 #include "src/sksl/ir/SkSLVarDeclarations.h"
 #include "src/sksl/ir/SkSLVariable.h"
 #include "src/sksl/ir/SkSLVariableReference.h"
@@ -47,7 +48,8 @@ public:
                 // Ensure function-parameter variables exist in the variable usage map. They aren't
                 // otherwise declared, but ProgramUsage::get() should be able to find them, even if
                 // they are unread and unwritten.
-                fUsage->fVariableCounts[param];
+                ProgramUsage::VariableCounts& counts = fUsage->fVariableCounts[param];
+                counts.fVarExists += fDelta;
             }
         } else if (pe.is<InterfaceBlock>()) {
             // Ensure interface-block variables exist in the variable usage map.
@@ -135,8 +137,12 @@ ProgramUsage::VariableCounts ProgramUsage::get(const Variable& v) const {
 bool ProgramUsage::isDead(const Variable& v) const {
     ModifierFlags flags = v.modifierFlags();
     VariableCounts counts = this->get(v);
-    if ((v.storage() != Variable::Storage::kLocal && counts.fRead) ||
-        (flags & (ModifierFlag::kIn | ModifierFlag::kOut | ModifierFlag::kUniform))) {
+    if (flags & (ModifierFlag::kIn | ModifierFlag::kOut | ModifierFlag::kUniform)) {
+        // Never eliminate ins, outs, or uniforms.
+        return false;
+    }
+    if (v.type().componentType().isOpaque()) {
+        // Never eliminate samplers, runtime-effect children, or atomics.
         return false;
     }
     // Consider the variable dead if it's never read and never written (besides the initial-value).

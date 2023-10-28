@@ -6,9 +6,6 @@
  */
 
 #include "include/effects/SkImageFilters.h"
-#include "src/effects/imagefilters/SkCropImageFilter.h"
-
-#ifdef SK_ENABLE_SKSL
 
 #include "include/core/SkFlattenable.h"
 #include "include/core/SkImageFilter.h"
@@ -29,6 +26,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <optional>
 #include <utility>
 
 namespace {
@@ -44,7 +42,7 @@ enum class MorphDirection { kX, kY };
 class SkMorphologyImageFilter final : public SkImageFilter_Base {
 public:
     SkMorphologyImageFilter(MorphType type, SkSize radii, sk_sp<SkImageFilter> input)
-            : SkImageFilter_Base(&input, 1, nullptr)
+            : SkImageFilter_Base(&input, 1)
             , fType(type)
             , fRadii(radii) {}
 
@@ -63,11 +61,11 @@ private:
     skif::LayerSpace<SkIRect> onGetInputLayerBounds(
             const skif::Mapping& mapping,
             const skif::LayerSpace<SkIRect>& desiredOutput,
-            const skif::LayerSpace<SkIRect>& contentBounds) const override;
+            std::optional<skif::LayerSpace<SkIRect>> contentBounds) const override;
 
-    skif::LayerSpace<SkIRect> onGetOutputLayerBounds(
+    std::optional<skif::LayerSpace<SkIRect>> onGetOutputLayerBounds(
             const skif::Mapping& mapping,
-            const skif::LayerSpace<SkIRect>& contentBounds) const override;
+            std::optional<skif::LayerSpace<SkIRect>> contentBounds) const override;
 
     skif::LayerSpace<SkISize> radii(const skif::Mapping& mapping) const {
         skif::LayerSpace<SkISize> radii = mapping.paramToLayer(fRadii).round();
@@ -120,7 +118,7 @@ sk_sp<SkImageFilter> make_morphology(MorphType type,
     // we just need to apply the 'cropRect' to the 'input'.
 
     if (cropRect) {
-        filter = SkMakeCropImageFilter(*cropRect, std::move(filter));
+        filter = SkImageFilters::Crop(*cropRect, std::move(filter));
     }
     return filter;
 }
@@ -320,17 +318,20 @@ skif::FilterResult SkMorphologyImageFilter::onFilterImage(const skif::Context& c
 skif::LayerSpace<SkIRect> SkMorphologyImageFilter::onGetInputLayerBounds(
         const skif::Mapping& mapping,
         const skif::LayerSpace<SkIRect>& desiredOutput,
-        const skif::LayerSpace<SkIRect>& contentBounds) const {
+        std::optional<skif::LayerSpace<SkIRect>> contentBounds) const {
     skif::LayerSpace<SkIRect> requiredInput = this->requiredInput(mapping, desiredOutput);
     return this->getChildInputLayerBounds(0, mapping, requiredInput, contentBounds);
 }
 
-skif::LayerSpace<SkIRect> SkMorphologyImageFilter::onGetOutputLayerBounds(
+std::optional<skif::LayerSpace<SkIRect>> SkMorphologyImageFilter::onGetOutputLayerBounds(
         const skif::Mapping& mapping,
-        const skif::LayerSpace<SkIRect>& contentBounds) const {
-    skif::LayerSpace<SkIRect> childOutput =
-            this->getChildOutputLayerBounds(0, mapping, contentBounds);
-    return this->kernelOutputBounds(mapping, childOutput);
+        std::optional<skif::LayerSpace<SkIRect>> contentBounds) const {
+    auto childOutput = this->getChildOutputLayerBounds(0, mapping, contentBounds);
+    if (childOutput) {
+        return this->kernelOutputBounds(mapping, *childOutput);
+    } else {
+        return skif::LayerSpace<SkIRect>::Unbounded();
+    }
 }
 
 SkRect SkMorphologyImageFilter::computeFastBounds(const SkRect& src) const {
@@ -343,22 +344,3 @@ SkRect SkMorphologyImageFilter::computeFastBounds(const SkRect& src) const {
     }
     return bounds;
 }
-
-#else
-
-// The morphology effects requires SkSL, just return the input, possibly cropped
-sk_sp<SkImageFilter> SkImageFilters::Dilate(SkScalar radiusX, SkScalar radiusY,
-                                            sk_sp<SkImageFilter> input,
-                                            const CropRect& cropRect) {
-    return cropRect ? SkMakeCropImageFilter(*cropRect, std::move(input)) : input;
-}
-
-sk_sp<SkImageFilter> SkImageFilters::Erode(SkScalar radiusX, SkScalar radiusY,
-                                           sk_sp<SkImageFilter> input,
-                                           const CropRect& cropRect) {
-    return cropRect ? SkMakeCropImageFilter(*cropRect, std::move(input)) : input;
-}
-
-void SkRegisterMorphologyImageFilterFlattenables() {}
-
-#endif

@@ -15,6 +15,7 @@
 #include "include/gpu/graphite/Image.h"
 #include "include/gpu/graphite/Recorder.h"
 #include "include/gpu/graphite/Surface.h"
+#include "include/gpu/vk/VulkanTypes.h"
 #include "src/gpu/graphite/Caps.h"
 #include "src/gpu/graphite/ContextPriv.h"
 #include "src/gpu/graphite/ResourceTypes.h"
@@ -173,11 +174,11 @@ DEF_GRAPHITE_TEST_FOR_ALL_CONTEXTS(ImageBackendTextureTest, reporter, context,
             BackendTexture texture = recorder->createBackendTexture(kSize, info);
             REPORTER_ASSERT(reporter, texture.isValid());
 
-            sk_sp<SkImage> image = SkImages::AdoptTextureFrom(recorder.get(),
-                                                              texture,
-                                                              kRGBA_8888_SkColorType,
-                                                              kPremul_SkAlphaType,
-                                                              /*colorSpace=*/nullptr);
+            sk_sp<SkImage> image = SkImages::WrapTexture(recorder.get(),
+                                                         texture,
+                                                         kRGBA_8888_SkColorType,
+                                                         kPremul_SkAlphaType,
+                                                         /*colorSpace=*/nullptr);
             REPORTER_ASSERT(reporter, image);
             REPORTER_ASSERT(reporter, image->hasMipmaps() == (mipmapped == Mipmapped::kYes));
 
@@ -185,11 +186,11 @@ DEF_GRAPHITE_TEST_FOR_ALL_CONTEXTS(ImageBackendTextureTest, reporter, context,
 
             // We should fail when trying to wrap the same texture in an image with a non-compatible
             // color type.
-            image = SkImages::AdoptTextureFrom(recorder.get(),
-                                               texture,
-                                               kAlpha_8_SkColorType,
-                                               kPremul_SkAlphaType,
-                                               /* colorSpace= */ nullptr);
+            image = SkImages::WrapTexture(recorder.get(),
+                                          texture,
+                                          kAlpha_8_SkColorType,
+                                          kPremul_SkAlphaType,
+                                          /* colorSpace= */ nullptr);
             REPORTER_ASSERT(reporter, !image);
 
             recorder->deleteBackendTexture(texture);
@@ -213,7 +214,8 @@ DEF_GRAPHITE_TEST_FOR_VULKAN_CONTEXT(VulkanBackendTextureMutableStateTest, repor
                            info,
                            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
                            /*queueFamilyIndex=*/1,
-                           VK_NULL_HANDLE);
+                           VK_NULL_HANDLE,
+                           skgpu::VulkanAlloc());
 
     REPORTER_ASSERT(reporter, texture.isValid());
     REPORTER_ASSERT(reporter,

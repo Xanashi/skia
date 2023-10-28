@@ -9,7 +9,6 @@
 #include "include/core/SkShader.h"
 #include "include/core/SkStream.h"
 #include "include/core/SkTextBlob.h"
-#include "include/core/SkTime.h"
 #include "include/core/SkTypeface.h"
 #include "include/effects/SkGradientShader.h"
 #include "modules/skparagraph/include/Paragraph.h"
@@ -19,6 +18,7 @@
 #include "modules/skparagraph/src/TextLine.h"
 #include "modules/skparagraph/utils/TestFontCollection.h"
 #include "src/base/SkRandom.h"
+#include "src/base/SkTime.h"
 #include "src/base/SkUTF.h"
 #include "src/core/SkOSFile.h"
 #include "src/utils/SkOSPath.h"
@@ -802,28 +802,28 @@ public:
             ParagraphBuilderImpl builder(paraStyle, getFontCollection());
 
             builder.pushStyle(style0);
-            builder.addText(logo11, strlen(logo1));
+            builder.addText(logo11, strlen(logo11));
             builder.pop();
             builder.pushStyle(style1);
-            builder.addText(logo12, strlen(logo2));
+            builder.addText(logo12, strlen(logo12));
             builder.pop();
 
             builder.addText("   ", 3);
 
             builder.pushStyle(style0);
-            builder.addText(logo13, strlen(logo3));
+            builder.addText(logo13, strlen(logo13));
             builder.pop();
             builder.pushStyle(style1);
-            builder.addText(logo14, strlen(logo4));
+            builder.addText(logo14, strlen(logo14));
             builder.pop();
 
             builder.addText("   ", 3);
 
             builder.pushStyle(style0);
-            builder.addText(logo15, strlen(logo5));
+            builder.addText(logo15, strlen(logo15));
             builder.pop();
             builder.pushStyle(style1);
-            builder.addText(logo16, strlen(logo6));
+            builder.addText(logo16, strlen(logo16));
             builder.pop();
 
             auto paragraph = builder.Build();
@@ -1385,7 +1385,7 @@ class Zalgo {
     }
 
 public:
-    std::u16string zalgo(std::string victim) {
+    std::u16string zalgo(const std::string& victim) {
         std::u16string result;
         for (auto& c : victim) {
             result += c;
@@ -2292,7 +2292,7 @@ public:
         auto res2 = paragraph->getRectsForRange(359, 360, RectHeightStyle::kTight, RectWidthStyle::kTight);
         auto res3 = paragraph->getRectsForRange(358, 359, RectHeightStyle::kTight, RectWidthStyle::kTight);
 
-        auto draw = [&](std::vector<TextBox> res, SkColor color) {
+        auto draw = [&](const std::vector<TextBox>& res, SkColor color) {
             SkPaint paint;
             paint.setColor(color);
             for (auto& r : res) {
@@ -4027,7 +4027,7 @@ public:
         paragraph_style.setTextStyle(text_style);
         paragraph_style.setTextAlign(TextAlign::kStart);
         paragraph_style.setEllipsis(u"\u2026");
-        auto draw = [&](std::u16string text, size_t lines, TextDirection dir) {
+        auto draw = [&](const std::u16string& text, size_t lines, TextDirection dir) {
             paragraph_style.setMaxLines(lines);
             paragraph_style.setTextDirection(dir);
             ParagraphBuilderImpl builder(paragraph_style, fontCollection);
@@ -4240,7 +4240,7 @@ public:
         paragraph_style.setTextStyle(text_style);
         paragraph_style.setTextAlign(TextAlign::kStart);
         paragraph_style.setEllipsis(u"\u2026");
-        auto draw = [&](std::u16string text) {
+        auto draw = [&](const std::u16string& text) {
             paragraph_style.setMaxLines(1);
             ParagraphBuilderImpl builder(paragraph_style, fontCollection);
             builder.pushStyle(text_style);

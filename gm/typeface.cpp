@@ -22,6 +22,7 @@
 #include "include/core/SkTypeface.h"
 #include "include/core/SkTypes.h"
 #include "include/private/base/SkTemplates.h"
+#include "src/core/SkFontPriv.h"
 #include "tools/Resources.h"
 
 #include <string.h>
@@ -43,7 +44,7 @@ static void getGlyphPositions(const SkFont& font, const uint16_t glyphs[],
 
 static void applyKerning(SkPoint pos[], const int32_t adjustments[], int count,
                          const SkFont& font) {
-    SkScalar scale = font.getSize() / font.getTypefaceOrDefault()->getUnitsPerEm();
+    SkScalar scale = font.getSize() / SkFontPriv::GetTypefaceOrDefault(font)->getUnitsPerEm();
 
     SkScalar globalAdj = 0;
     for (int i = 0; i < count - 1; ++i) {
@@ -54,7 +55,7 @@ static void applyKerning(SkPoint pos[], const int32_t adjustments[], int count,
 
 static void drawKernText(SkCanvas* canvas, const void* text, size_t len,
                          SkScalar x, SkScalar y, const SkFont& font, const SkPaint& paint) {
-    SkTypeface* face = font.getTypefaceOrDefault();
+    SkTypeface* face = SkFontPriv::GetTypefaceOrDefault(font);
     if (!face) {
         canvas->drawSimpleText(text, len, SkTextEncoding::kUTF8, x, y, font, paint);
         return;
@@ -396,8 +397,6 @@ DEF_SIMPLE_GM_CAN_FAIL(typefacerendering_pfb, canvas, errMsg, 640, 840) {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-#include "include/effects/SkStrokeAndFillPathEffect.h"
-
 // Exercise different paint styles and embolden, and compare with strokeandfill patheffect
 DEF_SIMPLE_GM(typeface_styling, canvas, 710, 360) {
     sk_sp<SkTypeface> face = MakeResourceAsTypeface("fonts/Roboto-Regular.ttf");
@@ -409,7 +408,7 @@ DEF_SIMPLE_GM(typeface_styling, canvas, 710, 360) {
     uint16_t glyphs[1] = { font.unicharToGlyph('A') };
     SkPoint pos[1] = { {0, 0} };
 
-    auto draw = [&](SkPaint::Style style, float width, sk_sp<SkPathEffect> pe) {
+    auto draw = [&](SkPaint::Style style, float width) {
         // Draws 3 rows:
         //  1. normal
         //  2. emboldened
@@ -418,7 +417,6 @@ DEF_SIMPLE_GM(typeface_styling, canvas, 710, 360) {
         SkPaint paint;
         paint.setStyle(style);
         paint.setStrokeWidth(width);
-        paint.setPathEffect(pe);
 
         font.setEmbolden(true);
         canvas->drawGlyphs(1, glyphs, pos, {20, 120*2}, font, paint);
@@ -433,21 +431,17 @@ DEF_SIMPLE_GM(typeface_styling, canvas, 710, 360) {
     const struct {
         SkPaint::Style  style;
         float           width;
-        bool            usePE;
     } recs[] = {
-        { SkPaint::kFill_Style,             0,  false },
-        { SkPaint::kStroke_Style,           0,  false },
-        { SkPaint::kStroke_Style,           3,  false },
-        { SkPaint::kStrokeAndFill_Style,    0,  false },
-        { SkPaint::kStrokeAndFill_Style,    3,  false },
-        { SkPaint::kStroke_Style,           0,  true },
-        { SkPaint::kStroke_Style,           3,  true },
+        { SkPaint::kFill_Style,             0 },
+        { SkPaint::kStroke_Style,           0 },
+        { SkPaint::kStroke_Style,           3 },
+        { SkPaint::kStrokeAndFill_Style,    0 },
+        { SkPaint::kStrokeAndFill_Style,    3 },
     };
 
     canvas->translate(0, -20);
-    auto pe = SkStrokeAndFillPathEffect::Make();
     for (auto r : recs) {
-        draw(r.style, r.width, r.usePE ? pe : nullptr);
+        draw(r.style, r.width);
         canvas->translate(100, 0);
     }
 }

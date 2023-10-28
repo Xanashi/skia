@@ -68,7 +68,7 @@ public:
     GrThreadSafeCache();
     ~GrThreadSafeCache();
 
-#if GR_TEST_UTILS
+#if defined(GR_TEST_UTILS)
     int numEntries() const  SK_EXCLUDES(fSpinLock);
 
     size_t approxBytesUsedForHash() const  SK_EXCLUDES(fSpinLock);
@@ -121,7 +121,7 @@ public:
             // TODO: once we add the gpuBuffer we could free 'fVertices'. Deinstantiable
             // DDLs could throw a monkey wrench into that plan though.
             SkASSERT(!fGpuBuffer);
-            fGpuBuffer = gpuBuffer;
+            fGpuBuffer = std::move(gpuBuffer);
         }
 
         void reset() {
@@ -264,7 +264,7 @@ private:
         void set(const skgpu::UniqueKey& key, sk_sp<VertexData> vertData) {
             SkASSERT(fTag == kEmpty || fTag == kVertData);
             fKey = key;
-            fVertData = vertData;
+            fVertData = std::move(vertData);
             fTag = kVertData;
         }
 

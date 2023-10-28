@@ -39,46 +39,49 @@ static bool check_valid_uniform_type(Position pos,
 
     // In RuntimeEffects we only allow a restricted set of types, namely shader/blender/colorFilter,
     // 32-bit signed integers, 16-bit and 32-bit floats, and their composites.
-    {
-        bool error = false;
-        if (ProgramConfig::IsRuntimeEffect(context.fConfig->fKind)) {
-            // `shader`, `blender`, `colorFilter`
-            if (t->isEffectChild()) {
-                return true;
-            }
-
-            // `int`, `int2`, `int3`, `int4`
-            if (ct.isSigned() && ct.bitWidth() == 32 && (t->isScalar() || t->isVector())) {
-                return true;
-            }
-
-            // `float`, `float2`, `float3`, `float4`, `float2x2`, `float3x3`, `float4x4`
-            // `half`, `half2`, `half3`, `half4`, `half2x2`, `half3x3`, `half4x4`
-            if (ct.isFloat() &&
-                (t->isScalar() || t->isVector() || (t->isMatrix() && t->rows() == t->columns()))) {
-                return true;
-            }
-
-            // Everything else is an error.
-            error = true;
+    bool error = false;
+    if (ProgramConfig::IsRuntimeEffect(context.fConfig->fKind)) {
+        // `shader`, `blender`, `colorFilter`
+        if (t->isEffectChild()) {
+            return true;
         }
+
+        // `int`, `int2`, `int3`, `int4`
+        if (ct.isSigned() && ct.bitWidth() == 32 && (t->isScalar() || t->isVector())) {
+            return true;
+        }
+
+        // `float`, `float2`, `float3`, `float4`, `float2x2`, `float3x3`, `float4x4`
+        // `half`, `half2`, `half3`, `half4`, `half2x2`, `half3x3`, `half4x4`
+        if (ct.isFloat() &&
+            (t->isScalar() || t->isVector() || (t->isMatrix() && t->rows() == t->columns()))) {
+            return true;
+        }
+
+        // Everything else is an error.
+        error = true;
+    } else {
+        // We don't allow samplers, textures or atomics to be marked as uniforms. This rules out
+        // any possible opaque type.
+        error = error || ct.isOpaque();
 
         // We disallow boolean uniforms in SkSL since they are not well supported by backend
-        // platforms and drivers. We disallow atomic variables in uniforms as that doesn't map
-        // cleanly to all backends.
-        if (error || (ct.isBoolean() && (t->isScalar() || t->isVector())) || ct.isAtomic()) {
-            context.fErrors->error(
-                    pos, "variables of type '" + t->displayName() + "' may not be uniform");
-            return false;
-        }
+        // platforms and drivers.
+        error = error || (ct.isBoolean() && (t->isScalar() || t->isVector()));
+    }
+
+    if (error) {
+        context.fErrors->error(pos, "variables of type '" + t->displayName() +
+                                    "' may not be uniform");
+        return false;
     }
 
     // In non-RTE SkSL we allow structs and interface blocks to be uniforms but we must make sure
     // their fields are allowed.
     if (t->isStruct()) {
         for (const Field& field : t->fields()) {
-            if (!check_valid_uniform_type(
-                        field.fPosition, field.fType, context, /*topLevel=*/false)) {
+            if (!check_valid_uniform_type(field.fPosition, field.fType, context,
+                                          /*topLevel=*/false)) {
                 // Emit a "caused by" line only for the top-level uniform type and not for any
                 // nested structs.
                 if (topLevel) {
@@ -177,12 +180,11 @@ void VarDeclaration::ErrorCheck(const Context& context,
         check_valid_uniform_type(pos, baseType, context);
     }
     if (baseType->isEffectChild() && !modifierFlags.isUniform()) {
-        context.fErrors->error(pos,
-                "variables of type '" + baseType->displayName() + "' must be uniform");
+        context.fErrors->error(pos, "variables of type '" + baseType->displayName() +
+                                    "' must be uniform");
     }
-    if (baseType->isEffectChild() && (context.fConfig->fKind == ProgramKind::kMeshVertex ||
-                                      context.fConfig->fKind == ProgramKind::kMeshFragment)) {
-        context.fErrors->error(pos, "effects are not permitted in custom mesh shaders");
+    if (baseType->isEffectChild() && context.fConfig->fKind == ProgramKind::kMeshVertex) {
+        context.fErrors->error(pos, "effects are not permitted in mesh vertex shaders");
     }
     if (baseType->isOrContainsAtomic()) {
         // An atomic variable (or a struct or an array that contains an atomic member) must be
@@ -258,6 +260,11 @@ void VarDeclaration::ErrorCheck(const Context& context,
                 // Only non-opaque types allow `in` and `out`.
                 permitted |= ModifierFlag::kIn | ModifierFlag::kOut;
             }
+            if (ProgramConfig::IsFragment(context.fConfig->fKind) && baseType->isStruct() &&
+                !baseType->isInterfaceBlock()) {
+                // Only structs in fragment shaders allow `pixel_local`.
+                permitted |= ModifierFlag::kPixelLocal;
+            }
             if (ProgramConfig::IsCompute(context.fConfig->fKind)) {
                 // Only compute shaders allow `workgroup`.
                 if (!baseType->isOpaque() || baseType->isAtomic()) {
@@ -271,6 +278,15 @@ void VarDeclaration::ErrorCheck(const Context& context,
     }
 
     LayoutFlags permittedLayoutFlags = LayoutFlag::kAll;
+
+    // Pixel format modifiers are required on storage textures, and forbidden on other types.
+    if (baseType->isStorageTexture()) {
+        if (!(layout.fFlags & LayoutFlag::kAllPixelFormats)) {
+            context.fErrors->error(pos, "storage textures must declare a pixel format");
+        }
+    } else {
+        permittedLayoutFlags &= ~LayoutFlag::kAllPixelFormats;
+    }
 
     // The `texture` and `sampler` modifiers can be present respectively on a texture and sampler or
     // simultaneously on a combined image-sampler but they are not permitted on any other type.
@@ -300,9 +316,7 @@ void VarDeclaration::ErrorCheck(const Context& context,
                                                   !permitBindingAndSet)) {
         permittedLayoutFlags &= ~LayoutFlag::kBinding;
         permittedLayoutFlags &= ~LayoutFlag::kSet;
-        permittedLayoutFlags &= ~LayoutFlag::kSPIRV;
-        permittedLayoutFlags &= ~LayoutFlag::kMetal;
-        permittedLayoutFlags &= ~LayoutFlag::kWGSL;
+        permittedLayoutFlags &= ~LayoutFlag::kAllBackends;
     }
     if (ProgramConfig::IsRuntimeEffect(context.fConfig->fKind)) {
         // Disallow all layout flags except 'color' in runtime effects
@@ -313,6 +327,10 @@ void VarDeclaration::ErrorCheck(const Context& context,
     if ((layout.fFlags & (LayoutFlag::kSet | LayoutFlag::kBinding)) ||
         (modifierFlags & (ModifierFlag::kIn | ModifierFlag::kOut))) {
         permittedLayoutFlags &= ~LayoutFlag::kPushConstant;
+    }
+    // The `builtin` layout flag is only allowed in modules.
+    if (!context.fConfig->fIsBuiltinCode) {
+        permittedLayoutFlags &= ~LayoutFlag::kBuiltin;
     }
 
     modifierFlags.checkPermittedFlags(context, modifiersPosition, permitted);
@@ -335,7 +353,7 @@ bool VarDeclaration::ErrorCheckAndCoerce(const Context& context,
     ErrorCheck(context, var.fPosition, var.modifiersPosition(), var.layout(), var.modifierFlags(),
                &var.type(), baseType, var.storage());
     if (value) {
-        if (var.type().isOpaque()) {
+        if (var.type().isOpaque() || var.type().isOrContainsAtomic()) {
             context.fErrors->error(value->fPosition, "opaque type '" + var.type().displayName() +
                                                      "' cannot use initializer expressions");
             return false;
@@ -379,7 +397,7 @@ bool VarDeclaration::ErrorCheckAndCoerce(const Context& context,
     if (var.storage() == Variable::Storage::kInterfaceBlock) {
         if (var.type().isOpaque()) {
             context.fErrors->error(var.fPosition, "opaque type '" + var.type().displayName() +
-                    "' is not permitted in an interface block");
+                                                  "' is not permitted in an interface block");
             return false;
         }
     }

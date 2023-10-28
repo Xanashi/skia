@@ -10,6 +10,7 @@
 #include "include/core/SkBitmap.h"
 #include "include/core/SkCanvas.h"
 #include "include/core/SkColor.h"
+#include "include/core/SkImage.h"
 #include "include/core/SkShader.h"
 #include "include/core/SkSize.h"
 #include "include/core/SkStream.h"
@@ -256,6 +257,76 @@ DEF_TEST(Codec_multiPictureParams, r) {
         REPORTER_ASSERT(r, mpParams->images[2].dataOffset == 2234524);
         REPORTER_ASSERT(r, mpParams->images[2].size == 38507);
     }
+
+    // Inserting various corrupt values.
+    {
+        const uint8_t bytes[] = {
+                0x4d, 0x50, 0x46, 0x00,  // 0: {'M', 'P', 'F',   0} signature
+                0x4d, 0x4d, 0x00, 0x2a,  // 4: {'M', 'M',   0, '*'} big-endian
+                0x00, 0x00, 0x00, 0x08,  // 8: Index IFD offset
+                0x00, 0x03,              // 12: Number of tags
+                0xb0, 0x00,              // 14: Version tag
+                0x00, 0x07,              // 16: Undefined type
+                0x00, 0x00, 0x00, 0x04,  // 18: Size
+                0x30, 0x31, 0x30, 0x30,  // 22: Value
+                0xb0, 0x01,              // 26: Number of images
+                0x00, 0x04,              // 28: Unsigned long type
+                0x00, 0x00, 0x00, 0x01,  // 30: Count
+                0x00, 0x00, 0x00, 0x02,  // 34: Value
+                0xb0, 0x02,              // 38: MP entry tag
+                0x00, 0x07,              // 40: Undefined type
+                0x00, 0x00, 0x00, 0x20,  // 42: Size
+                0x00, 0x00, 0x00, 0x32,  // 46: Value (offset)
+                0x00, 0x00, 0x00, 0x00,  // 50: Next IFD offset (null)
+                0x20, 0x03, 0x00, 0x00,  // 54: MP Entry 0 attributes
+                0x00, 0x56, 0xda, 0x2f,  // 58: MP Entry 0 size (5691951)
+                0x00, 0x00, 0x00, 0x00,  // 62: MP Entry 0 offset (0)
+                0x00, 0x00, 0x00, 0x00,  // 66: MP Entry 0 dependencies
+                0x00, 0x00, 0x00, 0x00,  // 70: MP Entry 1 attributes.
+                0x00, 0x14, 0xc6, 0x01,  // 74: MP Entry 1 size (1361409)
+                0x00, 0x55, 0x7c, 0x1f,  // 78: MP Entry 1 offset (5602335)
+                0x00, 0x00, 0x00, 0x00,  // 82: MP Entry 1 dependencies
+        };
+
+        // Verify the offsets labeled above.
+        REPORTER_ASSERT(r, bytes[22] == 0x30);
+        REPORTER_ASSERT(r, bytes[26] == 0xb0);
+        REPORTER_ASSERT(r, bytes[38] == 0xb0);
+        REPORTER_ASSERT(r, bytes[54] == 0x20);
+        REPORTER_ASSERT(r, bytes[81] == 0x1f);
+
+        {
+            // Change the version to {'0', '1', '0', '1'}.
+            auto bytesInvalid = SkData::MakeWithCopy(bytes, sizeof(bytes));
+            REPORTER_ASSERT(r, bytes[25] == '0');
+            reinterpret_cast<uint8_t*>(bytesInvalid->writable_data())[25] = '1';
+            REPORTER_ASSERT(r, SkJpegMultiPictureParameters::Make(bytesInvalid) == nullptr);
+        }
+
+        {
+            // Change the number of images to be undefined type instead of unsigned long type.
+            auto bytesInvalid = SkData::MakeWithCopy(bytes, sizeof(bytes));
+            REPORTER_ASSERT(r, bytes[29] == 0x04);
+            reinterpret_cast<uint8_t*>(bytesInvalid->writable_data())[29] = 0x07;
+            REPORTER_ASSERT(r, SkJpegMultiPictureParameters::Make(bytesInvalid) == nullptr);
+        }
+
+        {
+            // Make the MP entries point off of the end of the buffer.
+            auto bytesInvalid = SkData::MakeWithCopy(bytes, sizeof(bytes));
+            REPORTER_ASSERT(r, bytes[49] == 0x32);
+            reinterpret_cast<uint8_t*>(bytesInvalid->writable_data())[49] = 0xFE;
+            REPORTER_ASSERT(r, SkJpegMultiPictureParameters::Make(bytesInvalid) == nullptr);
+        }
+
+        {
+            // Make the MP entries too small.
+            auto bytesInvalid = SkData::MakeWithCopy(bytes, sizeof(bytes));
+            REPORTER_ASSERT(r, bytes[45] == 0x20);
+            reinterpret_cast<uint8_t*>(bytesInvalid->writable_data())[45] = 0x1F;
+            REPORTER_ASSERT(r, SkJpegMultiPictureParameters::Make(bytesInvalid) == nullptr);
+        }
+    }
 }
 
 DEF_TEST(Codec_jpegMultiPicture, r) {
@@ -395,30 +466,27 @@ DEF_TEST(AndroidCodec_jpegGainmapDecode, r) {
         SkISize dimensions;
         SkColor originColor;
         SkColor farCornerColor;
-        float logRatioMin;
-        float logRatioMax;
+        float ratioMin;
+        float ratioMax;
         float hdrRatioMin;
         float hdrRatioMax;
-        SkGainmapInfo::Type type;
     } recs[] = {
             {"images/iphone_13_pro.jpeg",
              SkISize::Make(1512, 2016),
              0xFF3B3B3B,
              0xFF101010,
-             0.f,
+             sk_float_exp(0.f),
+             sk_float_exp(1.f),
              1.f,
-             1.f,
-             2.71828f,
-             SkGainmapInfo::Type::kMultiPicture},
+             2.71828f},
             {"images/hdrgm.jpg",
              SkISize::Make(188, 250),
              0xFFE9E9E9,
              0xFFAAAAAA,
-             -2.209409f,
-             2.209409f,
+             sk_float_exp(-2.209409f),
+             sk_float_exp(2.209409f),
              1.f,
-             9.110335f,
-             SkGainmapInfo::Type::kHDRGM},
+             9.110335f},
     };
 
     TestStream::Type kStreamTypes[] = {
@@ -448,18 +516,16 @@ DEF_TEST(AndroidCodec_jpegGainmapDecode, r) {
 
             // Verify the gainmap rendering parameters.
             constexpr float kEpsilon = 1e-3f;
-            REPORTER_ASSERT(r, approx_eq(gainmapInfo.fLogRatioMin.fR, rec.logRatioMin, kEpsilon));
-            REPORTER_ASSERT(r, approx_eq(gainmapInfo.fLogRatioMin.fG, rec.logRatioMin, kEpsilon));
-            REPORTER_ASSERT(r, approx_eq(gainmapInfo.fLogRatioMin.fB, rec.logRatioMin, kEpsilon));
+            REPORTER_ASSERT(r, approx_eq(gainmapInfo.fGainmapRatioMin.fR, rec.ratioMin, kEpsilon));
+            REPORTER_ASSERT(r, approx_eq(gainmapInfo.fGainmapRatioMin.fG, rec.ratioMin, kEpsilon));
+            REPORTER_ASSERT(r, approx_eq(gainmapInfo.fGainmapRatioMin.fB, rec.ratioMin, kEpsilon));
 
-            REPORTER_ASSERT(r, approx_eq(gainmapInfo.fLogRatioMax.fR, rec.logRatioMax, kEpsilon));
-            REPORTER_ASSERT(r, approx_eq(gainmapInfo.fLogRatioMax.fG, rec.logRatioMax, kEpsilon));
-            REPORTER_ASSERT(r, approx_eq(gainmapInfo.fLogRatioMax.fB, rec.logRatioMax, kEpsilon));
+            REPORTER_ASSERT(r, approx_eq(gainmapInfo.fGainmapRatioMax.fR, rec.ratioMax, kEpsilon));
+            REPORTER_ASSERT(r, approx_eq(gainmapInfo.fGainmapRatioMax.fG, rec.ratioMax, kEpsilon));
+            REPORTER_ASSERT(r, approx_eq(gainmapInfo.fGainmapRatioMax.fB, rec.ratioMax, kEpsilon));
 
-            REPORTER_ASSERT(r, approx_eq(gainmapInfo.fHdrRatioMin, rec.hdrRatioMin, kEpsilon));
-            REPORTER_ASSERT(r, approx_eq(gainmapInfo.fHdrRatioMax, rec.hdrRatioMax, kEpsilon));
-
-            REPORTER_ASSERT(r, gainmapInfo.fType == rec.type);
+            REPORTER_ASSERT(r, approx_eq(gainmapInfo.fDisplayRatioSdr, rec.hdrRatioMin, kEpsilon));
+            REPORTER_ASSERT(r, approx_eq(gainmapInfo.fDisplayRatioHdr, rec.hdrRatioMax, kEpsilon));
         }
     }
 }
@@ -550,7 +616,7 @@ DEF_TEST(AndroidCodec_gainmapInfoEncode, r) {
         }
 
         // Encode |gainmapInfo|.
-        bool encodeResult = SkJpegGainmapEncoder::EncodeJpegR(&encodeStream,
+        bool encodeResult = SkJpegGainmapEncoder::EncodeHDRGM(&encodeStream,
                                                               baseBitmap.pixmap(),
                                                               SkJpegEncoder::Options(),
                                                               gainmapBitmap.pixmap(),
@@ -568,7 +634,6 @@ DEF_TEST(AndroidCodec_gainmapInfoEncode, r) {
     }
 }
 
-#if defined(SK_ENABLE_SKSL)
 // Render an applied gainmap.
 static SkBitmap render_gainmap(const SkImageInfo& renderInfo,
                                float renderHdrRatio,
@@ -630,7 +695,6 @@ static SkColor4f render_gainmap_pixel(float renderHdrRatio,
             testPixelInfo, renderHdrRatio, baseBitmap, gainmapBitmap, gainmapInfo, x, y);
     return testPixelBitmap.getColor4f(0, 0);
 }
-#endif
 
 DEF_TEST(AndroidCodec_jpegGainmapTranscode, r) {
     const char* path = "images/iphone_13_pro.jpeg";
@@ -642,27 +706,16 @@ DEF_TEST(AndroidCodec_jpegGainmapTranscode, r) {
     decode_all(r, GetResourceAsStream(path), baseBitmap[0], gainmapBitmap[0], gainmapInfo[0]);
 
     constexpr float kEpsilon = 1e-2f;
-    for (size_t i = 0; i < 2; ++i) {
+    {
         SkDynamicMemoryWStream encodeStream;
-        bool encodeResult = false;
 
-        if (i == 0) {
-            // Transcode to JpegR.
-            encodeResult = SkJpegGainmapEncoder::EncodeJpegR(&encodeStream,
-                                                             baseBitmap[0].pixmap(),
-                                                             SkJpegEncoder::Options(),
-                                                             gainmapBitmap[0].pixmap(),
-                                                             SkJpegEncoder::Options(),
-                                                             gainmapInfo[0]);
-        } else {
-            // Transcode to HDRGM.
-            encodeResult = SkJpegGainmapEncoder::EncodeHDRGM(&encodeStream,
-                                                             baseBitmap[0].pixmap(),
-                                                             SkJpegEncoder::Options(),
-                                                             gainmapBitmap[0].pixmap(),
-                                                             SkJpegEncoder::Options(),
-                                                             gainmapInfo[0]);
-        }
+        // Transcode to UltraHDR.
+        bool encodeResult = SkJpegGainmapEncoder::EncodeHDRGM(&encodeStream,
+                                                              baseBitmap[0].pixmap(),
+                                                              SkJpegEncoder::Options(),
+                                                              gainmapBitmap[0].pixmap(),
+                                                              SkJpegEncoder::Options(),
+                                                              gainmapInfo[0]);
         REPORTER_ASSERT(r, encodeResult);
         auto encodeData = encodeStream.detachAsData();
 
@@ -673,10 +726,12 @@ DEF_TEST(AndroidCodec_jpegGainmapTranscode, r) {
         // HDRGM will have the same rendering parameters.
         REPORTER_ASSERT(
                 r,
-                approx_eq_rgb(gainmapInfo[0].fLogRatioMin, gainmapInfo[1].fLogRatioMin, kEpsilon));
+                approx_eq_rgb(
+                        gainmapInfo[0].fGainmapRatioMin, gainmapInfo[1].fGainmapRatioMin,kEpsilon));
         REPORTER_ASSERT(
                 r,
-                approx_eq_rgb(gainmapInfo[0].fLogRatioMax, gainmapInfo[1].fLogRatioMax, kEpsilon));
+                approx_eq_rgb(
+                        gainmapInfo[0].fGainmapRatioMax, gainmapInfo[1].fGainmapRatioMax, kEpsilon));
         REPORTER_ASSERT(
                 r,
                 approx_eq_rgb(
@@ -688,11 +743,18 @@ DEF_TEST(AndroidCodec_jpegGainmapTranscode, r) {
                 r,
                 approx_eq(gainmapInfo[0].fEpsilonHdr.fR, gainmapInfo[1].fEpsilonHdr.fR, kEpsilon));
         REPORTER_ASSERT(
-                r, approx_eq(gainmapInfo[0].fHdrRatioMin, gainmapInfo[1].fHdrRatioMin, kEpsilon));
+                r,
+                approx_eq(
+                        gainmapInfo[0].fDisplayRatioSdr,
+                        gainmapInfo[1].fDisplayRatioSdr,
+                        kEpsilon));
         REPORTER_ASSERT(
-                r, approx_eq(gainmapInfo[0].fHdrRatioMax, gainmapInfo[1].fHdrRatioMax, kEpsilon));
+                r,
+                approx_eq(
+                        gainmapInfo[0].fDisplayRatioHdr,
+                        gainmapInfo[1].fDisplayRatioHdr,
+                        kEpsilon));
 
-#if defined(SK_ENABLE_SKSL)
         // Render a few pixels and verify that they come out the same. Rendering requires SkSL.
         const struct Rec {
             int x;
@@ -732,7 +794,6 @@ DEF_TEST(AndroidCodec_jpegGainmapTranscode, r) {
 
             REPORTER_ASSERT(r, approx_eq_rgb(p0, p1, kEpsilon));
         }
-#endif  // !defined(SK_ENABLE_SKSL)
     }
 }
 #endif  // !defined(SK_ENABLE_NDK_IMAGES)

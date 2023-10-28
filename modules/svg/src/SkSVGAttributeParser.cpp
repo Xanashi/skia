@@ -297,14 +297,14 @@ bool SkSVGAttributeParser::parseHexColorToken(SkColor* c) {
 bool SkSVGAttributeParser::parseColorComponentIntegralToken(int32_t* c) {
     const char* p = SkParse::FindS32(fCurPos, c);
     if (!p || *p == '.') {
-    // No value parsed, or fractional value.
-    return false;
+        // No value parsed, or fractional value.
+        return false;
     }
 
     if (*p == '%') {
-    *c = SkScalarRoundToInt(*c * 255.0f / 100);
-    *c = SkTPin<int32_t>(*c, 0, 255);
-    p++;
+        *c = SkScalarRoundToInt(*c * 255.0f / 100);
+        *c = SkTPin<int32_t>(*c, 0, 255);
+        p++;
     }
 
     fCurPos = p;
@@ -315,8 +315,8 @@ bool SkSVGAttributeParser::parseColorComponentFractionalToken(int32_t* c) {
     SkScalar s;
     const char* p = SkParse::FindScalar(fCurPos, &s);
     if (!p || *p != '%') {
-    // Floating point must be a percentage (CSS2 rgb-percent syntax).
-    return false;
+        // Floating point must be a percentage (CSS2 rgb-percent syntax).
+        return false;
     }
     p++;  // Skip '%'
 
@@ -328,11 +328,13 @@ bool SkSVGAttributeParser::parseColorComponentFractionalToken(int32_t* c) {
 
 bool SkSVGAttributeParser::parseColorComponentScalarToken(int32_t* c) {
     SkScalar s;
-    const char* p = SkParse::FindScalar(fCurPos, &s);
-    *c = SkScalarRoundToInt(s * 255.0f);
-    *c = SkTPin<int32_t>(*c, 0, 255);
-    fCurPos = p;
-    return true;
+    if (const char* p = SkParse::FindScalar(fCurPos, &s)) {
+        *c = SkScalarRoundToInt(s * 255.0f);
+        *c = SkTPin<int32_t>(*c, 0, 255);
+        fCurPos = p;
+        return true;
+    }
+    return false;
 }
 
 bool SkSVGAttributeParser::parseColorComponentToken(int32_t* c) {

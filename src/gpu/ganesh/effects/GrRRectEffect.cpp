@@ -135,7 +135,7 @@ bool CircularRRectEffect::onIsEqual(const GrFragmentProcessor& other) const {
 
 GR_DEFINE_FRAGMENT_PROCESSOR_TEST(CircularRRectEffect)
 
-#if GR_TEST_UTILS
+#if defined(GR_TEST_UTILS)
 std::unique_ptr<GrFragmentProcessor> CircularRRectEffect::TestCreate(GrProcessorTestData* d) {
     SkScalar w = d->fRandom->nextRangeScalar(20.f, 1000.f);
     SkScalar h = d->fRandom->nextRangeScalar(20.f, 1000.f);
@@ -469,7 +469,7 @@ bool EllipticalRRectEffect::onIsEqual(const GrFragmentProcessor& other) const {
 
 GR_DEFINE_FRAGMENT_PROCESSOR_TEST(EllipticalRRectEffect)
 
-#if GR_TEST_UTILS
+#if defined(GR_TEST_UTILS)
 std::unique_ptr<GrFragmentProcessor> EllipticalRRectEffect::TestCreate(GrProcessorTestData* d) {
     SkScalar w = d->fRandom->nextRangeScalar(20.f, 1000.f);
     SkScalar h = d->fRandom->nextRangeScalar(20.f, 1000.f);
@@ -511,6 +511,10 @@ std::unique_ptr<GrFragmentProcessor> EllipticalRRectEffect::TestCreate(GrProcess
 //////////////////////////////////////////////////////////////////////////////
 
 static bool elliptical_effect_uses_scale(const GrShaderCaps& caps, const SkRRect& rrect) {
+    // Keep shaders consistent across varying radii when in reduced shader mode.
+    if (caps.fReducedShaderMode) {
+        return true;
+    }
     // If we're on a device where float != fp32 then we'll do the distance computation in a space
     // that is normalized by the largest radius. The scale uniform will be scale, 1/scale. The
     // radii uniform values are already in this normalized space.

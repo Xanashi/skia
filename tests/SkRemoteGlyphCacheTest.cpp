@@ -53,6 +53,7 @@
 #include "tests/Test.h"
 #include "tools/Resources.h"
 #include "tools/ToolUtils.h"
+#include "tools/fonts/FontToolUtils.h"
 #include "tools/fonts/TestEmptyTypeface.h"
 
 #include <cmath>
@@ -306,7 +307,7 @@ static void use_padding_options(GrContextOptions* options) {
 }
 
 DEF_GANESH_TEST_FOR_CONTEXTS(SkRemoteGlyphCache_StrikeSerializationSlug,
-                             sk_gpu_test::GrContextFactory::IsRenderingContext,
+                             skgpu::IsRenderingContext,
                              reporter,
                              ctxInfo,
                              use_padding_options,
@@ -350,7 +351,7 @@ DEF_GANESH_TEST_FOR_CONTEXTS(SkRemoteGlyphCache_StrikeSerializationSlug,
 }
 
 DEF_GANESH_TEST_FOR_CONTEXTS(SkRemoteGlyphCache_StrikeSerializationSlugForcePath,
-                             sk_gpu_test::GrContextFactory::IsRenderingContext,
+                             skgpu::IsRenderingContext,
                              reporter,
                              ctxInfo,
                              use_padding_options,
@@ -394,7 +395,7 @@ DEF_GANESH_TEST_FOR_CONTEXTS(SkRemoteGlyphCache_StrikeSerializationSlugForcePath
 }
 
 DEF_GANESH_TEST_FOR_CONTEXTS(SkRemoteGlyphCache_SlugSerialization,
-                             sk_gpu_test::GrContextFactory::IsRenderingContext,
+                             skgpu::IsRenderingContext,
                              reporter,
                              ctxInfo,
                              use_padding_options,
@@ -417,7 +418,7 @@ DEF_GANESH_TEST_FOR_CONTEXTS(SkRemoteGlyphCache_SlugSerialization,
 
     // Generate strike updates.
     auto srcSlug = Slug::ConvertBlob(analysisCanvas.get(), *serverBlob, {0.3f, 0}, paint);
-    auto dstSlugData = srcSlug->serialize();
+    auto dstSlugData = srcSlug->serialize({});
 
     std::vector<uint8_t> serverStrikeData;
     server.writeStrikeData(&serverStrikeData);
@@ -427,7 +428,7 @@ DEF_GANESH_TEST_FOR_CONTEXTS(SkRemoteGlyphCache_SlugSerialization,
                     client.readStrikeData(serverStrikeData.data(), serverStrikeData.size()));
 
     SkBitmap expected = RasterSlug(srcSlug, 10, 10, paint, dContext);
-    auto dstSlug = client.deserializeSlugForTest(dstSlugData->data(), dstSlugData->size());
+    auto dstSlug = client.deserializeSlugForTest(dstSlugData->data(), dstSlugData->size(), {});
     REPORTER_ASSERT(reporter, dstSlug != nullptr);
     SkBitmap actual = RasterSlug(dstSlug, 10, 10, paint, dContext);
     compare_blobs(expected, actual, reporter);
@@ -880,10 +881,11 @@ DEF_GANESH_TEST_FOR_RENDERING_CONTEXTS(SkRemoteGlyphCache_CacheMissReporting,
     SkStrikeClient client(discardableManager, false);
 
     auto serverTypeface = SkTypeface::MakeFromName("monospace", SkFontStyle());
+    REPORTER_ASSERT(reporter, serverTypeface);
 
     // Create the clientTypeface proxy directly from the serverTypeface.
     auto clientTypeface = sk_make_sp<SkTypefaceProxy>(
-            SkTypeface::UniqueID(serverTypeface.get()),
+            serverTypeface->uniqueID(),
             serverTypeface->countGlyphs(),
             serverTypeface->fontStyle(),
             serverTypeface->isFixedPitch(),
@@ -919,7 +921,7 @@ sk_sp<SkTextBlob> MakeEmojiBlob(sk_sp<SkTypeface> serverTf, SkScalar textSize,
     font.setTypeface(serverTf);
     font.setSize(textSize);
 
-    const char* text = ToolUtils::emoji_sample_text();
+    const char* text = ToolUtils::EmojiSampleText();
     auto blob = SkTextBlob::MakeFromText(text, strlen(text), font);
     if (clientTf == nullptr) return blob;
 
@@ -946,7 +948,7 @@ DEF_GANESH_TEST_FOR_RENDERING_CONTEXTS(SkRemoteGlyphCache_TypefaceWithNoPaths,
     SkStrikeServer server(discardableManager.get());
     SkStrikeClient client(discardableManager, false);
 
-    auto serverTypeface = ToolUtils::emoji_typeface();
+    auto serverTypeface = ToolUtils::EmojiTypeface();
     const SkTypefaceID serverTypefaceID = serverTypeface->uniqueID();
 
     auto props = FindSurfaceProps(direct);
@@ -1021,7 +1023,7 @@ DEF_GANESH_TEST_FOR_RENDERING_CONTEXTS(SkRemoteGlyphCache_TypefaceWithPaths_Mask
     SkStrikeServer server(discardableManager.get());
     SkStrikeClient client(discardableManager, true);
 
-    auto serverTypeface = ToolUtils::create_portable_typeface();
+    auto serverTypeface = ToolUtils::DefaultPortableTypeface();
     const SkTypefaceID serverTypefaceID = serverTypeface->uniqueID();
 
     auto props = FindSurfaceProps(direct);
@@ -1080,7 +1082,7 @@ DEF_GANESH_TEST_FOR_RENDERING_CONTEXTS(SkRemoteGlyphCache_TypefaceWithPaths_Path
     SkStrikeServer server(discardableManager.get());
     SkStrikeClient client(discardableManager, true);
 
-    auto serverTypeface = ToolUtils::create_portable_typeface();
+    auto serverTypeface = ToolUtils::DefaultPortableTypeface();
     const SkTypefaceID serverTypefaceID = serverTypeface->uniqueID();
 
     auto props = FindSurfaceProps(direct);
@@ -1135,7 +1137,7 @@ DEF_TEST(SkTypefaceProxy_Basic_Serial, reporter) {
     sk_sp<DiscardableManager> discardableManager = sk_make_sp<DiscardableManager>();
     SkTypefaceProxyPrototype srcProto{*typeface};
 
-    SkBinaryWriteBuffer writeBuffer;
+    SkBinaryWriteBuffer writeBuffer({});
     srcProto.flatten(writeBuffer);
 
     auto data = writeBuffer.snapshotAsData();

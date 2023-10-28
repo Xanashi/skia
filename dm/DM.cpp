@@ -7,7 +7,6 @@
 
 #include "dm/DMJsonWriter.h"
 #include "dm/DMSrcSink.h"
-#include "gm/verifiers/gmverifier.h"
 #include "include/codec/SkBmpDecoder.h"
 #include "include/codec/SkCodec.h"
 #include "include/codec/SkGifDecoder.h"
@@ -39,6 +38,7 @@
 #include "tools/HashAndEncode.h"
 #include "tools/ProcStats.h"
 #include "tools/Resources.h"
+#include "tools/TestFontDataProvider.h"
 #include "tools/ToolUtils.h"
 #include "tools/flags/CommonFlags.h"
 #include "tools/flags/CommonFlagsConfig.h"
@@ -46,6 +46,7 @@
 #include "tools/trace/ChromeTracingTracer.h"
 #include "tools/trace/EventTracingPriv.h"
 #include "tools/trace/SkDebugfTracer.h"
+#include "include/codec/SkEncodedImageFormat.h"
 
 #include <memory>
 #include <vector>
@@ -184,9 +185,6 @@ static DEFINE_string(properties, "",
                      "Space-separated key/value pairs to add to JSON identifying this run.");
 
 static DEFINE_bool(rasterize_pdf, false, "Rasterize PDFs when possible.");
-
-static DEFINE_bool(runVerifiers, false,
-                   "if true, run SkQP-style verification of GM-produced images.");
 
 #if defined(__MSVC_RUNTIME_CHECKS)
 #include <rtcapi.h>
@@ -1205,11 +1203,6 @@ struct Task {
                                     result.c_str()));
             }
 
-            // Run verifiers if specified
-            if (FLAGS_runVerifiers) {
-                RunGMVerifiers(task, bitmap);
-            }
-
             // We're likely switching threads here, so we must capture by value, [=] or [foo,bar].
             SkStreamAsset* data = stream.detachAsStream().release();
             gDefinitelyThreadSafeWork->add([task,name,bitmap,data]{
@@ -1476,23 +1469,6 @@ struct Task {
             }
         }
     }
-
-    static void RunGMVerifiers(const Task& task, const SkBitmap& actualBitmap) {
-        const SkString name = task.src->name();
-        auto verifierList = task.src->getVerifiers();
-        if (verifierList == nullptr) {
-            return;
-        }
-
-        skiagm::verifiers::VerifierResult
-            res = verifierList->verifyAll(task.sink->colorInfo(), actualBitmap);
-        if (!res.ok()) {
-            fail(
-                SkStringPrintf(
-                    "%s %s %s %s: verifier failed: %s", task.sink.tag.c_str(), task.src.tag.c_str(),
-                    task.src.options.c_str(), name.c_str(), res.message().c_str()));
-        }
-    }
 };
 
 /*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*/
@@ -1558,13 +1534,15 @@ static void run_ganesh_test(skiatest::Test test, const GrContextOptions& grCtxOp
     done("unit", "test", "", test.fName);
 }
 
-static void run_graphite_test(skiatest::Test test) {
+static void run_graphite_test(skiatest::Test test, skgpu::graphite::ContextOptions options) {
     DMReporter reporter;
     if (!FLAGS_dryRun && !should_skip("_", "tests", "_", test.fName)) {
         AutoreleasePool pool;
+        test.modifyGraphiteContextOptions(&options);
+
         skiatest::ReporterContext ctx(&reporter, SkString(test.fName));
         start("unit", "test", "", test.fName);
-        test.graphite(&reporter);
+        test.graphite(&reporter, options);
     }
     done("unit", "test", "", test.fName);
 }
@@ -1596,6 +1574,7 @@ int main(int argc, char** argv) {
 
     CommonFlags::SetDefaultFontMgr();
     CommonFlags::SetAnalyticAA();
+    skiatest::SetFontTestDataDirectory();
 
     gSkForceRasterPipelineBlitter     = FLAGS_forceRasterPipelineHP || FLAGS_forceRasterPipeline;
     gForceHighPrecisionRasterPipeline = FLAGS_forceRasterPipelineHP;
@@ -1609,6 +1588,9 @@ int main(int argc, char** argv) {
     if (FLAGS_verbose) {
         gVLog = stderr;
     }
+
+    skgpu::graphite::ContextOptions graphiteCtxOptions;
+    // Currently no command line flags directly control the Graphite context options
 
     GrContextOptions grCtxOptions;
     CommonFlags::SetCtxOptions(&grCtxOptions);
@@ -1678,7 +1660,7 @@ int main(int argc, char** argv) {
     // With the parallel work running, run serial tasks and tests here on main thread.
     for (Task& task : serial) { Task::Run(task); }
     for (skiatest::Test& test : *gGaneshTests) { run_ganesh_test(test, grCtxOptions); }
-    for (skiatest::Test& test : *gGraphiteTests) { run_graphite_test(test); }
+    for (skiatest::Test& test : *gGraphiteTests) { run_graphite_test(test, graphiteCtxOptions); }
 
     // Wait for any remaining parallel work to complete (including any spun off of serial tasks).
     parallel.wait();

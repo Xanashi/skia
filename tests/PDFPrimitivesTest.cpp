@@ -13,7 +13,6 @@
 #include "include/core/SkCanvas.h"
 #include "include/core/SkColor.h"
 #include "include/core/SkDocument.h"
-#include "include/core/SkFlattenable.h"
 #include "include/core/SkFont.h"
 #include "include/core/SkFontStyle.h"
 #include "include/core/SkFontTypes.h"
@@ -37,8 +36,6 @@
 #include "src/base/SkRandom.h"
 #include "src/core/SkImageFilterTypes.h"
 #include "src/core/SkImageFilter_Base.h"
-#include "src/core/SkReadBuffer.h"
-#include "src/core/SkSpecialImage.h"
 #include "src/pdf/SkClusterator.h"
 #include "src/pdf/SkPDFDocumentPriv.h"
 #include "src/pdf/SkPDFFont.h"
@@ -49,6 +46,7 @@
 #include "src/utils/SkFloatToDecimal.h"
 #include "tools/Resources.h"
 #include "tools/ToolUtils.h"
+#include "tools/fonts/FontToolUtils.h"
 
 #include <cfloat>
 #include <cmath>
@@ -57,6 +55,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <memory>
+#include <optional>
 #include <utility>
 
 class SkTypeface;
@@ -276,33 +275,37 @@ namespace {
 
 class TestImageFilter : public SkImageFilter_Base {
 public:
-    static sk_sp<TestImageFilter> Make(bool visited = false) {
-        return sk_sp<TestImageFilter>(new TestImageFilter(visited));
-    }
+    TestImageFilter() : SkImageFilter_Base(nullptr, 0), fVisited(false) {}
 
     bool visited() const { return fVisited; }
 
-protected:
-    sk_sp<SkSpecialImage> onFilterImage(const skif::Context& ctx, SkIPoint* offset) const override {
+private:
+    Factory getFactory() const override {
+        SK_ABORT("Does not participate in serialization");
+        return nullptr;
+    }
+    const char* getTypeName() const override { return "TestImageFilter"; }
+
+    skif::FilterResult onFilterImage(const skif::Context& ctx) const override {
         fVisited = true;
-        offset->fX = offset->fY = 0;
-        return sk_ref_sp<SkSpecialImage>(ctx.sourceImage());
+        return ctx.source();
     }
 
-private:
-    SK_FLATTENABLE_HOOKS(TestImageFilter)
-    TestImageFilter(bool visited) : INHERITED(nullptr, 0, nullptr), fVisited(visited) {}
+    skif::LayerSpace<SkIRect> onGetInputLayerBounds(
+            const skif::Mapping& mapping,
+            const skif::LayerSpace<SkIRect>& desiredOutput,
+            std::optional<skif::LayerSpace<SkIRect>> contentBounds) const override {
+        return desiredOutput;
+    }
+
+    std::optional<skif::LayerSpace<SkIRect>> onGetOutputLayerBounds(
+            const skif::Mapping& mapping,
+            std::optional<skif::LayerSpace<SkIRect>> contentBounds) const override {
+        return contentBounds;
+    }
 
     mutable bool fVisited;
-
-    using INHERITED = SkImageFilter_Base;
 };
-
-sk_sp<SkFlattenable> TestImageFilter::CreateProc(SkReadBuffer& buffer) {
-    SK_IMAGEFILTER_UNFLATTEN_COMMON(common, 0);
-    bool visited = buffer.readBool();
-    return TestImageFilter::Make(visited);
-}
 
 }  // namespace
 
@@ -314,7 +317,7 @@ DEF_TEST(SkPDF_ImageFilter, reporter) {
     auto doc = SkPDF::MakeDocument(&stream);
     SkCanvas* canvas = doc->beginPage(100.0f, 100.0f);
 
-    sk_sp<TestImageFilter> filter(TestImageFilter::Make());
+    sk_sp<TestImageFilter> filter(new TestImageFilter());
 
     // Filter just created; should be unvisited.
     REPORTER_ASSERT(reporter, !filter->visited());
@@ -339,7 +342,7 @@ DEF_TEST(SkPDF_FontCanEmbedTypeface, reporter) {
         REPORTER_ASSERT(reporter,
                         !SkPDFFont::CanEmbedTypeface(noEmbedTypeface.get(), &doc));
     }
-    sk_sp<SkTypeface> portableTypeface(ToolUtils::create_portable_typeface(nullptr, SkFontStyle()));
+    sk_sp<SkTypeface> portableTypeface(ToolUtils::DefaultPortableTypeface());
     REPORTER_ASSERT(reporter,
                     SkPDFFont::CanEmbedTypeface(portableTypeface.get(), &doc));
 }

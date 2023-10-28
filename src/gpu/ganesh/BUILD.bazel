@@ -21,9 +21,6 @@ CORE_FILES = [
     "Device.cpp",
     "Device_drawTexture.cpp",
     "Device.h",
-    "GrAHardwareBufferImageGenerator.cpp",
-    "GrAHardwareBufferImageGenerator.h",
-    "GrAHardwareBufferUtils.cpp",
     "GrAppliedClip.h",
     "GrAttachment.cpp",
     "GrAttachment.h",
@@ -31,6 +28,7 @@ CORE_FILES = [
     "GrAuditTrail.h",
     "GrAutoLocaleSetter.h",
     "GrBackendSemaphore.cpp",
+    "GrBackendSemaphorePriv.h",
     "GrBackendSurface.cpp",
     "GrBackendSurfacePriv.h",
     "GrBackendTextureImageGenerator.cpp",
@@ -201,7 +199,6 @@ CORE_FILES = [
     "GrSurface.cpp",
     "GrSurface.h",
     "GrSurfaceCharacterization.cpp",
-    "GrSurfaceInfo.cpp",
     "GrSurfaceProxy.cpp",
     "GrSurfaceProxy.h",
     "GrSurfaceProxyPriv.h",
@@ -270,8 +267,18 @@ split_srcs_and_hdrs(
 )
 
 skia_filegroup(
+    name = "android_srcs",
+    srcs = [
+        "GrAHardwareBufferImageGenerator.cpp",
+        "GrAHardwareBufferImageGenerator.h",
+        "GrAHardwareBufferUtils.cpp",
+    ],
+)
+
+skia_filegroup(
     name = "srcs",
     srcs = [
+        ":android_srcs",
         ":core_skslc_srcs",
         ":core_srcs",
         "//src/gpu/ganesh/effects:srcs",
@@ -286,7 +293,6 @@ skia_filegroup(
         "//src/gpu/ganesh/text:srcs",
     ] + select_multi(
         {
-            "//src/gpu:dawn_ganesh": ["//src/gpu/ganesh/dawn:srcs"],
             "//src/gpu:gl_ganesh": ["//src/gpu/ganesh/gl:srcs"],
             "//src/gpu:vulkan_ganesh": ["//src/gpu/ganesh/vk:srcs"],
             "@platforms//os:android": ["//src/gpu/ganesh/surface:android_srcs"],
@@ -326,7 +332,6 @@ skia_filegroup(
         "//src/gpu/ganesh/text:private_hdrs",
     ] + select_multi(
         {
-            "//src/gpu:dawn_ganesh": ["//src/gpu/ganesh/dawn:private_hdrs"],
             "//src/gpu:gl_ganesh": ["//src/gpu/ganesh/gl:private_hdrs"],
             "//src/gpu:vulkan_ganesh": ["//src/gpu/ganesh/vk:private_hdrs"],
             "//src/gpu:metal_ganesh": ["//src/gpu/ganesh/mtl:private_hdrs"],
@@ -341,7 +346,6 @@ skia_cc_deps(
     visibility = ["//src/gpu:__pkg__"],
     deps = select_multi(
         {
-            "//src/gpu:dawn_ganesh": ["//src/gpu/ganesh/dawn:deps"],
             "//src/gpu:gl_ganesh": ["//src/gpu/ganesh/gl:deps"],
             # TODO(kjlubick) mtl and d3d backend
         },
