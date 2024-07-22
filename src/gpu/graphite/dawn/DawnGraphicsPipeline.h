@@ -46,31 +46,34 @@ public:
     inline static constexpr unsigned int kIntrinsicUniformBufferIndex = 0;
     inline static constexpr unsigned int kRenderStepUniformBufferIndex = 1;
     inline static constexpr unsigned int kPaintUniformBufferIndex = 2;
-    inline static constexpr unsigned int kNumUniformBuffers = 3;
+    inline static constexpr unsigned int kGradientBufferIndex = 3;
+    inline static constexpr unsigned int kNumUniformBuffers = 4;
 
     inline static constexpr unsigned int kVertexBufferIndex = 0;
     inline static constexpr unsigned int kInstanceBufferIndex = 1;
     inline static constexpr unsigned int kNumVertexBuffers = 2;
 
     static sk_sp<DawnGraphicsPipeline> Make(const DawnSharedContext* sharedContext,
-                                            SkSL::Compiler* compiler,
+                                            DawnResourceProvider* resourceProvider,
                                             const RuntimeEffectDictionary* runtimeDict,
                                             const GraphicsPipelineDesc& pipelineDesc,
                                             const RenderPassDesc& renderPassDesc);
 
-    ~DawnGraphicsPipeline() override {}
+    ~DawnGraphicsPipeline() override;
 
     uint32_t stencilReferenceValue() const { return fStencilReferenceValue; }
     PrimitiveType primitiveType() const { return fPrimitiveType; }
     bool hasStepUniforms() const { return fHasStepUniforms; }
-    bool hasFragmentUniforms() const { return fHasFragmentUniforms; }
+    bool hasPaintUniforms() const { return fHasPaintUniforms; }
+    bool hasGradientBuffer() const { return fHasGradientBuffer; }
+    int numTexturesAndSamplers() const { return fNumFragmentTexturesAndSamplers; }
     const wgpu::RenderPipeline& dawnRenderPipeline() const;
 
     using BindGroupLayouts = std::array<wgpu::BindGroupLayout, kBindGroupCount>;
     const BindGroupLayouts& dawnGroupLayouts() const { return fGroupLayouts; }
 
 private:
-    using AsyncPipelineCreation = DawnAsyncResult<wgpu::RenderPipeline>;
+    struct AsyncPipelineCreation;
 
     DawnGraphicsPipeline(const skgpu::graphite::SharedContext* sharedContext,
                          PipelineInfo* pipelineInfo,
@@ -79,7 +82,9 @@ private:
                          PrimitiveType primitiveType,
                          uint32_t refValue,
                          bool hasStepUniforms,
-                         bool hasFragmentUniforms);
+                         bool hasPaintUniforms,
+                         bool hasGradientBuffer,
+                         int numFragmentTexturesAndSamplers);
 
     void freeGpuData() override;
 
@@ -88,7 +93,9 @@ private:
     const PrimitiveType fPrimitiveType;
     const uint32_t fStencilReferenceValue;
     const bool fHasStepUniforms;
-    const bool fHasFragmentUniforms;
+    const bool fHasPaintUniforms;
+    const bool fHasGradientBuffer;
+    const int fNumFragmentTexturesAndSamplers;
 };
 
 } // namespace skgpu::graphite

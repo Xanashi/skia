@@ -25,7 +25,7 @@ DEF_GRAPHITE_TEST_FOR_ALL_CONTEXTS(DrawPassTestFailedDstCopy,
 
     // Define a paint that requires a dst copy.
     SkPaint paint;
-    PaintParams paintParams{paint, nullptr, DstReadRequirement::kTextureCopy, false};
+    PaintParams paintParams{paint, nullptr, nullptr, DstReadRequirement::kTextureCopy, false};
 
     // Define a draw that uses the paint, but is larger than the max texture size. In this case the
     // dst copy will fail.
@@ -34,7 +34,7 @@ DEF_GRAPHITE_TEST_FOR_ALL_CONTEXTS(DrawPassTestFailedDstCopy,
     drawList->recordDraw(recorder->priv().rendererProvider()->analyticRRect(),
                          Transform::Identity(),
                          Geometry(Shape(SkRect::Make(drawSize))),
-                         Clip(Rect::Infinite(), Rect::Infinite(), drawSize),
+                         Clip(Rect::Infinite(), Rect::Infinite(), drawSize, nullptr),
                          DrawOrder(DrawOrder::kClearDepth.next()),
                          &paintParams,
                          nullptr);
@@ -46,16 +46,21 @@ DEF_GRAPHITE_TEST_FOR_ALL_CONTEXTS(DrawPassTestFailedDstCopy,
     const SkImageInfo targetInfo = SkImageInfo::Make(targetSize, targetColorType, targetAlphaType);
     sk_sp<TextureProxy> target = TextureProxy::Make(
             caps,
+            recorder->priv().resourceProvider(),
             targetSize,
             caps->getDefaultSampledTextureInfo(
-                    targetColorType, Mipmapped::kNo, Protected::kNo, Renderable::kYes),
-            Budgeted::kNo);
+                    targetColorType, Mipmapped::kNo,
+                    recorder->priv().isProtected(), Renderable::kYes),
+            "DrawPassTestTargetProxy",
+            Budgeted::kYes);
     std::unique_ptr<DrawPass> drawPass = DrawPass::Make(recorder.get(),
                                                         std::move(drawList),
                                                         target,
                                                         targetInfo,
                                                         {LoadOp::kClear, StoreOp::kStore},
-                                                        {0.0f, 0.0f, 0.0f, 0.0f});
+                                                        {0.0f, 0.0f, 0.0f, 0.0f},
+                                                        /*dstCopy=*/nullptr,
+                                                        /*dstCopyOffset=*/{0,0});
 
     // Make sure creating the draw pass failed.
     REPORTER_ASSERT(reporter, !drawPass);

@@ -828,4 +828,13 @@ enum class SkSVGAnimationTag {
     kAnimateMotion
 };
 
+// https://www.w3.org/TR/SVG11/filters.html#TransferFunctionElementAttributes
+enum class SkSVGFeFuncType {
+    kIdentity,
+    kTable,
+    kDiscrete,
+    kLinear,
+    kGamma
+};
+
 #endif // SkSVGTypes_DEFINED

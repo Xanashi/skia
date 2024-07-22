@@ -20,6 +20,7 @@
 #include "src/gpu/ganesh/GrProcessor.h"
 #include "src/gpu/ganesh/GrProcessorUnitTest.h"
 #include "src/gpu/ganesh/GrProgramInfo.h"
+#include "src/gpu/ganesh/GrRecordingContextPriv.h"
 #include "src/gpu/ganesh/GrResourceProvider.h"
 #include "src/gpu/ganesh/GrShaderCaps.h"
 #include "src/gpu/ganesh/GrStyle.h"
@@ -30,6 +31,14 @@
 #include "src/gpu/ganesh/glsl/GrGLSLVertexGeoBuilder.h"
 #include "src/gpu/ganesh/ops/GrMeshDrawOp.h"
 #include "src/gpu/ganesh/ops/GrSimpleMeshDrawOpHelper.h"
+
+#if defined(GR_TEST_UTILS)
+
+#include "src/base/SkRandom.h"
+#include "src/gpu/ganesh/GrDrawOpTest.h"
+#include "src/gpu/ganesh/GrTestUtils.h"
+
+#endif
 
 #include <utility>
 
@@ -458,10 +467,11 @@ private:
                     "half2 prevDash = half2(half(-dashParams.y) - half(dashParams.w),"
                                            "half(-dashParams.y) + half(dashParams.x) -"
                                                                  "half(dashParams.w));"
+                    "const half kDashBoundsEpsilon = 0.01;"
                     "half dashAlpha = 0;"
                 );
             fragBuilder->codeAppendf(
-                    "if (angleFromStart - x + dashParams.y >= 6.28318530718) {"
+                    "if (angleFromStart - x + dashParams.y >= 6.28318530718 + kDashBoundsEpsilon) {"
                          "dashAlpha += half(%s(x - wrapDashes.z, d) * %s(wrapDashes.w - x, d));"
                          "currDash.y = min(currDash.y, lastIntervalLength);"
                          "if (nextDash.x >= lastIntervalLength) {"
@@ -474,7 +484,7 @@ private:
                     "}"
             , fnName.c_str(), fnName.c_str());
             fragBuilder->codeAppendf(
-                    "if (angleFromStart - x - dashParams.y < -0.01) {"
+                    "if (angleFromStart - x - dashParams.y < -kDashBoundsEpsilon) {"
                          "dashAlpha += half(%s(x - wrapDashes.x, d) * %s(wrapDashes.y - x, d));"
                          "currDash.x = max(currDash.x, 0);"
                          "if (prevDash.y <= 0) {"

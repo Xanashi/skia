@@ -38,7 +38,8 @@ bool TextPropertyValue::operator==(const TextPropertyValue& other) const {
         && fHasFill == other.fHasFill
         && fHasStroke == other.fHasStroke
         && fDecorator == other.fDecorator
-        && fLocale == other.fLocale;
+        && fLocale == other.fLocale
+        && fFontFamily == other.fFontFamily;
 }
 
 bool TextPropertyValue::operator!=(const TextPropertyValue& other) const {
@@ -56,6 +57,8 @@ bool TransformPropertyValue::operator==(const TransformPropertyValue& other) con
 bool TransformPropertyValue::operator!=(const TransformPropertyValue& other) const {
     return !(*this == other);
 }
+
+// The SK_API attributes are important here due o them being declared as a template.
 
 template <> SK_API
 ColorPropertyHandle::PropertyHandle(sk_sp<sksg::Color> node)

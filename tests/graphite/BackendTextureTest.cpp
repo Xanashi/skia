@@ -15,6 +15,7 @@
 #include "include/gpu/graphite/Image.h"
 #include "include/gpu/graphite/Recorder.h"
 #include "include/gpu/graphite/Surface.h"
+#include "include/gpu/vk/VulkanMutableTextureState.h"
 #include "include/gpu/vk/VulkanTypes.h"
 #include "src/gpu/graphite/Caps.h"
 #include "src/gpu/graphite/ContextPriv.h"
@@ -208,7 +209,8 @@ DEF_GRAPHITE_TEST_FOR_VULKAN_CONTEXT(VulkanBackendTextureMutableStateTest, repor
                            VK_IMAGE_TILING_OPTIMAL,
                            VK_IMAGE_USAGE_SAMPLED_BIT,
                            VK_SHARING_MODE_EXCLUSIVE,
-                           VK_IMAGE_ASPECT_COLOR_BIT);
+                           VK_IMAGE_ASPECT_COLOR_BIT,
+                           /*ycbcrConversionInfo*/{});
 
     BackendTexture texture({16, 16},
                            info,
@@ -222,7 +224,8 @@ DEF_GRAPHITE_TEST_FOR_VULKAN_CONTEXT(VulkanBackendTextureMutableStateTest, repor
                     texture.getVkImageLayout() == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
     REPORTER_ASSERT(reporter, texture.getVkQueueFamilyIndex() == 1);
 
-    skgpu::MutableTextureState newState(VK_IMAGE_LAYOUT_GENERAL, 0);
+    skgpu::MutableTextureState newState =
+            skgpu::MutableTextureStates::MakeVulkan(VK_IMAGE_LAYOUT_GENERAL, 0);
     texture.setMutableState(newState);
 
     REPORTER_ASSERT(reporter,

@@ -48,7 +48,7 @@ private:
                          const Texture* depthStencilTexture,
                          SkRect viewport,
                          const DrawPassList&) override;
-    bool onAddComputePass(const DispatchGroupList&) override;
+    bool onAddComputePass(DispatchGroupSpan) override;
 
     // Methods for populating a Dawn RenderPassEncoder:
     bool beginRenderPass(const RenderPassDesc&,
@@ -66,12 +66,12 @@ private:
                         int height);
     void endRenderPass();
 
-    void addDrawPass(const DrawPass*);
+    bool addDrawPass(const DrawPass*);
 
-    void bindGraphicsPipeline(const GraphicsPipeline*);
+    bool bindGraphicsPipeline(const GraphicsPipeline*);
     void setBlendConstants(float* blendConstants);
 
-    void bindUniformBuffer(const BindBufferInfo& info, UniformSlot);
+    void bindUniformBuffer(const BindUniformBufferInfo& info, UniformSlot);
     void bindDrawBuffers(const BindBufferInfo& vertices,
                          const BindBufferInfo& instances,
                          const BindBufferInfo& indices,
@@ -108,6 +108,7 @@ private:
     void bindComputePipeline(const ComputePipeline*);
     void bindDispatchResources(const DispatchGroup&, const DispatchGroup::Dispatch&);
     void dispatchWorkgroups(const WorkgroupSize& globalSize);
+    void dispatchWorkgroupsIndirect(const Buffer* indirectBuffer, size_t indirectBufferOffset);
     void endComputePass();
 
     // Methods for doing texture/buffer to texture/buffer copying:
@@ -140,6 +141,7 @@ private:
 
     std::array<const DawnBuffer*, DawnGraphicsPipeline::kNumUniformBuffers> fBoundUniformBuffers;
     std::array<uint32_t, DawnGraphicsPipeline::kNumUniformBuffers> fBoundUniformBufferOffsets;
+    std::array<uint32_t, DawnGraphicsPipeline::kNumUniformBuffers> fBoundUniformBufferSizes;
 
     wgpu::CommandEncoder fCommandEncoder;
     wgpu::RenderPassEncoder fActiveRenderPassEncoder;
@@ -148,7 +150,8 @@ private:
     wgpu::Buffer fCurrentIndirectBuffer;
     size_t fCurrentIndirectBufferOffset = 0;
 
-    wgpu::Buffer fIntrinsicConstantBuffer;
+    sk_sp<DawnBuffer> fIntrinsicConstantBuffer;
+    int fIntrinsicConstantBufferSlotsUsed = 0;
 
     const DawnGraphicsPipeline* fActiveGraphicsPipeline = nullptr;
     const DawnComputePipeline* fActiveComputePipeline = nullptr;

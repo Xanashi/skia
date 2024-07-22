@@ -1,13 +1,14 @@
-load("//bazel:skia_rules.bzl", "exports_files_legacy", "skia_filegroup")
+load("//bazel:skia_rules.bzl", "skia_filegroup")
+
+package(
+    default_applicable_licenses = ["//:license"],
+)
 
 licenses(["notice"])
-
-exports_files_legacy()
 
 skia_filegroup(
     name = "public_hdrs",
     srcs = [
-        "SkAnimCodecPlayer.h",
         "SkCamera.h",
         "SkCanvasStateUtils.h",
         "SkCustomTypeface.h",
@@ -33,10 +34,12 @@ skia_filegroup(
         "SkEventTracer.h",
         "SkNWayCanvas.h",
         "SkNoDrawCanvas.h",
+        "SkOrderedFontMgr.h",
         "SkPaintFilterCanvas.h",
         "SkParse.h",
         "SkParsePath.h",
         "SkShadowUtils.h",
+        "SkTextUtils.h",
         "SkTraceEventPhase.h",
     ],
     visibility = ["//src/core:__pkg__"],

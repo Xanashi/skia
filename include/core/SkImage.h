@@ -98,6 +98,8 @@ SK_API sk_sp<SkImage> RasterFromCompressedTextureData(sk_sp<SkData> data,
  *
  *  If the encoded format is not supported, nullptr is returned.
  *
+ *  If possible, clients should use SkCodecs::DeferredImage instead.
+ *
  *  @param encoded  the encoded data
  *  @return         created SkImage, or nullptr
 
@@ -540,6 +542,13 @@ public:
                     int srcY,
                     CachingHint cachingHint = kAllow_CachingHint) const;
 
+#if defined(GRAPHITE_TEST_UTILS)
+    bool readPixelsGraphite(skgpu::graphite::Recorder*,
+                            const SkPixmap& dst,
+                            int srcX,
+                            int srcY) const;
+#endif
+
 #ifndef SK_IMAGE_READ_PIXELS_DISABLE_LEGACY_API
     /** Deprecated. Use the variants that accept a GrDirectContext. */
     bool readPixels(const SkImageInfo& dstInfo, void* dstPixels, size_t dstRowBytes,
@@ -691,6 +700,26 @@ public:
     */
     bool scalePixels(const SkPixmap& dst, const SkSamplingOptions&,
                      CachingHint cachingHint = kAllow_CachingHint) const;
+
+    /**
+     * Create a new image by copying this image and scaling to fit the ImageInfo's dimensions
+     * and converting the pixels into the ImageInfo's ColorInfo.
+     * This is done retaining the domain (backend) of the image (e.g. gpu, raster)
+     *
+     * The Recorder parameter is required if the original image was created on a graphite Recorder,
+     * but must be nullptr if it was create in some other way (e.g. GrContext, raster, deferred).
+     *
+     * return nullptr if the requested ColorInfo is not supported,  its dimesions are out of range,
+     *  or if the recorder is null on a graphite Image.
+     */
+    sk_sp<SkImage> makeScaled(skgpu::graphite::Recorder*,
+                              const SkImageInfo&,
+                              const SkSamplingOptions&) const;
+
+    sk_sp<SkImage> makeScaled(const SkImageInfo& info,
+                              const SkSamplingOptions& sampling) const {
+        return this->makeScaled(nullptr, info, sampling);
+    }
 
     /** Returns encoded SkImage pixels as SkData, if SkImage was created from supported
         encoded stream format. Platform support for formats vary and may require building

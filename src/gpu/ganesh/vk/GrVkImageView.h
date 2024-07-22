@@ -9,13 +9,12 @@
 #define GrVkImageView_DEFINED
 
 #include "include/gpu/GrTypes.h"
-#include "include/gpu/vk/GrVkTypes.h"
+#include "include/gpu/vk/VulkanTypes.h"
 #include "src/gpu/ganesh/vk/GrVkManagedResource.h"
 
 #include <cinttypes>
 
 class GrVkSamplerYcbcrConversion;
-struct GrVkYcbcrConversionInfo;
 
 class GrVkImageView : public GrVkManagedResource {
 public:
@@ -24,9 +23,12 @@ public:
         kStencil_Type
     };
 
-    static sk_sp<const GrVkImageView> Make(GrVkGpu* gpu, VkImage image, VkFormat format,
-                                           Type viewType, uint32_t miplevels,
-                                           const GrVkYcbcrConversionInfo& ycbcrInfo);
+    static sk_sp<const GrVkImageView> Make(GrVkGpu* gpu,
+                                           VkImage image,
+                                           VkFormat format,
+                                           Type viewType,
+                                           uint32_t miplevels,
+                                           const skgpu::VulkanYcbcrConversionInfo& ycbcrInfo);
 
     VkImageView imageView() const { return fImageView; }
 

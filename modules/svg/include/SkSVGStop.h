@@ -15,6 +15,8 @@ class SkSVGLengthContext;
 
 class SK_API SkSVGStop : public SkSVGHiddenContainer {
 public:
+    static constexpr SkSVGTag tag = SkSVGTag::kStop;
+
     static sk_sp<SkSVGStop> Make() {
         return sk_sp<SkSVGStop>(new SkSVGStop());
     }

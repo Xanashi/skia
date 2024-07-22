@@ -154,10 +154,10 @@ private:
     /** Implemented by porting layer to return the default factory. */
 #if !defined(SK_DISABLE_LEGACY_FONTMGR_FACTORY)
     static sk_sp<SkFontMgr> Factory();
+#endif
 
     /** For SVG embedded fonts */
     mutable SkTypefaceCache fTFCache;
-#endif
 };
 
 #endif

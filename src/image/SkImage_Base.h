@@ -23,6 +23,7 @@ class GrImageContext;
 class SkBitmap;
 class SkColorSpace;
 class SkPixmap;
+class SkSurface;
 enum SkColorType : int;
 enum SkYUVColorSpace : int;
 struct SkIRect;
@@ -70,6 +71,17 @@ public:
                               int srcX,
                               int srcY,
                               CachingHint) const = 0;
+
+    // used by makeScaled()
+    virtual sk_sp<SkSurface> onMakeSurface(skgpu::graphite::Recorder*,
+                                           const SkImageInfo&) const = 0;
+
+#if defined(GRAPHITE_TEST_UTILS)
+    virtual bool onReadPixelsGraphite(skgpu::graphite::Recorder*,
+                                      const SkPixmap& dst,
+                                      int srcX,
+                                      int srcY) const { return false; }
+#endif
 
     virtual bool onHasMipmaps() const = 0;
     virtual bool onIsProtected() const = 0;

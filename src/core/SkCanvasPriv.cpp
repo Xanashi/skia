@@ -20,7 +20,6 @@
 #include "include/private/base/SkAssert.h"
 #include "include/private/base/SkTo.h"
 #include "src/base/SkAutoMalloc.h"
-#include "src/core/SkDevice.h"
 #include "src/core/SkMaskFilterBase.h"
 #include "src/core/SkReadBuffer.h"
 #include "src/core/SkWriteBuffer.h"
@@ -160,22 +159,10 @@ bool SkCanvasPriv::ImageToColorFilter(SkPaint* paint) {
     return true;
 }
 
-#if defined(GRAPHITE_TEST_UTILS)
-#include "src/gpu/graphite/Device.h"
-
-skgpu::graphite::TextureProxy* SkCanvasPriv::TopDeviceGraphiteTargetProxy(SkCanvas* canvas) {
-    if (auto gpuDevice = canvas->topDevice()->asGraphiteDevice()) {
-        return gpuDevice->target();
-    }
-    return nullptr;
-}
-
-#endif // defined(GRAPHITE_TEST_UTILS)
-
-
 AutoLayerForImageFilter::AutoLayerForImageFilter(SkCanvas* canvas,
                                                  const SkPaint& paint,
-                                                 const SkRect* rawBounds)
+                                                 const SkRect* rawBounds,
+                                                 bool skipMaskFilterLayer)
             : fPaint(paint)
             , fCanvas(canvas)
             , fTempLayersForFilters(0) {
@@ -196,9 +183,7 @@ AutoLayerForImageFilter::AutoLayerForImageFilter(SkCanvas* canvas,
     // coverage into the alpha channel). The draw's paint preserves all geometric effects that have
     // to be applied before the mask filter. The layer's restore paint adds an image filter
     // representing the mask filter.
-    // TODO: Eventually all devices will use this code path and it will just check for mask filters.
-    if (fPaint.getMaskFilter() &&
-        SkCanvasPriv::TopDevice(canvas)->useDrawCoverageMaskForMaskFilters()) {
+    if (fPaint.getMaskFilter() && !skipMaskFilterLayer) {
         this->addMaskFilterLayer(rawBounds);
     }
 
@@ -213,7 +198,24 @@ AutoLayerForImageFilter::~AutoLayerForImageFilter() {
         fCanvas->fSaveCount -= 1;
         fCanvas->internalRestore();
     }
-    SkASSERT(fCanvas->getSaveCount() == fSaveCount);
+    // Negative save count occurs when this layer was moved.
+    SkASSERT(fSaveCount < 0 || fCanvas->getSaveCount() == fSaveCount);
+}
+
+AutoLayerForImageFilter::AutoLayerForImageFilter(AutoLayerForImageFilter&& other) {
+    *this = std::move(other);
+}
+
+AutoLayerForImageFilter& AutoLayerForImageFilter::operator=(AutoLayerForImageFilter&& other) {
+    fPaint = std::move(other.fPaint);
+    fCanvas = other.fCanvas;
+    fTempLayersForFilters = other.fTempLayersForFilters;
+    SkDEBUGCODE(fSaveCount = other.fSaveCount;)
+
+    other.fTempLayersForFilters = 0;
+    SkDEBUGCODE(other.fSaveCount = -1;)
+
+    return *this;
 }
 
 void AutoLayerForImageFilter::addImageFilterLayer(const SkRect* drawBounds) {

@@ -6,6 +6,7 @@
  */
 
 #include "include/core/SkColor.h"
+#include "include/core/SkFontMgr.h"
 #include "include/core/SkPictureRecorder.h"
 #include "include/core/SkStream.h"
 #include "modules/skottie/include/Skottie.h"
@@ -359,7 +360,8 @@ DEF_TEST(Skottie_Props, reporter) {
       false,
       false,
       nullptr,
-      SkString()
+      SkString(),
+      SkString("test-family")
     });
     REPORTER_ASSERT(reporter, texts[0].handle->get() == text_prop);
     text_prop.fLocale = "custom_lc";

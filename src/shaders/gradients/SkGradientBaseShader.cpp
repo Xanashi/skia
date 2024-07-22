@@ -16,13 +16,13 @@
 #include "include/core/SkShader.h"
 #include "include/core/SkTileMode.h"
 #include "include/private/SkColorData.h"
-#include "include/private/base/SkFloatBits.h"
 #include "include/private/base/SkFloatingPoint.h"
 #include "include/private/base/SkMalloc.h"
 #include "include/private/base/SkTArray.h"
 #include "include/private/base/SkTPin.h"
 #include "include/private/base/SkTo.h"
 #include "src/base/SkArenaAlloc.h"
+#include "src/base/SkFloatBits.h"
 #include "src/base/SkVx.h"
 #include "src/core/SkColorSpacePriv.h"
 #include "src/core/SkColorSpaceXformSteps.h"
@@ -201,9 +201,10 @@ SkGradientBaseShader::SkGradientBaseShader(const Descriptor& desc, const SkMatri
             fColorCount = 4
      */
     fColorCount = desc.fColorCount;
-    // check if we need to add in start and/or end position/colors
+
+    // Check if we need to add in start and/or end position/colors
     if (desc.fPositions) {
-        fFirstStopIsImplicit = desc.fPositions[0] != 0;
+        fFirstStopIsImplicit = desc.fPositions[0] > 0;
         fLastStopIsImplicit = desc.fPositions[desc.fColorCount - 1] != SK_Scalar1;
         fColorCount += fFirstStopIsImplicit + fLastStopIsImplicit;
     }
@@ -239,15 +240,62 @@ SkGradientBaseShader::SkGradientBaseShader(const Descriptor& desc, const SkMatri
         const SkScalar uniformStep = desc.fPositions[startIndex] - prev;
         for (int i = startIndex; i < count; i++) {
             // Pin the last value to 1.0, and make sure pos is monotonic.
-            auto curr = (i == desc.fColorCount) ? 1 : SkTPin(desc.fPositions[i], prev, 1.0f);
+            float curr = 1.0f;
+            if (i != desc.fColorCount) {
+                curr = SkTPin(desc.fPositions[i], prev, 1.0f);
+
+                // If a value is clamped to 1.0 before the last stop, the last stop
+                // actually isn't implicit if we thought it was.
+                if (curr == 1.0f && fLastStopIsImplicit) {
+                    fLastStopIsImplicit = false;
+                }
+            }
+
             uniformStops &= SkScalarNearlyEqual(uniformStep, curr - prev);
 
             *positions++ = prev = curr;
         }
 
-        // If the stops are uniform, treat them as implicit.
         if (uniformStops) {
+            // If the stops are uniform, treat them as implicit.
             fPositions = nullptr;
+        } else {
+            // Remove duplicate stops with more than two of the same stop,
+            // keeping the leftmost and rightmost stop colors.
+            // i.e.       0, 0, 0,   0.2, 0.2, 0.3, 0.3, 0.3, 1, 1
+            // w/  clamp  0,    0,   0.2, 0.2, 0.3,      0.3, 1, 1
+            // w/o clamp        0,   0.2, 0.2, 0.3,      0.3, 1
+            int i = 0;
+            int dedupedColorCount = 0;
+            for (int j = 1; j <= fColorCount; j++) {
+                // We can compare the current positions at i and j since once these fPosition
+                // values are overwritten, our i and j pointers will be past the overwritten values.
+                if (j == fColorCount || fPositions[i] != fPositions[j]) {
+                    bool dupStop = j - i > 1;
+
+                    // Ignore the leftmost stop (i) if it is a non-clamp tilemode with
+                    // a duplicate stop on t = 0.
+                    bool ignoreLeftmost = dupStop && fTileMode != SkTileMode::kClamp
+                                                    && fPositions[i] == 0;
+                    if (!ignoreLeftmost) {
+                        fPositions[dedupedColorCount] = fPositions[i];
+                        fColors[dedupedColorCount] =  fColors[i];
+                        dedupedColorCount++;
+                    }
+
+                    // Include the rightmost stop (j-1) only if the stop has a duplicate,
+                    // ignoring the rightmost stop if it is a non-clamp tilemode with t = 1.
+                    bool ignoreRightmost = fTileMode != SkTileMode::kClamp
+                                                    && fPositions[j - 1] == 1;
+                    if (dupStop && !ignoreRightmost) {
+                        fPositions[dedupedColorCount] = fPositions[j - 1];
+                        fColors[dedupedColorCount] = fColors[j - 1];
+                        dedupedColorCount++;
+                    }
+                    i = j;
+                }
+            }
+            fColorCount = dedupedColorCount;
         }
     }
 }
@@ -301,15 +349,15 @@ static void init_stop_evenly(SkRasterPipeline_GradientCtx* ctx,
 static void init_stop_pos(SkRasterPipeline_GradientCtx* ctx,
                           size_t stop,
                           float t_l,
-                          float t_r,
+                          float c_scale,
                           SkPMColor4f c_l,
                           SkPMColor4f c_r) {
     // See note about Clankium's old compiler in init_stop_evenly().
     SkPMColor4f Fs = {
-            (c_r.fR - c_l.fR) / (t_r - t_l),
-            (c_r.fG - c_l.fG) / (t_r - t_l),
-            (c_r.fB - c_l.fB) / (t_r - t_l),
-            (c_r.fA - c_l.fA) / (t_r - t_l),
+            (c_r.fR - c_l.fR) * c_scale,
+            (c_r.fG - c_l.fG) * c_scale,
+            (c_r.fB - c_l.fB) * c_scale,
+            (c_r.fA - c_l.fA) * c_scale,
     };
     SkPMColor4f Bs = {
             c_l.fR - Fs.fR * t_l,
@@ -390,8 +438,11 @@ void SkGradientBaseShader::AppendGradientFillStages(SkRasterPipeline* p,
                 SkPMColor4f c_r = pmColors[i + 1];
                 SkASSERT(t_l <= t_r);
                 if (t_l < t_r) {
-                    init_stop_pos(ctx, stopCount, t_l, t_r, c_l, c_r);
-                    stopCount += 1;
+                    float c_scale = sk_ieee_float_divide(1, t_r - t_l);
+                    if (SkIsFinite(c_scale)) {
+                        init_stop_pos(ctx, stopCount, t_l, c_scale, c_l, c_r);
+                        stopCount += 1;
+                    }
                 }
                 t_l = t_r;
                 c_l = c_r;
@@ -420,11 +471,13 @@ void SkGradientBaseShader::AppendInterpolatedToDstStages(SkRasterPipeline* p,
         switch (interpolation.fColorSpace) {
             case ColorSpace::kLab:
             case ColorSpace::kOKLab:
+            case ColorSpace::kOKLabGamutMap:
                 p->append(SkRasterPipelineOp::unpremul);
                 colorIsPremul = false;
                 break;
             case ColorSpace::kLCH:
             case ColorSpace::kOKLCH:
+            case ColorSpace::kOKLCHGamutMap:
             case ColorSpace::kHSL:
             case ColorSpace::kHWB:
                 p->append(SkRasterPipelineOp::unpremul_polar);
@@ -439,10 +492,17 @@ void SkGradientBaseShader::AppendInterpolatedToDstStages(SkRasterPipeline* p,
     switch (interpolation.fColorSpace) {
         case ColorSpace::kLab:   p->append(SkRasterPipelineOp::css_lab_to_xyz);           break;
         case ColorSpace::kOKLab: p->append(SkRasterPipelineOp::css_oklab_to_linear_srgb); break;
+        case ColorSpace::kOKLabGamutMap:
+            p->append(SkRasterPipelineOp::css_oklab_gamut_map_to_linear_srgb);
+            break;
         case ColorSpace::kLCH:   p->append(SkRasterPipelineOp::css_hcl_to_lab);
                                  p->append(SkRasterPipelineOp::css_lab_to_xyz);           break;
         case ColorSpace::kOKLCH: p->append(SkRasterPipelineOp::css_hcl_to_lab);
                                  p->append(SkRasterPipelineOp::css_oklab_to_linear_srgb); break;
+        case ColorSpace::kOKLCHGamutMap:
+            p->append(SkRasterPipelineOp::css_hcl_to_lab);
+            p->append(SkRasterPipelineOp::css_oklab_gamut_map_to_linear_srgb);
+            break;
         case ColorSpace::kHSL:   p->append(SkRasterPipelineOp::css_hsl_to_srgb);          break;
         case ColorSpace::kHWB:   p->append(SkRasterPipelineOp::css_hwb_to_srgb);          break;
         default: break;
@@ -528,26 +588,23 @@ bool SkGradientBaseShader::isOpaque() const {
     return fColorsAreOpaque && (this->getTileMode() != SkTileMode::kDecal);
 }
 
-static unsigned rounded_divide(unsigned numer, unsigned denom) {
-    return (numer + (denom >> 1)) / denom;
-}
-
-bool SkGradientBaseShader::onAsLuminanceColor(SkColor* lum) const {
-    // we just compute an average color.
-    // possibly we could weight this based on the proportional width for each color
-    //   assuming they are not evenly distributed in the fPos array.
-    int r = 0;
-    int g = 0;
-    int b = 0;
-    const int n = fColorCount;
-    // TODO: use linear colors?
-    for (int i = 0; i < n; ++i) {
-        SkColor c = this->getLegacyColor(i);
-        r += SkColorGetR(c);
-        g += SkColorGetG(c);
-        b += SkColorGetB(c);
+bool SkGradientBaseShader::onAsLuminanceColor(SkColor4f* lum) const {
+    // We just compute an average color. There are several things we could do better:
+    // 1) We already have a different average_gradient_color helper later in this file, that weights
+    //    contribution by the relative size of each band.
+    // 2) Colors should be converted to some standard color space! These could be in any space.
+    // 3) Do we want to average in the source space, sRGB, or some linear space?
+    SkColor4f color{0, 0, 0, 1};
+    for (int i = 0; i < fColorCount; ++i) {
+        color.fR += fColors[i].fR;
+        color.fG += fColors[i].fG;
+        color.fB += fColors[i].fB;
     }
-    *lum = SkColorSetRGB(rounded_divide(r, n), rounded_divide(g, n), rounded_divide(b, n));
+    const float scale = 1.0f / fColorCount;
+    color.fR *= scale;
+    color.fG *= scale;
+    color.fB *= scale;
+    *lum = color;
     return true;
 }
 
@@ -574,7 +631,9 @@ static sk_sp<SkColorSpace> intermediate_color_space(SkGradientShader::Interpolat
             return SkColorSpace::MakeRGB(SkNamedTransferFn::kLinear, SkNamedGamut::kXYZ);
 
         case ColorSpace::kOKLab:
+        case ColorSpace::kOKLabGamutMap:
         case ColorSpace::kOKLCH:
+        case ColorSpace::kOKLCHGamutMap:
             // The "standard" conversion to these spaces starts with XYZD65. That requires extra
             // effort to conjure. The author also has reference code for going directly from linear
             // sRGB, so we use that.
@@ -754,12 +813,14 @@ SkColor4fXformer::SkColor4fXformer(const SkGradientBaseShader* shader,
     // 3) Transform to the interpolation color space (if it's special)
     ConvertColorProc convertFn = nullptr;
     switch (interpolation.fColorSpace) {
-        case ColorSpace::kHSL:   convertFn = srgb_to_hsl;       break;
-        case ColorSpace::kHWB:   convertFn = srgb_to_hwb;       break;
-        case ColorSpace::kLab:   convertFn = xyzd50_to_lab;     break;
-        case ColorSpace::kLCH:   convertFn = xyzd50_to_hcl;     break;
-        case ColorSpace::kOKLab: convertFn = lin_srgb_to_oklab; break;
-        case ColorSpace::kOKLCH: convertFn = lin_srgb_to_okhcl; break;
+        case ColorSpace::kHSL:           convertFn = srgb_to_hsl;       break;
+        case ColorSpace::kHWB:           convertFn = srgb_to_hwb;       break;
+        case ColorSpace::kLab:           convertFn = xyzd50_to_lab;     break;
+        case ColorSpace::kLCH:           convertFn = xyzd50_to_hcl;     break;
+        case ColorSpace::kOKLab:         convertFn = lin_srgb_to_oklab; break;
+        case ColorSpace::kOKLabGamutMap: convertFn = lin_srgb_to_oklab; break;
+        case ColorSpace::kOKLCH:         convertFn = lin_srgb_to_okhcl; break;
+        case ColorSpace::kOKLCHGamutMap: convertFn = lin_srgb_to_okhcl; break;
         default: break;
     }
 
@@ -1035,30 +1096,4 @@ sk_sp<SkShader> SkGradientBaseShader::MakeDegenerateGradient(const SkColor4f col
     }
     SkDEBUGFAIL("Should not be reached");
     return nullptr;
-}
-
-SkGradientBaseShader::ColorStopOptimizer::ColorStopOptimizer(const SkColor4f* colors,
-                                                             const SkScalar* pos,
-                                                             int count,
-                                                             SkTileMode mode)
-        : fColors(colors), fPos(pos), fCount(count) {
-    if (!pos || count != 3) {
-        return;
-    }
-
-    if (SkScalarNearlyEqual(pos[0], 0.0f) && SkScalarNearlyEqual(pos[1], 0.0f) &&
-        SkScalarNearlyEqual(pos[2], 1.0f)) {
-        if (SkTileMode::kRepeat == mode || SkTileMode::kMirror == mode || colors[0] == colors[1]) {
-            // Ignore the leftmost color/pos.
-            fColors += 1;
-            fPos += 1;
-            fCount = 2;
-        }
-    } else if (SkScalarNearlyEqual(pos[0], 0.0f) && SkScalarNearlyEqual(pos[1], 1.0f) &&
-               SkScalarNearlyEqual(pos[2], 1.0f)) {
-        if (SkTileMode::kRepeat == mode || SkTileMode::kMirror == mode || colors[1] == colors[2]) {
-            // Ignore the rightmost color/pos.
-            fCount = 2;
-        }
-    }
 }

@@ -71,15 +71,22 @@ struct SK_API ContextOptions {
 #endif
 
     /**
-     * Can the glyph atlas use multiple textures. If allowed, the each texture's size is bound by
-     * fGlypheCacheTextureMaximumBytes.
+     * The maximum size of textures used for Skia's PathAtlas caches.
      */
-    bool fAllowMultipleGlyphCacheTextures = true;
+    int fMaxPathAtlasTextureSize = 8192;  // oversized, PathAtlas will likely be smaller
+
+    /**
+     * Can the glyph and path atlases use multiple textures. If allowed, each texture's size is
+     * bound by fGlyphCacheTextureMaximumBytes and fMaxPathAtlasTextureSize, respectively.
+     */
+    bool fAllowMultipleAtlasTextures = true;
     bool fSupportBilerpFromGlyphAtlas = false;
 
     /**
      * Disable caching of glyph uploads at the start of each Recording. These can add additional
      * overhead and are only necessary if Recordings are replayed or played out of order.
+     *
+     * Deprecated, now only used to set requireOrderedRecordings Caps.
      */
     bool fDisableCachedGlyphUploads = false;
 
@@ -88,6 +95,15 @@ struct SK_API ContextOptions {
      * What is the budget for GPU resources allocated and held by the Context.
      */
     size_t fGpuBudgetInBytes = kDefaultContextBudget;
+
+    /**
+     * Whether labels will be set on backend resources.
+     */
+#if defined(SK_DEBUG)
+    bool fSetBackendLabels = true;
+#else
+    bool fSetBackendLabels = false;
+#endif
 
     /**
      * Private options that are only meant for testing within Skia's tools.

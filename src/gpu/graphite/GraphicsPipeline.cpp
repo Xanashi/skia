@@ -11,7 +11,10 @@
 namespace skgpu::graphite {
 
 GraphicsPipeline::GraphicsPipeline(const SharedContext* sharedContext, PipelineInfo* pipelineInfo)
-        : Resource(sharedContext, Ownership::kOwned, skgpu::Budgeted::kYes, /*gpuMemorySize=*/0) {
+        : Resource(sharedContext,
+                   Ownership::kOwned,
+                   skgpu::Budgeted::kYes,
+                   /*gpuMemorySize=*/0) {
 #if defined(GRAPHITE_TEST_UTILS)
     if (pipelineInfo) {
         fPipelineInfo.fRenderStepID = pipelineInfo->fRenderStepID;

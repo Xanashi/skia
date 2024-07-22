@@ -56,9 +56,7 @@ protected:
 
         // Setup our random scaler context
         auto typeface = ToolUtils::CreatePortableTypeface("sans-serif", SkFontStyle::Bold());
-        if (!typeface) {
-            typeface = SkTypeface::MakeDefault();
-        }
+        SkASSERT(typeface);
         font.setTypeface(sk_make_sp<SkRandomTypeface>(std::move(typeface), paint, false));
 
         SkScalar y = 0;
@@ -85,12 +83,12 @@ protected:
         y += bounds.fBottom;
 
         // color emoji
-        if (sk_sp<SkTypeface> origEmoji = ToolUtils::EmojiTypeface()) {
-            font.setTypeface(sk_make_sp<SkRandomTypeface>(origEmoji, paint, false));
-            const char* emojiText = ToolUtils::EmojiSampleText();
-            font.measureText(emojiText, strlen(emojiText), SkTextEncoding::kUTF8, &bounds);
+        ToolUtils::EmojiTestSample sample = ToolUtils::EmojiSample();
+        if (sample.typeface) {
+            font.setTypeface(sk_make_sp<SkRandomTypeface>(sample.typeface, paint, false));
+            font.measureText(sample.sampleText, strlen(sample.sampleText), SkTextEncoding::kUTF8, &bounds);
             y -= bounds.fTop;
-            ToolUtils::add_to_text_blob(&builder, emojiText, font, 0, y);
+            ToolUtils::add_to_text_blob(&builder, sample.sampleText, font, 0, y);
             y += bounds.fBottom;
         }
 

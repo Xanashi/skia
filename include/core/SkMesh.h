@@ -15,6 +15,7 @@
 #include "include/core/SkString.h"
 #include "include/effects/SkRuntimeEffect.h"
 #include "include/private/base/SkAPI.h"
+#include "include/private/base/SkTArray.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -61,7 +62,7 @@ namespace SkSL { struct Program; }
  * assumed to be shared between stages. It is an error to specify uniforms in the vertex and
  * fragment program with the same name but different types, dimensionality, or layouts.
  */
-class SkMeshSpecification : public SkNVRefCnt<SkMeshSpecification> {
+class SK_API SkMeshSpecification : public SkNVRefCnt<SkMeshSpecification> {
 public:
     /** These values are enforced when creating a specification. */
     static constexpr size_t kMaxStride       = 1024;
@@ -185,6 +186,8 @@ public:
 
     size_t stride() const { return fStride; }
 
+    SkColorSpace* colorSpace() const { return fColorSpace.get(); }
+
 private:
     friend struct SkMeshSpecificationPriv;
 
@@ -257,7 +260,7 @@ private:
  * SkMeshSpecification::uniformSize() and SkMeshSpecification::uniforms() for sizing and packing
  * uniforms into the SkData.
  */
-class SkMesh {
+class SK_API SkMesh {
 public:
     class IndexBuffer : public SkRefCnt {
     public:
@@ -376,7 +379,7 @@ private:
     sk_sp<IndexBuffer>  fIB;
 
     sk_sp<const SkData> fUniforms;
-    std::vector<ChildPtr> fChildren;
+    skia_private::STArray<2, ChildPtr> fChildren;
 
     size_t fVOffset = 0;  // Must be a multiple of spec->stride()
     size_t fVCount  = 0;

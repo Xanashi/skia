@@ -22,6 +22,8 @@
 #endif
 #include <vector>
 
+class SkTraceMemoryDump;
+
 namespace skgpu {
 class SingleOwner;
 }
@@ -80,6 +82,8 @@ public:
 
     size_t currentBudgetedBytes() const { return fBudgetedBytes; }
 
+    void dumpMemoryStatistics(SkTraceMemoryDump* traceMemoryDump) const;
+
 #if defined(GRAPHITE_TEST_UTILS)
     void forceProcessReturnedResources() { this->processReturnedResources(); }
 
@@ -112,7 +116,8 @@ private:
     void removeFromNonpurgeableArray(Resource* resource);
     void removeFromPurgeableQueue(Resource* resource);
 
-    void processReturnedResources();
+    // This will return true if any resources were actually returned to the cache
+    bool processReturnedResources();
     void returnResourceToCache(Resource*, LastRemovedRef);
 
     uint32_t getNextTimestamp();

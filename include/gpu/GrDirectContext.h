@@ -42,9 +42,7 @@ class SkTraceMemoryDump;
 enum SkColorType : int;
 enum class SkTextureCompressionType;
 struct GrMockOptions;
-struct GrVkBackendContext; // IWYU pragma: keep
 struct GrD3DBackendContext; // IWYU pragma: keep
-struct GrMtlBackendContext; // IWYU pragma: keep
 
 namespace skgpu {
     class MutableTextureState;
@@ -61,40 +59,6 @@ enum class BackendSurfaceAccess;
 
 class SK_API GrDirectContext : public GrRecordingContext {
 public:
-#if defined(SK_VULKAN) && !defined(SK_DISABLE_LEGACY_VK_GRDIRECTCONTEXT_FACTORIES)
-    /**
-     * The Vulkan context (VkQueue, VkDevice, VkInstance) must be kept alive until the returned
-     * GrDirectContext is destroyed. This also means that any objects created with this
-     * GrDirectContext (e.g. SkSurfaces, SkImages, etc.) must also be released as they may hold
-     * refs on the GrDirectContext. Once all these objects and the GrDirectContext are released,
-     * then it is safe to delete the vulkan objects.
-     */
-    static sk_sp<GrDirectContext> MakeVulkan(const GrVkBackendContext&, const GrContextOptions&);
-    static sk_sp<GrDirectContext> MakeVulkan(const GrVkBackendContext&);
-#endif
-
-#ifdef SK_METAL
-    /**
-     * Makes a GrDirectContext which uses Metal as the backend. The GrMtlBackendContext contains a
-     * MTLDevice and MTLCommandQueue which should be used by the backend. These objects must
-     * have their own ref which will be released when the GrMtlBackendContext is destroyed.
-     * Ganesh will take its own ref on the objects which will be released when the GrDirectContext
-     * is destroyed.
-     */
-    static sk_sp<GrDirectContext> MakeMetal(const GrMtlBackendContext&, const GrContextOptions&);
-    static sk_sp<GrDirectContext> MakeMetal(const GrMtlBackendContext&);
-    /**
-     * Deprecated.
-     *
-     * Makes a GrDirectContext which uses Metal as the backend. The device parameter is an
-     * MTLDevice and queue is an MTLCommandQueue which should be used by the backend. These objects
-     * must have a ref on them that can be transferred to Ganesh, which will release the ref
-     * when the GrDirectContext is destroyed.
-     */
-    static sk_sp<GrDirectContext> MakeMetal(void* device, void* queue, const GrContextOptions&);
-    static sk_sp<GrDirectContext> MakeMetal(void* device, void* queue);
-#endif
-
 #ifdef SK_DIRECT3D
     /**
      * Makes a GrDirectContext which uses Direct3D as the backend. The Direct3D context
@@ -943,7 +907,9 @@ public:
     const GrDirectContextPriv priv() const;  // NOLINT(readability-const-return-type)
 
 protected:
-    GrDirectContext(GrBackendApi backend, const GrContextOptions& options);
+    GrDirectContext(GrBackendApi backend,
+                    const GrContextOptions& options,
+                    sk_sp<GrContextThreadSafeProxy> proxy);
 
     bool init() override;
 

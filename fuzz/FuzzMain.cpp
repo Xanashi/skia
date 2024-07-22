@@ -10,6 +10,7 @@
 #include "include/core/SkBitmap.h"
 #include "include/core/SkCanvas.h"
 #include "include/core/SkData.h"
+#include "include/core/SkFontMgr.h"
 #include "include/core/SkImage.h"
 #include "include/core/SkMallocPixelRef.h"
 #include "include/core/SkPaint.h"
@@ -18,13 +19,12 @@
 #include "include/core/SkSurface.h"
 #include "include/core/SkTextBlob.h"
 #include "include/encode/SkPngEncoder.h"
-#include "src/core/SkFontMgrPriv.h"
 #include "src/core/SkOSFile.h"
 #include "src/core/SkReadBuffer.h"
 #include "src/utils/SkOSPath.h"
 #include "tools/ToolUtils.h"
 #include "tools/flags/CommandLineFlags.h"
-#include "tools/fonts/TestFontMgr.h"
+#include "tools/fonts/FontToolUtils.h"
 
 #include <iostream>
 #include <map>
@@ -90,6 +90,7 @@ static void fuzz_image_decode(const sk_sp<SkData>&);
 static void fuzz_image_decode_incremental(const sk_sp<SkData>&);
 static void fuzz_img(const sk_sp<SkData>&, uint8_t, uint8_t);
 static void fuzz_json(const sk_sp<SkData>&);
+static void fuzz_parse_path(const sk_sp<SkData>&);
 static void fuzz_path_deserialize(const sk_sp<SkData>&);
 static void fuzz_region_deserialize(const sk_sp<SkData>&);
 static void fuzz_region_set_path(const sk_sp<SkData>&);
@@ -123,7 +124,7 @@ int main(int argc, char** argv) {
             "--help lists the valid types. If type is not specified,\n"
             "fuzz will make a guess based on the name of the file.\n");
     CommandLineFlags::Parse(argc, argv);
-    gSkFontMgr_DefaultFactory = &ToolUtils::MakePortableFontMgr;
+    ToolUtils::UsePortableFontMgr();
 
     SkString path = SkString(FLAGS_bytes.isEmpty() ? argv[0] : FLAGS_bytes[0]);
     SkString type = SkString(FLAGS_type.isEmpty() ? "" : FLAGS_type[0]);
@@ -215,6 +216,10 @@ static int fuzz_file(const SkString& path, SkString type) {
     }
     if (type.equals("json")) {
         fuzz_json(std::move(bytes));
+        return 0;
+    }
+    if (type.equals("parse_path")) {
+        fuzz_parse_path(std::move(bytes));
         return 0;
     }
     if (type.equals("path_deserialize")) {
@@ -752,6 +757,13 @@ void FuzzColorspace(const uint8_t *data, size_t size);
 static void fuzz_color_deserialize(const sk_sp<SkData>& data) {
     FuzzColorspace(data->bytes(), data->size());
     SkDebugf("[terminated] Finished SkColorspace\n");
+}
+
+void FuzzParsePath(const uint8_t *data, size_t size);
+
+static void fuzz_parse_path(const sk_sp<SkData>& data) {
+    FuzzParsePath(data->bytes(), data->size());
+    SkDebugf("[terminated] parse_path didn't crash!\n");
 }
 
 void FuzzPathDeserialize(const uint8_t *data, size_t size);

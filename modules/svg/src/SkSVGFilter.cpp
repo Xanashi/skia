@@ -31,6 +31,8 @@ sk_sp<SkImageFilter> SkSVGFilter::buildFilterDAG(const SkSVGRenderContext& ctx) 
     sk_sp<SkImageFilter> filter;
     SkSVGFilterContext fctx(ctx.resolveOBBRect(fX, fY, fWidth, fHeight, fFilterUnits),
                             fPrimitiveUnits);
+    SkSVGRenderContext localCtx(ctx);
+    this->applyProperties(&localCtx);
     SkSVGColorspace cs = SkSVGColorspace::kSRGB;
 
     SkSVGRenderContext filterCtx(ctx);

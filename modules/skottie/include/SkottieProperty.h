@@ -14,13 +14,20 @@
 #include "include/core/SkPoint.h"
 #include "include/core/SkRect.h"
 #include "include/core/SkRefCnt.h"
+#include "include/core/SkScalar.h"
 #include "include/core/SkSpan.h"
+#include "include/core/SkString.h"
 #include "include/core/SkTypeface.h"
+#include "include/private/base/SkAPI.h"
 #include "include/utils/SkTextUtils.h"
 #include "modules/skottie/include/TextShaper.h"
 
+#include <cstddef>
+#include <cstdint>
 #include <functional>
-#include <vector>
+#include <limits>
+#include <memory>
+#include <utility>
 
 class SkCanvas;
 
@@ -90,6 +97,9 @@ struct TextPropertyValue {
                             // breaking rules for certain scripts: ja-u-lb-strict.
                             // Pass an empty string to use the system locale.
     SkString                fLocale;
+                            // Optional font family name, to be passed to the font manager for
+                            // fallback.
+    SkString                fFontFamily;
 
     bool operator==(const TextPropertyValue& other) const;
     bool operator!=(const TextPropertyValue& other) const;

@@ -39,7 +39,7 @@ public:
         // RasterPathAtlas is supported
         kRaster  = 0b010,
     };
-    SK_DECL_BITMASK_OPS_FRIENDS(PathAtlasFlags);
+    SK_DECL_BITMASK_OPS_FRIENDS(PathAtlasFlags)
     using PathAtlasFlagsBitMask = SkEnumBitMask<PathAtlasFlags>;
 
     // Query the supported path atlas algorithms based on device capabilities.
@@ -52,7 +52,8 @@ public:
     // glyph rendering. This TextAtlasManager is always available.
     TextAtlasManager* textAtlasManager() const { return fTextAtlasManager.get(); }
 
-    // Returns whether a particular atlas type is available
+    // Returns whether a particular atlas type is available. Currently PathAtlasFlags::kRaster is
+    // always supported.
     bool isAvailable(PathAtlasFlags atlasType) const {
         return SkToBool(fPathAtlasFlags & atlasType);
     }
@@ -60,7 +61,7 @@ public:
     // Creates a new transient atlas handler that uses compute shaders to rasterize coverage masks
     // for path rendering. This method returns nullptr if compute shaders are not supported by the
     // owning Recorder's context.
-    std::unique_ptr<ComputePathAtlas> createComputePathAtlas() const;
+    std::unique_ptr<ComputePathAtlas> createComputePathAtlas(Recorder* recorder) const;
 
     // Gets the atlas handler that uses the CPU raster pipeline to create coverage masks
     // for path rendering.
@@ -71,10 +72,15 @@ public:
             Recorder*, uint16_t width, uint16_t height, SkColorType, uint16_t identifier,
             bool requireStorageUsage);
 
-    void clearTexturePool();
+    // Free all GPU resources (and any cache data referring to masks stored in the textures)
+    // used by any of the atlases directly managed by this provider.
+    void freeGpuResources();
 
     // Push any pending uploads to atlases onto the draw context
-    void recordUploads(DrawContext*, Recorder*);
+    void recordUploads(DrawContext*);
+
+    // Handle any post-flush work (garbage collection, e.g.)
+    void postFlush();
 
 private:
     std::unique_ptr<TextAtlasManager> fTextAtlasManager;

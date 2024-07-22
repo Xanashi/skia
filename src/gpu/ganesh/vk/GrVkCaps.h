@@ -8,7 +8,7 @@
 #ifndef GrVkCaps_DEFINED
 #define GrVkCaps_DEFINED
 
-#include "include/gpu/vk/GrVkTypes.h"
+#include "include/gpu/vk/VulkanTypes.h"
 #include "include/private/base/SkTArray.h"
 #include "include/private/base/SkTDArray.h"
 #include "src/gpu/ganesh/GrCaps.h"
@@ -30,14 +30,14 @@ public:
      * Creates a GrVkCaps that is set such that nothing is supported. The init function should
      * be called to fill out the caps.
      */
-    GrVkCaps(const GrContextOptions& contextOptions,
-             const skgpu::VulkanInterface* vkInterface,
-             VkPhysicalDevice device,
-             const VkPhysicalDeviceFeatures2& features,
+    GrVkCaps(const GrContextOptions&,
+             const skgpu::VulkanInterface*,
+             VkPhysicalDevice,
+             const VkPhysicalDeviceFeatures2&,
              uint32_t instanceVersion,
              uint32_t physicalDeviceVersion,
-             const skgpu::VulkanExtensions& extensions,
-             skgpu::Protected isProtected = skgpu::Protected::kNo);
+             const skgpu::VulkanExtensions&,
+             skgpu::Protected);
 
     bool isFormatSRGB(const GrBackendFormat&) const override;
 
@@ -167,6 +167,8 @@ public:
     // Returns true if the VK_EXT_image_drm_format_modifier is enabled.
     bool supportsDRMFormatModifiers() const { return fSupportsDRMFormatModifiers; }
 
+    bool supportsDeviceFaultInfo() const { return fSupportsDeviceFaultInfo; }
+
     // Returns whether we prefer to record draws directly into a primary command buffer.
     bool preferPrimaryOverSecondaryCommandBuffers() const {
         return fPreferPrimaryOverSecondaryCommandBuffers;
@@ -183,10 +185,6 @@ public:
     bool mustInvalidatePrimaryCmdBufferStateAfterClearAttachments() const {
         return fMustInvalidatePrimaryCmdBufferStateAfterClearAttachments;
     }
-
-    // For host visible allocations, this returns true if we require that they are coherent. This
-    // is used to work around bugs for devices that don't handle non-coherent memory correctly.
-    bool mustUseCoherentHostVisibleMemory() const { return fMustUseCoherentHostVisibleMemory; }
 
     // Returns whether a pure GPU accessible buffer is more performant to read than a buffer that is
     // also host visible. If so then in some cases we may prefer the cost of doing a copy to the
@@ -325,13 +323,13 @@ private:
         SkUNREACHABLE;
     }
 
-    void init(const GrContextOptions& contextOptions,
-              const skgpu::VulkanInterface* vkInterface,
-              VkPhysicalDevice device,
+    void init(const GrContextOptions&,
+              const skgpu::VulkanInterface*,
+              VkPhysicalDevice,
               const VkPhysicalDeviceFeatures2&,
               uint32_t physicalDeviceVersion,
               const skgpu::VulkanExtensions&,
-              GrProtected isProtected);
+              GrProtected);
     void initGrCaps(const skgpu::VulkanInterface* vkInterface,
                     VkPhysicalDevice physDev,
                     const VkPhysicalDeviceProperties&,
@@ -422,7 +420,7 @@ private:
         std::unique_ptr<ColorTypeInfo[]> fColorTypeInfos;
         int fColorTypeInfoCount = 0;
     };
-    static const size_t kNumVkFormats = 23;
+    static const size_t kNumVkFormats = 25;
     FormatInfo fFormatTable[kNumVkFormats];
 
     FormatInfo& getFormatInfo(VkFormat);
@@ -433,7 +431,7 @@ private:
 
     VkFormat fPreferredStencilFormat;
 
-    skia_private::STArray<1, GrVkYcbcrConversionInfo> fYcbcrInfos;
+    skia_private::STArray<1, skgpu::VulkanYcbcrConversionInfo> fYcbcrInfos;
 
     bool fMustSyncCommandBuffersWithQueue = false;
     bool fShouldAlwaysUseDedicatedImageMemory = false;
@@ -457,10 +455,11 @@ private:
 
     bool fSupportsDRMFormatModifiers = false;
 
+    bool fSupportsDeviceFaultInfo = false;
+
     bool fPreferPrimaryOverSecondaryCommandBuffers = true;
     bool fMustInvalidatePrimaryCmdBufferStateAfterClearAttachments = false;
 
-    bool fMustUseCoherentHostVisibleMemory = false;
     bool fGpuOnlyBuffersMorePerformant = false;
     bool fShouldPersistentlyMapCpuToGpuBuffers = true;
 

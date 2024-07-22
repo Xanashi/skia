@@ -4,28 +4,67 @@
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
-
 #include "src/gpu/ganesh/gradients/GrGradientShader.h"
 
+#include "include/core/SkAlphaType.h"
+#include "include/core/SkBitmap.h"
 #include "include/core/SkColorSpace.h"
+#include "include/core/SkColorType.h"
+#include "include/core/SkMatrix.h"
+#include "include/core/SkRect.h"
+#include "include/core/SkSamplingOptions.h"
+#include "include/core/SkString.h"
+#include "include/core/SkTileMode.h"
+#include "include/effects/SkGradientShader.h"
+#include "include/effects/SkRuntimeEffect.h"
+#include "include/gpu/GpuTypes.h"
+#include "include/gpu/GrBackendSurface.h"
 #include "include/gpu/GrRecordingContext.h"
+#include "include/gpu/GrTypes.h"
 #include "include/private/SkColorData.h"
+#include "include/private/base/SkAssert.h"
+#include "include/private/base/SkDebug.h"
+#include "include/private/base/SkMath.h"
+#include "include/private/base/SkOnce.h"
+#include "include/private/base/SkSpan_impl.h"
+#include "include/private/base/SkTemplates.h"
+#include "include/private/gpu/ganesh/GrTypesPriv.h"
+#include "src/base/SkArenaAlloc.h"
 #include "src/base/SkMathPriv.h"
+#include "src/base/SkVx.h"
 #include "src/core/SkColorSpacePriv.h"
 #include "src/core/SkRasterPipeline.h"
+#include "src/core/SkRasterPipelineOpContexts.h"
 #include "src/core/SkRasterPipelineOpList.h"
 #include "src/core/SkRuntimeEffectPriv.h"
 #include "src/gpu/ganesh/GrCaps.h"
-#include "src/gpu/ganesh/GrColor.h"
 #include "src/gpu/ganesh/GrColorInfo.h"
 #include "src/gpu/ganesh/GrColorSpaceXform.h"
+#include "src/gpu/ganesh/GrFPArgs.h"
+#include "src/gpu/ganesh/GrFragmentProcessor.h"
 #include "src/gpu/ganesh/GrRecordingContextPriv.h"
+#include "src/gpu/ganesh/GrSamplerState.h"
+#include "src/gpu/ganesh/GrShaderCaps.h"
 #include "src/gpu/ganesh/SkGr.h"
 #include "src/gpu/ganesh/effects/GrMatrixEffect.h"
 #include "src/gpu/ganesh/effects/GrSkSLFP.h"
 #include "src/gpu/ganesh/effects/GrTextureEffect.h"
 #include "src/gpu/ganesh/gradients/GrGradientBitmapCache.h"
+#include "src/shaders/SkShaderBase.h"
 #include "src/shaders/gradients/SkGradientBaseShader.h"
+
+#include <algorithm>
+#include <array>
+#include <cstddef>
+#include <tuple>
+#include <utility>
+
+struct SkV4;
+
+#if defined(GR_TEST_UTILS)
+#include "src/base/SkRandom.h"
+#include "src/gpu/ganesh/GrTestUtils.h"
+#endif
 
 using namespace skia_private;
 
@@ -689,15 +728,17 @@ static std::unique_ptr<GrFragmentProcessor> make_interpolated_to_dst(
     using ColorSpace = SkGradientShader::Interpolation::ColorSpace;
 
     // If these values change, you will need to edit sksl_shared
-    static_assert(static_cast<int>(ColorSpace::kDestination) == 0);
-    static_assert(static_cast<int>(ColorSpace::kSRGBLinear)  == 1);
-    static_assert(static_cast<int>(ColorSpace::kLab)         == 2);
-    static_assert(static_cast<int>(ColorSpace::kOKLab)       == 3);
-    static_assert(static_cast<int>(ColorSpace::kLCH)         == 4);
-    static_assert(static_cast<int>(ColorSpace::kOKLCH)       == 5);
-    static_assert(static_cast<int>(ColorSpace::kSRGB)        == 6);
-    static_assert(static_cast<int>(ColorSpace::kHSL)         == 7);
-    static_assert(static_cast<int>(ColorSpace::kHWB)         == 8);
+    static_assert(static_cast<int>(ColorSpace::kDestination)   == 0);
+    static_assert(static_cast<int>(ColorSpace::kSRGBLinear)    == 1);
+    static_assert(static_cast<int>(ColorSpace::kLab)           == 2);
+    static_assert(static_cast<int>(ColorSpace::kOKLab)         == 3);
+    static_assert(static_cast<int>(ColorSpace::kOKLabGamutMap) == 4);
+    static_assert(static_cast<int>(ColorSpace::kLCH)           == 5);
+    static_assert(static_cast<int>(ColorSpace::kOKLCH)         == 6);
+    static_assert(static_cast<int>(ColorSpace::kOKLCHGamutMap) == 7);
+    static_assert(static_cast<int>(ColorSpace::kSRGB)          == 8);
+    static_assert(static_cast<int>(ColorSpace::kHSL)           == 9);
+    static_assert(static_cast<int>(ColorSpace::kHWB)           == 10);
 
     static const SkRuntimeEffect* effect = SkMakeRuntimeEffect(SkRuntimeEffect::MakeForColorFilter,
         "uniform int colorSpace;"    // specialized
@@ -715,8 +756,10 @@ static std::unique_ptr<GrFragmentProcessor> make_interpolated_to_dst(
     switch (interpolation.fColorSpace) {
         case ColorSpace::kLab:
         case ColorSpace::kOKLab:
+        case ColorSpace::kOKLabGamutMap:
         case ColorSpace::kLCH:
         case ColorSpace::kOKLCH:
+        case ColorSpace::kOKLCHGamutMap:
         case ColorSpace::kHSL:
         case ColorSpace::kHWB:
             // In these exotic spaces, unpremul the colors if necessary (no need to do this if

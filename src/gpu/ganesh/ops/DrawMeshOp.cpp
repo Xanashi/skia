@@ -25,7 +25,9 @@
 #include "src/gpu/ganesh/glsl/GrGLSLProgramBuilder.h"
 #include "src/gpu/ganesh/glsl/GrGLSLVarying.h"
 #include "src/gpu/ganesh/glsl/GrGLSLVertexGeoBuilder.h"
+#include "src/gpu/ganesh/ops/GrMeshDrawOp.h"
 #include "src/gpu/ganesh/ops/GrSimpleMeshDrawOpHelper.h"
+#include "src/sksl/SkSLString.h"
 #include "src/sksl/codegen/SkSLPipelineStageCodeGenerator.h"
 #include "src/sksl/ir/SkSLProgram.h"
 #include "src/sksl/ir/SkSLVarDeclarations.h"
@@ -181,7 +183,8 @@ private:
                 });
                 SkASSERT(it != uniforms.end());
 
-                UniformHandle* handle = &fSelf->fSpecUniformHandles[it - uniforms.begin()];
+                size_t handleIdx = std::distance(uniforms.begin(), it);
+                UniformHandle* handle = &fSelf->fSpecUniformHandles[handleIdx];
                 if (handle->isValid()) {
                     const GrShaderVar& uniformVar = fUniformHandler->getUniformVariable(*handle);
                     return std::string(uniformVar.getName().c_str());
@@ -305,7 +308,8 @@ private:
             }
 
             SkASSERT(fSpecUniformHandles.empty());
-            fSpecUniformHandles.resize(mgp.fSpec->uniforms().size());
+            fSpecUniformHandles.reserve_exact(mgp.fSpec->uniforms().size());
+            fSpecUniformHandles.push_back_n(mgp.fSpec->uniforms().size());
 
             SkMeshSpecificationPriv::ColorType meshColorType =
                     SkMeshSpecificationPriv::GetColorType(*mgp.fSpec);
@@ -517,10 +521,10 @@ private:
     private:
         SkMatrix fViewMatrix = SkMatrix::InvalidMatrix();
 
-        TArray<std::unique_ptr<GrFragmentProcessor::ProgramImpl>> fChildImpls;
-        UniformHandle                                             fViewMatrixUniform;
-        UniformHandle                                             fColorUniform;
-        std::vector<UniformHandle>                                fSpecUniformHandles;
+        STArray<2, std::unique_ptr<GrFragmentProcessor::ProgramImpl>> fChildImpls;
+        UniformHandle                                                 fViewMatrixUniform;
+        UniformHandle                                                 fColorUniform;
+        STArray<8, UniformHandle>                                     fSpecUniformHandles;
 
         GrGLSLColorSpaceXformHelper fColorSpaceHelper;
     };
@@ -872,13 +876,8 @@ MeshOp::MeshOp(GrProcessorSet*                              processorSet,
     fMeshes.emplace_back(mesh);
 
     fSpecification = mesh.refSpec();
-    if (fColorSpaceXform) {
-        fUniforms = SkRuntimeEffectPriv::TransformUniforms(mesh.spec()->uniforms(),
-                                                           mesh.refUniforms(),
-                                                           fColorSpaceXform->steps());
-    } else {
-        fUniforms = mesh.refUniforms();
-    }
+    fUniforms = SkRuntimeEffectPriv::TransformUniforms(
+            mesh.spec()->uniforms(), mesh.refUniforms(), mesh.spec()->colorSpace());
 
     fChildren = std::move(children);
 
@@ -1176,10 +1175,13 @@ GrOp::CombineResult MeshOp::onCombineIfPossible(GrOp* t, SkArenaAlloc*, const Gr
         return CombineResult::kCannotCombine;
     }
 
+    if (fVertexCount > INT32_MAX - that->fVertexCount) {
+        return CombineResult::kCannotCombine;
+    }
     if (SkToBool(fIndexCount) != SkToBool(that->fIndexCount)) {
         return CombineResult::kCannotCombine;
     }
-    if (SkToBool(fIndexCount) && fVertexCount + that->fVertexCount > SkToInt(UINT16_MAX)) {
+    if (SkToBool(fIndexCount) && fVertexCount > SkToInt(UINT16_MAX) - that->fVertexCount) {
         return CombineResult::kCannotCombine;
     }
 
@@ -1189,7 +1191,7 @@ GrOp::CombineResult MeshOp::onCombineIfPossible(GrOp* t, SkArenaAlloc*, const Gr
     }
 
     // Our specs made for vertices don't have uniforms.
-    SkASSERT(fSpecification->uniforms().size() == 0);
+    SkASSERT(fSpecification->uniforms().empty());
 
     if (!SkMeshSpecificationPriv::HasColors(*fSpecification) && fColor != that->fColor) {
         return CombineResult::kCannotCombine;

@@ -18,9 +18,11 @@ class SkShader;
 
 namespace skgpu::graphite {
 
+class DrawContext;
 class KeyContext;
 class PaintParamsKeyBuilder;
 class PipelineDataGatherer;
+class Recorder;
 class TextureProxy;
 
 // TBD: If occlusion culling is eliminated as a phase, we can easily move the paint conversion
@@ -31,16 +33,9 @@ class TextureProxy;
 // assumed to be anti-aliased.
 class PaintParams {
 public:
-    PaintParams(const SkColor4f& color,
-                sk_sp<SkBlender> finalBlender,
-                sk_sp<SkShader>,
-                sk_sp<SkColorFilter>,
-                sk_sp<SkBlender> primitiveBlender,
-                DstReadRequirement dstReadReq,
-                bool skipColorXform,
-                bool dither);
     explicit PaintParams(const SkPaint&,
                          sk_sp<SkBlender> primitiveBlender,
+                         sk_sp<SkShader> clipShader,
                          DstReadRequirement dstReadReq,
                          bool skipColorXform);
 
@@ -73,6 +68,8 @@ public:
 
     void toKey(const KeyContext&, PaintParamsKeyBuilder*, PipelineDataGatherer*) const;
 
+    void notifyImagesInUse(Recorder*, DrawContext*) const;
+
 private:
     void addPaintColorToKey(const KeyContext&, PaintParamsKeyBuilder*, PipelineDataGatherer*) const;
     void handlePrimitiveColor(const KeyContext&,
@@ -91,12 +88,10 @@ private:
     // In the case where there is primitive blending, the primitive color is the source color and
     // the dest is the paint's color (or the paint's shader's computed color).
     sk_sp<SkBlender>     fPrimitiveBlender;
+    sk_sp<SkShader>      fClipShader;
     DstReadRequirement   fDstReadReq;
     bool                 fSkipColorXform;
     bool                 fDither;
-
-    // TODO: Will also store ColorFilter, dither, and any extra shader from an
-    // active clipShader().
 };
 
 using AddToKeyFn = std::function<void()>;

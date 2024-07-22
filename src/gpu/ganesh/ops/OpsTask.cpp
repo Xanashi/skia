@@ -24,6 +24,7 @@
 #include "src/gpu/ganesh/GrResourceAllocator.h"
 #include "src/gpu/ganesh/GrResourceProvider.h"
 #include "src/gpu/ganesh/GrTexture.h"
+#include "src/gpu/ganesh/GrTextureResolveManager.h"
 #include "src/gpu/ganesh/geometry/GrRect.h"
 
 using namespace skia_private;
@@ -914,7 +915,7 @@ void OpsTask::gatherProxyIntervals(GrResourceAllocator* alloc) const {
     GrRenderTargetProxy* targetProxy = targetSurface->asRenderTargetProxy();
 
     // Add the interval for all the writes to this OpsTasks's target
-    if (fOpChains.size()) {
+    if (!fOpChains.empty()) {
         unsigned int cur = alloc->curOp();
 
         alloc->addInterval(targetProxy, cur, cur + fOpChains.size() - 1,

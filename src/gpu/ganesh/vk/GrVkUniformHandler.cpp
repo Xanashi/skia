@@ -14,6 +14,8 @@
 #include "src/gpu/ganesh/vk/GrVkPipelineStateBuilder.h"
 #include "src/gpu/ganesh/vk/GrVkTexture.h"
 
+static constexpr int kDstInputAttachmentIndex = 0;
+
 // To determine whether a current offset is aligned, we can just 'and' the lowest bits with the
 // alignment mask. A value of 0 means aligned, any other value is how many bytes past alignment we
 // are. This works since all alignments are powers of 2. The mask is always (alignment - 1).
@@ -362,7 +364,7 @@ void GrVkUniformHandler::appendUniformDecls(GrShaderFlags visibility, SkString* 
         if (visibility & localUniform.fVisibility) {
             if (SkSLTypeCanBeUniformValue(localUniform.fVariable.getType())) {
                 Layout layout = fUsePushConstants ? kStd430Layout : kStd140Layout;
-                uniformsString.appendf("layout(offset=%d) ", localUniform.fOffsets[layout]);
+                uniformsString.appendf("layout(offset=%u) ", localUniform.fOffsets[layout]);
                 localUniform.fVariable.appendDecl(fProgramBuilder->shaderCaps(), &uniformsString);
                 uniformsString.append(";\n");
             }

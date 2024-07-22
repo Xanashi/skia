@@ -459,6 +459,42 @@ DEF_TEST(SVGDevice_fill_stroke, reporter) {
     }
 }
 
+DEF_TEST(SVGDevice_fill_opacity_black_fill, reporter) {
+    struct {
+        SkColor     color;
+        const char* expected_fill_opacity;
+    } gTests[] = {
+        // Semi-transparent black
+        {  SkColorSetARGB(0x33, 0x00, 0x00, 0x00), "0.2" },
+        // Opaque black
+        {  SkColorSetARGB(0xFF, 0x00, 0x00, 0x00), nullptr },
+    };
+
+    for (const auto& tst : gTests) {
+        SkPaint p;
+        p.setColor(tst.color);
+        p.setStyle(SkPaint::kFill_Style);
+
+        SkDOM dom;
+        {
+            auto svgCanvas = MakeDOMCanvas(&dom);
+            SkRect bounds{0, 0, SkIntToScalar(100), SkIntToScalar(100)};
+            svgCanvas->drawRect(bounds, p);
+        }
+
+        const SkDOM::Node* rootElement = dom.finishParsing();
+        ABORT_TEST(reporter, !rootElement, "root element not found");
+
+        const SkDOM::Node* rectElement = dom.getFirstChild(rootElement, "rect");
+        ABORT_TEST(reporter, !rectElement, "rect element not found");
+        const auto* fill_opacity = dom.findAttr(rectElement, "fill-opacity");
+        REPORTER_ASSERT(reporter, !!fill_opacity == !!tst.expected_fill_opacity);
+        if (fill_opacity) {
+            REPORTER_ASSERT(reporter, strcmp(fill_opacity, tst.expected_fill_opacity) == 0);
+        }
+    }
+}
+
 DEF_TEST(SVGDevice_fill_rect_hex, reporter) {
     SkDOM dom;
     SkPaint paint;
@@ -534,6 +570,67 @@ DEF_TEST(SVGDevice_fill_stroke_rect_hex, reporter) {
     REPORTER_ASSERT(reporter, strcmp(dom.findAttr(rectNode, "stroke"), "#123456") == 0);
     REPORTER_ASSERT(reporter, strcmp(dom.findAttr(rectNode, "stroke-width"), "1") == 0);
 }
+
+DEF_TEST(SVGDevice_rect_with_path_effect, reporter) {
+    SkDOM dom;
+
+    SkScalar intervals[] = {0, 20};
+    sk_sp<SkPathEffect> pathEffect = SkDashPathEffect::Make(intervals, 2, 0);
+
+    SkPaint paint;
+    paint.setPathEffect(pathEffect);
+
+    {
+        auto svgCanvas = MakeDOMCanvas(&dom);
+        svgCanvas->drawRect(SkRect::MakeXYWH(0, 0, 100, 100), paint);
+    }
+
+    const auto* rootElement = dom.finishParsing();
+    REPORTER_ASSERT(reporter, rootElement, "root element not found");
+    const auto* pathElement = dom.getFirstChild(rootElement, "path");
+    REPORTER_ASSERT(reporter, pathElement, "path element not found");
+}
+
+DEF_TEST(SVGDevice_rrect_with_path_effect, reporter) {
+    SkDOM dom;
+
+    SkScalar intervals[] = {0, 20};
+    sk_sp<SkPathEffect> pathEffect = SkDashPathEffect::Make(intervals, 2, 0);
+
+    SkPaint paint;
+    paint.setPathEffect(pathEffect);
+
+    {
+        auto svgCanvas = MakeDOMCanvas(&dom);
+        svgCanvas->drawRRect(SkRRect::MakeRectXY(SkRect::MakeXYWH(0, 0, 100, 100), 10, 10), paint);
+    }
+
+    const auto* rootElement = dom.finishParsing();
+    REPORTER_ASSERT(reporter, rootElement, "root element not found");
+    const auto* pathElement = dom.getFirstChild(rootElement, "path");
+    REPORTER_ASSERT(reporter, pathElement, "path element not found");
+}
+
+DEF_TEST(SVGDevice_oval_with_path_effect, reporter) {
+    SkDOM dom;
+
+    SkScalar intervals[] = {0, 20};
+    sk_sp<SkPathEffect> pathEffect = SkDashPathEffect::Make(intervals, 2, 0);
+
+    SkPaint paint;
+    paint.setPathEffect(pathEffect);
+
+    {
+        auto svgCanvas = MakeDOMCanvas(&dom);
+        svgCanvas->drawOval(SkRect::MakeXYWH(0, 0, 100, 100), paint);
+    }
+
+    const auto* rootElement = dom.finishParsing();
+    REPORTER_ASSERT(reporter, rootElement, "root element not found");
+    const auto* pathElement = dom.getFirstChild(rootElement, "path");
+    REPORTER_ASSERT(reporter, pathElement, "path element not found");
+}
+
 
 DEF_TEST(SVGDevice_path_effect, reporter) {
     SkDOM dom;

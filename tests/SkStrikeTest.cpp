@@ -81,7 +81,7 @@ prepare_for_mask_drawing(
         rejectedSize = 0;
     StrikeMutationMonitor m{strike};
     for (auto [glyphID, pos] : source) {
-        if (!SkScalarsAreFinite(pos.x(), pos.y())) {
+        if (!SkIsFinite(pos.x(), pos.y())) {
             continue;
         }
         const SkPackedGlyphID packedID{glyphID};
@@ -265,7 +265,7 @@ DEF_TEST(SkStrike_FlattenByType, reporter) {
 
     // Make a strike to merge into.
     SkStrikeCache strikeCache;
-    auto dstTypeface = SkTypeface::MakeFromName("monospace", SkFontStyle());
+    auto dstTypeface = ToolUtils::CreateTestTypeface("monospace", SkFontStyle());
     SkFont font{dstTypeface};
     SkStrikeSpec spec = SkStrikeSpec::MakeWithNoDevice(font);
     sk_sp<SkStrike> strike = spec.findOrCreateStrike(&strikeCache);

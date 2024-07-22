@@ -45,14 +45,4 @@ bool CollectImages(const CommandLineFlags::StringArray& dir,
  */
 void SetCtxOptions(struct GrContextOptions*);
 
-/**
- *  Enable, disable, or force analytic anti-aliasing using --analyticAA and --forceAnalyticAA.
- */
-void SetAnalyticAA();
-
-/**
- *  Turn on portable (--nonativeFonts) or GDI font rendering (--gdi).
- */
-void SetDefaultFontMgr();
-
 }  // namespace CommonFlags

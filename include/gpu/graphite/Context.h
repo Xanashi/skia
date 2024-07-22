@@ -22,6 +22,7 @@
 
 class SkColorSpace;
 class SkRuntimeEffect;
+class SkTraceMemoryDump;
 
 namespace skgpu::graphite {
 
@@ -54,6 +55,9 @@ public:
 
     bool insertRecording(const InsertRecordingInfo&);
     bool submit(SyncToCpu = SyncToCpu::kNo);
+
+    /** Returns true if there is work that was submitted to the GPU that has not finished. */
+    bool hasUnfinishedGpuWork() const;
 
     void asyncRescaleAndReadPixels(const SkImage* image,
                                    const SkImageInfo& dstImageInfo,
@@ -143,9 +147,37 @@ public:
     void performDeferredCleanup(std::chrono::milliseconds msNotUsed);
 
     /**
-     * Returns the number of bytes of gpu memory currently budgeted in the Context's cache.
+     * Returns the number of bytes of the Context's gpu memory cache budget that are currently in
+     * use.
      */
     size_t currentBudgetedBytes() const;
+
+    /**
+     * Returns the size of Context's gpu memory cache budget in bytes.
+     */
+    size_t maxBudgetedBytes() const;
+
+    /**
+     * Enumerates all cached GPU resources owned by the Context and dumps their memory to
+     * traceMemoryDump.
+     */
+    void dumpMemoryStatistics(SkTraceMemoryDump* traceMemoryDump) const;
+
+    /**
+     * Returns true if the backend-specific context has gotten into an unrecoverarble, lost state
+     * (e.g. if we've gotten a VK_ERROR_DEVICE_LOST in the Vulkan backend).
+     */
+    bool isDeviceLost() const;
+
+    /**
+     * Returns the maximum texture dimension supported by the underlying backend.
+     */
+    int maxTextureSize() const;
+
+    /*
+     * Does this context support protected content?
+     */
+    bool supportsProtectedContent() const;
 
     // Provides access to functions that aren't part of the public API.
     ContextPriv priv();
@@ -177,44 +209,13 @@ private:
     friend class ContextPriv;
     friend class ContextCtorAccessor;
 
-    SingleOwner* singleOwner() const { return &fSingleOwner; }
-
-    // Must be called in Make() to handle one-time GPU setup operations that can possibly fail and
-    // require Context::Make() to return a nullptr.
-    bool finishInitialization();
-
-    void asyncRescaleAndReadPixelsYUV420Impl(const SkImage*,
-                                             SkYUVColorSpace yuvColorSpace,
-                                             bool readAlpha,
-                                             sk_sp<SkColorSpace> dstColorSpace,
-                                             const SkIRect& srcRect,
-                                             const SkISize& dstSize,
-                                             SkImage::RescaleGamma rescaleGamma,
-                                             SkImage::RescaleMode rescaleMode,
-                                             SkImage::ReadPixelsCallback callback,
-                                             SkImage::ReadPixelsContext context);
-
-    void asyncReadPixels(const TextureProxy* textureProxy,
-                         const SkImageInfo& srcImageInfo,
-                         const SkColorInfo& dstColorInfo,
-                         const SkIRect& srcRect,
-                         SkImage::ReadPixelsCallback callback,
-                         SkImage::ReadPixelsContext context);
-
-    void asyncReadPixelsYUV420(Recorder*,
-                               const SkImage*,
-                               SkYUVColorSpace yuvColorSpace,
-                               bool readAlpha,
-                               const SkIRect& srcRect,
-                               SkImage::ReadPixelsCallback callback,
-                               SkImage::ReadPixelsContext context);
-
-    // Inserts a texture to buffer transfer task, used by asyncReadPixels methods
     struct PixelTransferResult {
         using ConversionFn = void(void* dst, const void* mappedBuffer);
         // If null then the transfer could not be performed. Otherwise this buffer will contain
         // the pixel data when the transfer is complete.
         sk_sp<Buffer> fTransferBuffer;
+        // Size of the read.
+        SkISize fSize;
         // RowBytes for transfer buffer data
         size_t fRowBytes;
         // If this is null then the transfer buffer will contain the data in the requested
@@ -222,16 +223,59 @@ private:
         // from the transfer buffer's color type to the requested color type.
         std::function<ConversionFn> fPixelConverter;
     };
-    PixelTransferResult transferPixels(const TextureProxy*,
-                                       const SkImageInfo& srcImageInfo,
+
+    SingleOwner* singleOwner() const { return &fSingleOwner; }
+
+    // Must be called in Make() to handle one-time GPU setup operations that can possibly fail and
+    // require Context::Make() to return a nullptr.
+    bool finishInitialization();
+
+    void checkForFinishedWork(SyncToCpu);
+
+    std::unique_ptr<Recorder> makeInternalRecorder() const;
+
+    template <typename SrcPixels> struct AsyncParams;
+
+    template <typename ReadFn, typename... ExtraArgs>
+    void asyncRescaleAndReadImpl(ReadFn Context::* asyncRead,
+                                 SkImage::RescaleGamma rescaleGamma,
+                                 SkImage::RescaleMode rescaleMode,
+                                 const AsyncParams<SkImage>&,
+                                 ExtraArgs...);
+
+    // Recorder is optional and will be used if drawing operations are required. If no Recorder is
+    // provided but drawing operations are needed, a new Recorder will be created automatically.
+    void asyncReadPixels(std::unique_ptr<Recorder>, const AsyncParams<SkImage>&);
+    void asyncReadPixelsYUV420(std::unique_ptr<Recorder>,
+                               const AsyncParams<SkImage>&,
+                               SkYUVColorSpace);
+
+    // Like asyncReadPixels() except it performs no fallbacks, and requires that the texture be
+    // readable. However, the texture does not need to be sampleable.
+    void asyncReadTexture(std::unique_ptr<Recorder>,
+                          const AsyncParams<TextureProxy>&,
+                          const SkColorInfo& srcColorInfo);
+
+    // Inserts a texture to buffer transfer task, used by asyncReadPixels methods. If the
+    // Recorder is non-null, tasks will be added to the Recorder's list; otherwise the transfer
+    // tasks will be added to the queue manager directly.
+    PixelTransferResult transferPixels(Recorder*,
+                                       const TextureProxy* srcProxy,
+                                       const SkColorInfo& srcColorInfo,
                                        const SkColorInfo& dstColorInfo,
                                        const SkIRect& srcRect);
+
+    // If the recorder is non-null, it will be snapped and inserted with the assumption that the
+    // copy tasks (and possibly preparatory draw tasks) have already been added to the Recording.
+    void finalizeAsyncReadPixels(std::unique_ptr<Recorder>,
+                                 SkSpan<PixelTransferResult>,
+                                 SkImage::ReadPixelsCallback callback,
+                                 SkImage::ReadPixelsContext callbackContext);
 
     sk_sp<SharedContext> fSharedContext;
     std::unique_ptr<ResourceProvider> fResourceProvider;
     std::unique_ptr<QueueManager> fQueueManager;
     std::unique_ptr<ClientMappedBufferManager> fMappedBufferManager;
-    std::unique_ptr<PlotUploadTracker> fPlotUploadTracker;
 
     // In debug builds we guard against improper thread handling. This guard is passed to the
     // ResourceCache for the Context.

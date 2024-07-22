@@ -12,6 +12,7 @@
 #include "include/core/SkString.h"
 #include "include/core/SkTypes.h"
 #include "src/base/SkEnumBitMask.h"
+#include "src/base/SkVx.h"
 #include "src/gpu/graphite/Attribute.h"
 #include "src/gpu/graphite/DrawTypes.h"
 #include "src/gpu/graphite/ResourceTypes.h"
@@ -41,12 +42,6 @@ struct ResourceBindingRequirements;
 
 enum class Coverage { kNone, kSingleChannel, kLCD };
 
-struct Varying {
-    const char* fName;
-    SkSLType fType;
-    // TODO: add modifier (e.g., flat and noperspective) support
-};
-
 /**
  * The actual technique for rasterizing a high-level draw recorded in a DrawList is handled by a
  * specific Renderer. Each technique has an associated singleton Renderer that decomposes the
@@ -71,7 +66,7 @@ public:
     // The DrawWriter is configured with the vertex and instance strides of the RenderStep, and its
     // primitive type. The recorded draws will be executed with a graphics pipeline compatible with
     // this RenderStep.
-    virtual void writeVertices(DrawWriter*, const DrawParams&, int ssboIndex) const = 0;
+    virtual void writeVertices(DrawWriter*, const DrawParams&, skvx::ushort2 ssboIndices) const = 0;
 
     // Write out the uniform values (aligned for the layout), textures, and samplers. The uniform
     // values will be de-duplicated across all draws using the RenderStep before uploading to the
@@ -108,12 +103,6 @@ public:
     // 'half4 primitiveColor' variable (defined in the calling code).
     virtual const char* fragmentColorSkSL() const { return R"()"; }
 
-    // Returns the effective local-space outset the RenderStep applies to geometry transformed by
-    // `localToDevice` contained in the local `bounds`.
-    virtual float boundsOutset(const Transform& localToDevice, const Rect& bounds) const {
-        return 0.0f;
-    }
-
     uint32_t uniqueID() const { return fUniqueID; }
 
     // Returns a name formatted as "Subclass[variant]", where "Subclass" matches the C++ class name
@@ -124,6 +113,7 @@ public:
     bool performsShading()     const { return SkToBool(fFlags & Flags::kPerformsShading);     }
     bool hasTextures()         const { return SkToBool(fFlags & Flags::kHasTextures);         }
     bool emitsPrimitiveColor() const { return SkToBool(fFlags & Flags::kEmitsPrimitiveColor); }
+    bool outsetBoundsForAA()   const { return SkToBool(fFlags & Flags::kOutsetBoundsForAA);   }
 
     Coverage coverage() const { return RenderStep::GetCoverage(fFlags); }
 
@@ -135,7 +125,12 @@ public:
     size_t numVertexAttributes()   const { return fVertexAttrs.size();   }
     size_t numInstanceAttributes() const { return fInstanceAttrs.size(); }
 
-    static const char* ssboIndex() { return "ssboIndex"; }
+    // Name of an attribute containing both render step and shading SSBO indices, if used.
+    static const char* ssboIndicesAttribute() { return "ssboIndices"; }
+
+    // Name of a varying to pass SSBO indices to fragment shader. Both render step and shading
+    // indices are passed, because render step uniforms are sometimes used for coverage.
+    static const char* ssboIndicesVarying() { return "ssboIndicesVar"; }
 
     // The uniforms of a RenderStep are bound to the kRenderStep slot, the rest of the pipeline
     // may still use uniforms bound to other slots.
@@ -162,15 +157,16 @@ public:
     //    - Does each DrawList::Draw have extra space (e.g. 8 bytes) that steps can cache data in?
 protected:
     enum class Flags : unsigned {
-        kNone                  = 0b000000,
-        kRequiresMSAA          = 0b000001,
-        kPerformsShading       = 0b000010,
-        kHasTextures           = 0b000100,
-        kEmitsCoverage         = 0b001000,
-        kLCDCoverage           = 0b010000,
-        kEmitsPrimitiveColor   = 0b100000,
+        kNone                  = 0b0000000,
+        kRequiresMSAA          = 0b0000001,
+        kPerformsShading       = 0b0000010,
+        kHasTextures           = 0b0000100,
+        kEmitsCoverage         = 0b0001000,
+        kLCDCoverage           = 0b0010000,
+        kEmitsPrimitiveColor   = 0b0100000,
+        kOutsetBoundsForAA     = 0b1000000,
     };
-    SK_DECL_BITMASK_OPS_FRIENDS(Flags);
+    SK_DECL_BITMASK_OPS_FRIENDS(Flags)
 
     // While RenderStep does not define the full program that's run for a draw, it defines the
     // entire vertex layout of the pipeline. This is not allowed to change, so can be provided to
@@ -243,14 +239,13 @@ public:
     bool emitsPrimitiveColor() const {
         return SkToBool(fStepFlags & StepFlags::kEmitsPrimitiveColor);
     }
+    bool outsetBoundsForAA() const {
+        return SkToBool(fStepFlags & StepFlags::kOutsetBoundsForAA);
+    }
 
     SkEnumBitMask<DepthStencilFlags> depthStencilFlags() const { return fDepthStencilFlags; }
 
     Coverage coverage() const { return RenderStep::GetCoverage(fStepFlags); }
-
-    // Returns the effective local-space outset the Renderer applies to geometry transformed by
-    // `localToDevice` contained in the local `bounds`.
-    float boundsOutset(const Transform& localToDevice, const Rect& bounds) const;
 
 private:
     friend class RendererProvider; // for ctors
@@ -293,7 +288,7 @@ private:
 
     std::array<const RenderStep*, kMaxRenderSteps> fSteps;
     std::string fName;
-    DrawTypeFlags fDrawTypes = DrawTypeFlags::kAll;
+    DrawTypeFlags fDrawTypes = DrawTypeFlags::kNone;
     int fStepCount;
 
     SkEnumBitMask<StepFlags> fStepFlags = StepFlags::kNone;

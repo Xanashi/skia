@@ -85,7 +85,28 @@ static bool fill_buffer(wuffs_base__io_buffer* b, SkStream* s) {
     b->compact();
     size_t num_read = s->read(b->data.ptr + b->meta.wi, b->data.len - b->meta.wi);
     b->meta.wi += num_read;
-    b->meta.closed = s->isAtEnd();
+    // We hard-code false instead of s->isAtEnd(). In theory, Skia's
+    // SkStream::isAtEnd() method has the same semantics as Wuffs'
+    // wuffs_base__io_buffer_meta::closed field. Specifically, both are false
+    // when reading from a network socket when all bytes *available right now*
+    // have been read but there might be more later.
+    //
+    // However, SkStream is designed around synchronous I/O. The SkStream::read
+    // method does not take a callback and, per its documentation comments, a
+    // read request for N bytes should block until a full N bytes are
+    // available. In practice, Blink's SkStream subclass builds on top of async
+    // I/O and cannot afford to block. While it satisfies "the letter of the
+    // law", in terms of what the C++ compiler needs, it does not satisfy "the
+    // spirit of the law". Its read() can return short without blocking and its
+    // isAtEnd() can return false positives.
+    //
+    // When closed is true, Wuffs treats incomplete input as a fatal error
+    // instead of a recoverable "short read" suspension. We therefore hard-code
+    // false and return kIncompleteInput (instead of kErrorInInput) up the call
+    // stack even if the SkStream isAtEnd. The caller usually has more context
+    // (more than what's in the SkStream) to differentiate the two, like this:
+    // https://source.chromium.org/chromium/chromium/src/+/main:third_party/blink/renderer/platform/image-decoders/gif/gif_image_decoder.cc;l=115;drc=277dcc4d810ae4c0286d8af96d270ed9b686c5ff
+    b->meta.closed = false;
     return num_read > 0;
 }
 
@@ -119,57 +140,6 @@ static SkCodecAnimation::DisposalMethod wuffs_disposal_to_skia_disposal(
     }
 }
 
-static bool wuffs_status_means_incomplete_input(const char* status) {
-    if (status == wuffs_base__suspension__short_read) {
-        return true;
-    }
-
-    // This "look for lzw/gif truncated input" code works with Wuffs v0.3.1 and
-    // also works with its predecessor version, v0.3.0. The later version
-    // (v0.3.1, also known as Wuffs commit count 3390) added these "truncated
-    // input" errors to fix https://github.com/google/wuffs/issues/96
-    //
-    // Wuffs ships as a "single file C library", popularized by the STB
-    // libraries, where the one "wuffs.c" file serves as both ".h style" header
-    // and ".c style "implementation, depending on the WUFFS_IMPLEMENTATION
-    // macro. Single file C libraries may confuse some build systems'
-    // calculations for when to rebuild, as there is no traditional "wuffs.h"
-    // file to watch for modifications. There have been situations in the past,
-    // when building Skia directly or Skia-as-part-of-Chrome indirectly, where
-    // upgrading Wuffs passes a clean build but fails an incremental build.
-    //
-    // We therefore *unconditionally* look for these new error constants,
-    // regardless of the N in the v0.3.N Wuffs version. This code will work
-    // (without recompiling SkWuffsCodec.cpp) with both old and new Wuffs
-    // versions. The old versions simply do not produce such errors and the if
-    // statement always takes the implicit false (no-op) branch.
-    //
-    // Those old versions still do not export symbols (in the C language or
-    // compiler sense) such as wuffs_gif__error__truncated_input. The simpler
-    // if-check via == (instead of via strcmp) remains gated behind an "#if 0",
-    // again to workaround incremental builds failing.
-    //
-    // Eventually, if and when enough of Skia's reverse-dependencies (those
-    // projects that depend on Skia) have upgraded to Wuffs v0.3.1 or later, we
-    // could enable the "#if 0" branch unconditionally (and remove the "#else"
-    // workaround branch) or replace the "#if 0" by
-    // "#if WUFFS_VERSION_BUILD_METADATA_COMMIT_COUNT >= 3390".
-#if 0
-    if ((status == wuffs_lzw__error__truncated_input) ||
-        (status == wuffs_gif__error__truncated_input)) {
-        return true;
-    }
-#else
-    if (status && (status[0] == '#') &&
-        (!strcmp(status, "#lzw: truncated input") ||
-         !strcmp(status, "#gif: truncated input"))) {
-        return true;
-    }
-#endif
-
-    return false;
-}
-
 static SkAlphaType to_alpha_type(bool opaque) {
     return opaque ? kOpaque_SkAlphaType : kPremul_SkAlphaType;
 }
@@ -194,7 +164,7 @@ static SkCodec::Result reset_and_decode_image_config(wuffs_gif__decoder*       d
         status = decoder->decode_image_config(imgcfg, b);
         if (status.repr == nullptr) {
             break;
-        } else if (!wuffs_status_means_incomplete_input(status.repr)) {
+        } else if (status.repr != wuffs_base__suspension__short_read) {
             SkCodecPrintf("decode_image_config: %s", status.message());
             return SkCodec::kErrorInInput;
         } else if (!fill_buffer(b, s)) {
@@ -268,6 +238,7 @@ class SkWuffsCodec final : public SkScalingCodec {
 public:
     SkWuffsCodec(SkEncodedInfo&&                                         encodedInfo,
                  std::unique_ptr<SkStream>                               stream,
+                 bool                                                    canSeek,
                  std::unique_ptr<wuffs_gif__decoder, decltype(&sk_free)> dec,
                  std::unique_ptr<uint8_t, decltype(&sk_free)>            workbuf_ptr,
                  size_t                                                  workbuf_len,
@@ -275,6 +246,8 @@ public:
                  wuffs_base__io_buffer                                   iobuf);
 
     const SkWuffsFrame* frame(int i) const;
+
+    std::unique_ptr<SkStream> getEncodedData() const override;
 
 private:
     // SkCodec overrides.
@@ -320,7 +293,7 @@ private:
     void        updateNumFullyReceivedFrames();
 
     SkWuffsFrameHolder                           fFrameHolder;
-    std::unique_ptr<SkStream>                    fStream;
+    std::unique_ptr<SkStream>                    fPrivStream;
     std::unique_ptr<uint8_t, decltype(&sk_free)> fWorkbufPtr;
     size_t                                       fWorkbufLen;
 
@@ -360,6 +333,8 @@ private:
     bool fDecoderIsSuspended;
 
     uint8_t fBuffer[SK_WUFFS_CODEC_BUFFER_SIZE];
+
+    const bool fCanSeek;
 
     using INHERITED = SkScalingCodec;
 };
@@ -404,6 +379,7 @@ const SkFrame* SkWuffsFrameHolder::onGetFrame(int i) const {
 
 SkWuffsCodec::SkWuffsCodec(SkEncodedInfo&&                                         encodedInfo,
                            std::unique_ptr<SkStream>                               stream,
+                           bool                                                    canSeek,
                            std::unique_ptr<wuffs_gif__decoder, decltype(&sk_free)> dec,
                            std::unique_ptr<uint8_t, decltype(&sk_free)>            workbuf_ptr,
                            size_t                                                  workbuf_len,
@@ -416,7 +392,7 @@ SkWuffsCodec::SkWuffsCodec(SkEncodedInfo&&                                      
                 // is too trigger-happy on rewinding the stream.
                 nullptr),
       fFrameHolder(),
-      fStream(std::move(stream)),
+      fPrivStream(std::move(stream)),
       fWorkbufPtr(std::move(workbuf_ptr)),
       fWorkbufLen(workbuf_len),
       fDecoder(std::move(dec)),
@@ -434,7 +410,8 @@ SkWuffsCodec::SkWuffsCodec(SkEncodedInfo&&                                      
       fTwoPassPixbufLen(0),
       fNumFullyReceivedFrames(0),
       fFramesComplete(false),
-      fDecoderIsSuspended(false) {
+      fDecoderIsSuspended(false),
+      fCanSeek(canSeek) {
     fFrameHolder.init(this, imgcfg.pixcfg.width(), imgcfg.pixcfg.height());
 
     // Initialize fIOBuffer's fields, copying any outstanding data from iobuf to
@@ -489,7 +466,7 @@ SkCodec::Result SkWuffsCodec::onStartIncrementalDecode(const SkImageInfo&      d
     }
 
     const char* status = this->decodeFrameConfig();
-    if (wuffs_status_means_incomplete_input(status)) {
+    if (status == wuffs_base__suspension__short_read) {
         return SkCodec::kIncompleteInput;
     } else if (status != nullptr) {
         SkCodecPrintf("decodeFrameConfig: %s", status);
@@ -653,7 +630,7 @@ SkCodec::Result SkWuffsCodec::onIncrementalDecode(int* rowsDecoded) {
 SkCodec::Result SkWuffsCodec::onIncrementalDecodeOnePass() {
     const char* status = this->decodeFrame();
     if (status != nullptr) {
-        if (wuffs_status_means_incomplete_input(status)) {
+        if (status == wuffs_base__suspension__short_read) {
             return SkCodec::kIncompleteInput;
         } else {
             SkCodecPrintf("decodeFrame: %s", status);
@@ -678,7 +655,7 @@ SkCodec::Result SkWuffsCodec::onIncrementalDecodeTwoPass() {
         alphaType = to_alpha_type(f->reportedAlpha() == SkEncodedInfo::kOpaque_Alpha);
     }
     if (status != nullptr) {
-        if (wuffs_status_means_incomplete_input(status)) {
+        if (status == wuffs_base__suspension__short_read) {
             result = SkCodec::kIncompleteInput;
         } else {
             SkCodecPrintf("decodeFrame: %s", status);
@@ -801,6 +778,10 @@ SkCodec::Result SkWuffsCodec::onIncrementalDecodeTwoPass() {
 }
 
 int SkWuffsCodec::onGetFrameCount() {
+    if (!fCanSeek) {
+        return 1;
+    }
+
     // It is valid, in terms of the SkCodec API, to call SkCodec::getFrameCount
     // while in an incremental decode (after onStartIncrementalDecode returns
     // and before onIncrementalDecode returns kSuccess).
@@ -869,6 +850,11 @@ void SkWuffsCodec::onGetFrameCountInternal() {
 }
 
 bool SkWuffsCodec::onGetFrameInfo(int i, SkCodec::FrameInfo* frameInfo) const {
+    if (!fCanSeek) {
+        // We haven't read forward in the stream, so this info isn't available.
+        return false;
+    }
+
     const SkWuffsFrame* f = this->frame(i);
     if (!f) {
         return false;
@@ -911,7 +897,7 @@ SkCodec::Result SkWuffsCodec::seekFrame(int frameIndex) {
         return SkCodec::kInternalError;
     }
 
-    if (!seek_buffer(&fIOBuffer, fStream.get(), pos)) {
+    if (!seek_buffer(&fIOBuffer, fPrivStream.get(), pos)) {
         return SkCodec::kInternalError;
     }
     wuffs_base__status status =
@@ -923,13 +909,13 @@ SkCodec::Result SkWuffsCodec::seekFrame(int frameIndex) {
 }
 
 SkCodec::Result SkWuffsCodec::resetDecoder() {
-    if (!fStream->rewind()) {
+    if (!fPrivStream->rewind()) {
         return SkCodec::kInternalError;
     }
     fIOBuffer.meta = wuffs_base__empty_io_buffer_meta();
 
     SkCodec::Result result =
-        reset_and_decode_image_config(fDecoder.get(), nullptr, &fIOBuffer, fStream.get());
+        reset_and_decode_image_config(fDecoder.get(), nullptr, &fIOBuffer, fPrivStream.get());
     if (result == SkCodec::kIncompleteInput) {
         return SkCodec::kInternalError;
     } else if (result != SkCodec::kSuccess) {
@@ -945,7 +931,7 @@ const char* SkWuffsCodec::decodeFrameConfig() {
         wuffs_base__status status =
             fDecoder->decode_frame_config(&fFrameConfig, &fIOBuffer);
         if ((status.repr == wuffs_base__suspension__short_read) &&
-            fill_buffer(&fIOBuffer, fStream.get())) {
+            fill_buffer(&fIOBuffer, fPrivStream.get())) {
             continue;
         }
         fDecoderIsSuspended = !status.is_complete();
@@ -960,7 +946,7 @@ const char* SkWuffsCodec::decodeFrame() {
             &fPixelBuffer, &fIOBuffer, fIncrDecPixelBlend,
             wuffs_base__make_slice_u8(fWorkbufPtr.get(), fWorkbufLen), nullptr);
         if ((status.repr == wuffs_base__suspension__short_read) &&
-            fill_buffer(&fIOBuffer, fStream.get())) {
+            fill_buffer(&fIOBuffer, fPrivStream.get())) {
             continue;
         }
         fDecoderIsSuspended = !status.is_complete();
@@ -979,6 +965,13 @@ void SkWuffsCodec::updateNumFullyReceivedFrames() {
     }
 }
 
+// We cannot use the SkCodec implementation since we pass nullptr to the superclass out of
+// an abundance of caution w/r to rewinding the stream.
+std::unique_ptr<SkStream> SkWuffsCodec::getEncodedData() const {
+    SkASSERT(fPrivStream);
+    return fPrivStream->duplicate();
+}
+
 namespace SkGifDecoder {
 
 bool IsGif(const void* buf, size_t bytesRead) {
@@ -988,17 +981,24 @@ bool IsGif(const void* buf, size_t bytesRead) {
 }
 
 std::unique_ptr<SkCodec> MakeFromStream(std::unique_ptr<SkStream> stream,
+                                        SkCodec::SelectionPolicy  selectionPolicy,
                                         SkCodec::Result*          result) {
     SkASSERT(result);
     if (!stream) {
         *result = SkCodec::kInvalidInput;
         return nullptr;
     }
-    // Some clients (e.g. Android) need to be able to seek the stream, but may
-    // not provide a seekable stream. Copy the stream to one that can seek.
-    if (!stream->hasPosition() || !stream->hasLength()) {
-        auto data = SkCopyStreamToData(stream.get());
-        stream = std::make_unique<SkMemoryStream>(std::move(data));
+
+    bool canSeek = stream->hasPosition() && stream->hasLength();
+
+    if (selectionPolicy != SkCodec::SelectionPolicy::kPreferStillImage) {
+        // Some clients (e.g. Android) need to be able to seek the stream, but may
+        // not provide a seekable stream. Copy the stream to one that can seek.
+        if (!canSeek) {
+            auto data = SkCopyStreamToData(stream.get());
+            stream = std::make_unique<SkMemoryStream>(std::move(data));
+            canSeek = true;
+        }
     }
 
     uint8_t               buffer[SK_WUFFS_CODEC_BUFFER_SIZE];
@@ -1074,30 +1074,35 @@ std::unique_ptr<SkCodec> MakeFromStream(std::unique_ptr<SkStream> stream,
 
     *result = SkCodec::kSuccess;
     return std::unique_ptr<SkCodec>(new SkWuffsCodec(std::move(encodedInfo), std::move(stream),
+                                                     canSeek,
                                                      std::move(decoder), std::move(workbuf_ptr),
                                                      workbuf_len, imgcfg, iobuf));
 }
 
 std::unique_ptr<SkCodec> Decode(std::unique_ptr<SkStream> stream,
                                 SkCodec::Result* outResult,
-                                SkCodecs::DecodeContext) {
+                                SkCodecs::DecodeContext ctx) {
     SkCodec::Result resultStorage;
     if (!outResult) {
         outResult = &resultStorage;
     }
-    return MakeFromStream(std::move(stream), outResult);
+    auto policy = SkCodec::SelectionPolicy::kPreferStillImage;
+    if (ctx) {
+        policy = *static_cast<SkCodec::SelectionPolicy*>(ctx);
+    }
+    return MakeFromStream(std::move(stream), policy, outResult);
 }
 
 std::unique_ptr<SkCodec> Decode(sk_sp<SkData> data,
                                 SkCodec::Result* outResult,
-                                SkCodecs::DecodeContext) {
+                                SkCodecs::DecodeContext ctx) {
     if (!data) {
         if (outResult) {
             *outResult = SkCodec::kInvalidInput;
         }
         return nullptr;
     }
-    return Decode(SkMemoryStream::Make(std::move(data)), outResult, nullptr);
+    return Decode(SkMemoryStream::Make(std::move(data)), outResult, ctx);
 }
 }  // namespace SkGifDecoder
 

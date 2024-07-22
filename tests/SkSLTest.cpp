@@ -26,6 +26,7 @@
 #include "include/sksl/SkSLVersion.h"
 #include "src/base/SkArenaAlloc.h"
 #include "src/base/SkEnumBitMask.h"
+#include "src/base/SkNoDestructor.h"
 #include "src/base/SkStringView.h"
 #include "src/core/SkRasterPipeline.h"
 #include "src/core/SkRasterPipelineOpContexts.h"
@@ -37,8 +38,8 @@
 #include "src/sksl/SkSLCompiler.h"
 #include "src/sksl/SkSLProgramKind.h"
 #include "src/sksl/SkSLProgramSettings.h"
-#include "src/sksl/SkSLThreadContext.h"
 #include "src/sksl/SkSLUtil.h"
+#include "src/sksl/analysis/SkSLProgramVisitor.h"
 #include "src/sksl/codegen/SkSLRasterPipelineBuilder.h"
 #include "src/sksl/codegen/SkSLRasterPipelineCodeGenerator.h"
 #include "src/sksl/ir/SkSLFunctionDeclaration.h"
@@ -302,7 +303,10 @@ static bool failure_is_expected(std::string_view deviceName,    // "Geforce RTX4
         }
 
         // Switch fallthrough has some issues on iOS.
-        disables["SwitchWithFallthrough"].push_back({_, "OpenGL", GPU, kiOS});
+        for (const char* test : {"SwitchWithFallthrough",
+                                 "SwitchWithFallthroughGroups"}) {
+            disables[test].push_back({_, "OpenGL", GPU, kiOS});
+        }
 
         // - ARM ----------------------------------------------------------------------------------
         // Mali 400 is a very old driver its share of quirks, particularly in relation to matrices.
@@ -322,6 +326,7 @@ static bool failure_is_expected(std::string_view deviceName,    // "Geforce RTX4
                                  "SwitchDefaultOnly",                 //  "      "
                                  "SwitchWithFallthrough",             //  "      "
                                  "SwitchWithFallthroughAndVarDecls",  //  "      "
+                                 "SwitchWithFallthroughGroups",       //  "      "
                                  "SwitchWithLoops",                   //  "      "
                                  "SwitchCaseFolding",                 //  "      "
                                  "LoopFloat",                         //  "      "
@@ -352,6 +357,13 @@ static bool failure_is_expected(std::string_view deviceName,    // "Geforce RTX4
         for (const char* test : {"PreserveSideEffects",  // b/40044140
                                  "CommaSideEffects"}) {
             disables[test].push_back({regex("Quadro P400"), _, _, kLinux});
+        }
+
+        // b/318725123
+        for (const char* test : {"UniformArray",
+                                 "TemporaryIndexLookup",
+                                 "MatrixIndexLookup"}) {
+            disables[test].push_back({regex("Quadro P400"), "Dawn Vulkan", Graphite, kWindows});
         }
 
         // - PowerVR ------------------------------------------------------------------------------
@@ -387,9 +399,15 @@ static bool failure_is_expected(std::string_view deviceName,    // "Geforce RTX4
                                  "IntrinsicMixFloatES2",
                                  "IntrinsicClampFloat",
                                  "SwitchWithFallthrough",
+                                 "SwitchWithFallthroughGroups",
                                  "SwizzleIndexLookup",
                                  "SwizzleIndexStore"}) {
             disables[test].push_back({regex(ADRENO "[3456]"), _, _, kAndroid});
+        }
+        for (const char* test : {"SwitchWithFallthroughGroups",
+                                 "SwizzleIndexLookup",
+                                 "SwizzleIndexStore"}) {
+            disables[test].push_back({regex(ADRENO "[7]"), _, _, kAndroid});
         }
 
         // Older Adreno 5/6xx drivers report a pipeline error or silently fail when handling inouts.
@@ -425,6 +443,13 @@ static bool failure_is_expected(std::string_view deviceName,    // "Geforce RTX4
         // Adreno generates the wrong result for this test. (b/40044477)
         disables["StructFieldFolding"].push_back({regex(ADRENO "[56]"), "OpenGL",
                                                         _, kAndroid});
+
+        // b/318726662
+        for (const char* test : {"PrefixExpressionsES2",
+                                 "MatrixToVectorCast",
+                                 "MatrixConstructorsES2"}) {
+            disables[test].push_back({regex(ADRENO "620"), "Vulkan", Graphite, kAndroid});
+        }
 
         // - Intel --------------------------------------------------------------------------------
         // Disable various tests on Intel.
@@ -724,26 +749,38 @@ static void test_clone(skiatest::Reporter* r, const char* testFile, SkSLTestFlag
         return;
     }
     SkSL::ProgramSettings settings;
-    settings.fAllowVarDeclarationCloneForTesting = true;
     // TODO(skia:11209): Can we just put the correct #version in the source files that need this?
     settings.fMaxVersionAllowed = is_strict_es2(flags) ? SkSL::Version::k100 : SkSL::Version::k300;
-    SkSL::Compiler compiler(SkSL::ShaderCapsFactory::Standalone());
+    SkSL::Compiler compiler;
     std::unique_ptr<SkSL::Program> program = compiler.convertProgram(
             SkSL::ProgramKind::kRuntimeShader, shaderString.c_str(), settings);
     if (!program) {
         ERRORF(r, "%s", compiler.errorText().c_str());
         return;
     }
-    // We can't clone elements without a valid ThreadContext.
-    SkSL::ThreadContext::Start(&compiler, SkSL::ProgramKind::kFragment, settings);
-    for (const std::unique_ptr<SkSL::ProgramElement>& element : program->fOwnedElements) {
-        std::string original = element->description();
-        std::string cloned = element->clone()->description();
-        REPORTER_ASSERT(r, original == cloned,
-                "Mismatch after clone!\nOriginal: %s\nCloned: %s\n", original.c_str(),
-                cloned.c_str());
-    }
-    SkSL::ThreadContext::End();
+
+    // Clone every expression in the program, and ensure that its clone generates the same
+    // description as the original.
+    class CloneVisitor : public SkSL::ProgramVisitor {
+    public:
+        CloneVisitor(skiatest::Reporter* r) : fReporter(r) {}
+
+        bool visitExpression(const SkSL::Expression& expr) override {
+            std::string original = expr.description();
+            std::string cloned = expr.clone()->description();
+            REPORTER_ASSERT(fReporter, original == cloned,
+                            "Mismatch after clone!\nOriginal: %s\nCloned: %s\n",
+                            original.c_str(), cloned.c_str());
+
+            return INHERITED::visitExpression(expr);
+        }
+
+        skiatest::Reporter* fReporter;
+
+        using INHERITED = ProgramVisitor;
+    };
+
+    CloneVisitor{r}.visit(*program);
 }
 
 static void report_rp_pass(skiatest::Reporter* r, const char* testFile, SkSLTestFlags flags) {
@@ -771,7 +808,7 @@ static void test_raster_pipeline(skiatest::Reporter* r,
 
     // In Raster Pipeline, we can compile and run test shaders directly, without involving a surface
     // at all.
-    SkSL::Compiler compiler(SkSL::ShaderCapsFactory::Default());
+    SkSL::Compiler compiler;
     SkSL::ProgramSettings settings;
     settings.fMaxVersionAllowed = SkSL::Version::k300;
     std::unique_ptr<SkSL::Program> program = compiler.convertProgram(
@@ -841,7 +878,7 @@ static void test_raster_pipeline(skiatest::Reporter* r,
     }
 
     // Append the SkSL program to the raster pipeline.
-    pipeline.append_constant_color(&alloc, SkColors::kTransparent);
+    pipeline.appendConstantColor(&alloc, SkColors::kTransparent);
     rasterProg->appendStages(&pipeline, &alloc, /*callbacks=*/nullptr, SkSpan(uniformValues));
 
     // Move the float values from RGBA into an 8888 memory buffer.
@@ -882,9 +919,7 @@ static void test_raster_pipeline(skiatest::Reporter* r,
 
 #if defined(SK_GRAPHITE)
 static bool is_native_context_or_dawn(skgpu::ContextType type) {
-    // This avoids re-testing Dawn over and over again against every possible API.
-    return skgpu::IsNativeBackend(type) ||
-           type == skgpu::ContextType::kDawn;
+    return skgpu::IsNativeBackend(type) || skgpu::IsDawnBackend(type);
 }
 
 #define DEF_GRAPHITE_SKSL_TEST(flags, ctsEnforcement, name, path)         \
@@ -1049,6 +1084,10 @@ SKSL_TEST(ES3 | GPU_ES3, kNever,      IntrinsicUintBitsToFloat,        "intrinsi
 SKSL_TEST(ES3 | GPU_ES3, kNever,      ArrayNarrowingConversions,       "runtime/ArrayNarrowingConversions.rts")
 SKSL_TEST(ES3 | GPU_ES3, kNever,      Commutative,                     "runtime/Commutative.rts")
 SKSL_TEST(CPU,           kNever,      DivideByZero,                    "runtime/DivideByZero.rts")
+SKSL_TEST(CPU | GPU,     kNextRelease,FunctionParameterAliasingFirst,  "runtime/FunctionParameterAliasingFirst.rts")
+SKSL_TEST(CPU | GPU,     kNextRelease,FunctionParameterAliasingSecond, "runtime/FunctionParameterAliasingSecond.rts")
+SKSL_TEST(CPU | GPU,     kNextRelease,IfElseBinding,                   "runtime/IfElseBinding.rts")
+SKSL_TEST(CPU | GPU,     kNextRelease,IncrementDisambiguation,         "runtime/IncrementDisambiguation.rts")
 SKSL_TEST(CPU | GPU,     kApiLevel_T, LoopFloat,                       "runtime/LoopFloat.rts")
 SKSL_TEST(CPU | GPU,     kApiLevel_T, LoopInt,                         "runtime/LoopInt.rts")
 SKSL_TEST(CPU | GPU,     kApiLevel_U, Ossfuzz52603,                    "runtime/Ossfuzz52603.rts")
@@ -1087,6 +1126,7 @@ SKSL_TEST(ES3 | GPU_ES3, kNever,      DoWhileControlFlow,              "shared/D
 SKSL_TEST(CPU | GPU,     kApiLevel_T, EmptyBlocksES2,                  "shared/EmptyBlocksES2.sksl")
 SKSL_TEST(ES3 | GPU_ES3, kNever,      EmptyBlocksES3,                  "shared/EmptyBlocksES3.sksl")
 SKSL_TEST(CPU | GPU,     kApiLevel_T, ForLoopControlFlow,              "shared/ForLoopControlFlow.sksl")
+SKSL_TEST(ES3 | GPU_ES3, kNever,      ForLoopMultipleInitES3,          "shared/ForLoopMultipleInitES3.sksl")
 SKSL_TEST(CPU | GPU,     kNextRelease,ForLoopShadowing,                "shared/ForLoopShadowing.sksl")
 SKSL_TEST(CPU | GPU,     kApiLevel_T, FunctionAnonymousParameters,     "shared/FunctionAnonymousParameters.sksl")
 SKSL_TEST(CPU | GPU,     kApiLevel_T, FunctionArgTypeMatch,            "shared/FunctionArgTypeMatch.sksl")
@@ -1097,6 +1137,7 @@ SKSL_TEST(CPU | GPU,     kApiLevel_T, GeometricIntrinsics,             "shared/G
 SKSL_TEST(CPU | GPU,     kApiLevel_T, HelloWorld,                      "shared/HelloWorld.sksl")
 SKSL_TEST(CPU | GPU,     kApiLevel_T, Hex,                             "shared/Hex.sksl")
 SKSL_TEST(ES3 | GPU_ES3, kNever,      HexUnsigned,                     "shared/HexUnsigned.sksl")
+SKSL_TEST(CPU | GPU,     kNextRelease,IfStatement,                     "shared/IfStatement.sksl")
 SKSL_TEST(CPU | GPU,     kApiLevel_T, InoutParameters,                 "shared/InoutParameters.sksl")
 SKSL_TEST(CPU | GPU,     kApiLevel_U, InoutParamsAreDistinct,          "shared/InoutParamsAreDistinct.sksl")
 SKSL_TEST(ES3 | GPU_ES3, kApiLevel_U, IntegerDivisionES3,              "shared/IntegerDivisionES3.sksl")
@@ -1128,6 +1169,7 @@ SKSL_TEST(CPU | GPU,     kApiLevel_T, OutParamsDoubleSwizzle,          "shared/O
 SKSL_TEST(CPU | GPU,     kNextRelease,PostfixExpressions,              "shared/PostfixExpressions.sksl")
 SKSL_TEST(CPU | GPU,     kNextRelease,PrefixExpressionsES2,            "shared/PrefixExpressionsES2.sksl")
 SKSL_TEST(ES3 | GPU_ES3, kNever,      PrefixExpressionsES3,            "shared/PrefixExpressionsES3.sksl")
+SKSL_TEST(CPU | GPU,     kNextRelease,ReservedInGLSLButAllowedInSkSL,  "shared/ReservedInGLSLButAllowedInSkSL.sksl")
 SKSL_TEST(CPU | GPU,     kApiLevel_T, ResizeMatrix,                    "shared/ResizeMatrix.sksl")
 SKSL_TEST(ES3 | GPU_ES3, kNever,      ResizeMatrixNonsquare,           "shared/ResizeMatrixNonsquare.sksl")
 SKSL_TEST(CPU | GPU,     kApiLevel_T, ReturnsValueOnEveryPathES2,      "shared/ReturnsValueOnEveryPathES2.sksl")
@@ -1147,6 +1189,7 @@ SKSL_TEST(CPU | GPU,     kApiLevel_T, Switch,                          "shared/S
 SKSL_TEST(CPU | GPU,     kApiLevel_T, SwitchDefaultOnly,               "shared/SwitchDefaultOnly.sksl")
 SKSL_TEST(CPU | GPU,     kApiLevel_T, SwitchWithFallthrough,           "shared/SwitchWithFallthrough.sksl")
 SKSL_TEST(CPU | GPU,     kApiLevel_T, SwitchWithFallthroughAndVarDecls,"shared/SwitchWithFallthroughAndVarDecls.sksl")
+SKSL_TEST(CPU | GPU,     kApiLevel_V, SwitchWithFallthroughGroups,     "shared/SwitchWithFallthroughGroups.sksl")
 SKSL_TEST(CPU | GPU,     kApiLevel_T, SwitchWithLoops,                 "shared/SwitchWithLoops.sksl")
 SKSL_TEST(ES3 | GPU_ES3, kNever,      SwitchWithLoopsES3,              "shared/SwitchWithLoopsES3.sksl")
 SKSL_TEST(CPU | GPU,     kNever,      SwizzleAsLValue,                 "shared/SwizzleAsLValue.sksl")

@@ -384,7 +384,7 @@ GrOp::CombineResult FillRRectOpImpl::onCombineIfPossible(GrOp* op,
 
 #if defined(GR_TEST_UTILS)
 SkString FillRRectOpImpl::onDumpInfo() const {
-    SkString str = SkStringPrintf("# instances: %u\n", fInstanceCount);
+    SkString str = SkStringPrintf("# instances: %d\n", fInstanceCount);
     str += fHelper.dumpInfo();
     int i = 0;
     for (Instance* tmp = fHeadInstance; tmp; tmp = tmp->fNext, ++i) {
@@ -971,7 +971,9 @@ GrOp::Owner Make(GrRecordingContext* ctx,
 
 #if defined(GR_TEST_UTILS)
 
+#include "src/base/SkRandom.h"
 #include "src/gpu/ganesh/GrDrawOpTest.h"
+#include "src/gpu/ganesh/GrTestUtils.h"
 
 GR_DRAW_OP_TEST_DEFINE(FillRRectOp) {
     SkArenaAlloc arena(64 * sizeof(float));

@@ -8,6 +8,7 @@ Instead, do:
 load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository", "new_git_repository")
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
+load("//bazel:download_config_files.bzl", "download_config_files")
 load("//bazel:gcs_mirror.bzl", "gcs_mirror_url")
 
 def c_plus_plus_deps(ws = "@skia"):
@@ -29,13 +30,13 @@ def c_plus_plus_deps(ws = "@skia"):
     new_git_repository(
         name = "dawn",
         build_file = ws + "//bazel/external/dawn:BUILD.bazel",
-        commit = "0b52da754fe9165d768f7a20c8506629af4d5528",
+        commit = "374b289efbec5d1895674692e6f4a597f46afd45",
         remote = "https://dawn.googlesource.com/dawn.git",
     )
 
     git_repository(
         name = "abseil_cpp",
-        commit = "cb436cf0142b4cbe47aae94223443df7f82e2920",
+        commit = "65a55c2ba891f6d2492477707f4a2e327a0b40dc",
         remote = "https://skia.googlesource.com/external/github.com/abseil/abseil-cpp.git",
     )
 
@@ -56,14 +57,14 @@ def c_plus_plus_deps(ws = "@skia"):
     new_git_repository(
         name = "freetype",
         build_file = ws + "//bazel/external/freetype:BUILD.bazel",
-        commit = "45903920b984540bb629bc89f4c010159c23a89a",
+        commit = "73720c7c9958e87b3d134a7574d1720ad2d24442",
         remote = "https://chromium.googlesource.com/chromium/src/third_party/freetype2.git",
     )
 
     new_git_repository(
         name = "harfbuzz",
         build_file = ws + "//bazel/external/harfbuzz:BUILD.bazel",
-        commit = "4cfc6d8e173e800df086d7be078da2e8c5cfca19",
+        commit = "b74a7ecc93e283d059df51ee4f46961a782bcdb8",
         remote = "https://chromium.googlesource.com/external/github.com/harfbuzz/harfbuzz.git",
     )
 
@@ -76,8 +77,20 @@ def c_plus_plus_deps(ws = "@skia"):
     new_git_repository(
         name = "icu",
         build_file = ws + "//bazel/external/icu:BUILD.bazel",
-        commit = "a0718d4f121727e30b8d52c7a189ebf5ab52421f",
+        commit = "364118a1d9da24bb5b770ac3d762ac144d6da5a4",
         remote = "https://chromium.googlesource.com/chromium/deps/icu.git",
+        patch_cmds = [
+            "rm source/i18n/BUILD.bazel",
+            "rm source/common/BUILD.bazel",
+            "rm source/stubdata/BUILD.bazel",
+        ],
+    )
+
+    new_git_repository(
+        name = "icu4x",
+        build_file = ws + "//bazel/external/icu4x:BUILD.bazel",
+        commit = "bcf4f7198d4dc5f3127e84a6ca657c88e7d07a13",
+        remote = "https://chromium.googlesource.com/external/github.com/unicode-org/icu4x.git",
     )
 
     new_git_repository(
@@ -104,7 +117,7 @@ def c_plus_plus_deps(ws = "@skia"):
     new_git_repository(
         name = "libjpeg_turbo",
         build_file = ws + "//bazel/external/libjpeg_turbo:BUILD.bazel",
-        commit = "ed683925e4897a84b3bffc5c1414c85b97a129a3",
+        commit = "ccfbe1c82a3b6dbe8647ceb36a3f9ee711fba3cf",
         remote = "https://chromium.googlesource.com/chromium/deps/libjpeg_turbo.git",
     )
 
@@ -118,14 +131,14 @@ def c_plus_plus_deps(ws = "@skia"):
     new_git_repository(
         name = "libpng",
         build_file = ws + "//bazel/external/libpng:BUILD.bazel",
-        commit = "386707c6d19b974ca2e3db7f5c61873813c6fe44",
+        commit = "ed217e3e601d8e462f7fd1e04bed43ac42212429",
         remote = "https://skia.googlesource.com/third_party/libpng.git",
     )
 
     new_git_repository(
         name = "libwebp",
         build_file = ws + "//bazel/external/libwebp:BUILD.bazel",
-        commit = "2af26267cdfcb63a88e5c74a85927a12d6ca1d76",
+        commit = "845d5476a866141ba35ac133f856fa62f0b7445f",
         remote = "https://chromium.googlesource.com/webm/libwebp.git",
     )
 
@@ -160,47 +173,47 @@ def c_plus_plus_deps(ws = "@skia"):
     new_git_repository(
         name = "spirv_cross",
         build_file = ws + "//bazel/external/spirv_cross:BUILD.bazel",
-        commit = "637cff3d05892801daa43c93907e17151c7dfd31",
+        commit = "b8fcf307f1f347089e3c46eb4451d27f32ebc8d3",
         remote = "https://chromium.googlesource.com/external/github.com/KhronosGroup/SPIRV-Cross",
     )
 
     git_repository(
         name = "spirv_headers",
-        commit = "88bc5e321c2839707df8b1ab534e243e00744177",
+        commit = "db5a00f8cebe81146cafabf89019674a3c4bf03d",
         remote = "https://skia.googlesource.com/external/github.com/KhronosGroup/SPIRV-Headers.git",
     )
 
     git_repository(
         name = "spirv_tools",
-        commit = "4f014aff9c653e5e16de1cc5f7130e99e02982e5",
+        commit = "626dfbff49b53a5d054d4437d3bf3aa9ef85a6ee",
         remote = "https://skia.googlesource.com/external/github.com/KhronosGroup/SPIRV-Tools.git",
     )
 
     new_git_repository(
         name = "vello",
         build_file = ws + "//bazel/external/vello:BUILD.bazel",
-        commit = "ee3a076b291d206c361431cc841407adf265c692",
+        commit = "3ee3bea02164c5a816fe6c16ef4e3a810edb7620",
         remote = "https://skia.googlesource.com/external/github.com/linebender/vello.git",
     )
 
     new_git_repository(
         name = "vulkan_headers",
         build_file = ws + "//bazel/external/vulkan_headers:BUILD.bazel",
-        commit = "aff5071d4ee6215c60a91d8d983cad91bb25fb57",
+        commit = "fabe9e2672334fdb9a622d42a2e8f94578952082",
         remote = "https://chromium.googlesource.com/external/github.com/KhronosGroup/Vulkan-Headers",
     )
 
     new_git_repository(
         name = "vulkan_tools",
         build_file = ws + "//bazel/external/vulkan_tools:BUILD.bazel",
-        commit = "30244ad47b127a7ac2c80938918209627918ca30",
+        commit = "2cee0d5b1d8c34e26fd6d9992d3d428ac4c5139d",
         remote = "https://chromium.googlesource.com/external/github.com/KhronosGroup/Vulkan-Tools",
     )
 
     new_git_repository(
         name = "vulkan_utility_libraries",
         build_file = ws + "//bazel/external/vulkan_utility_libraries:BUILD.bazel",
-        commit = "5b3147a535e28a48ae760efacdf97b296d9e8c73",
+        commit = "67522b34edde86dbb97e164280291f387ade55fc",
         remote = "https://chromium.googlesource.com/external/github.com/KhronosGroup/Vulkan-Utility-Libraries",
     )
 
@@ -214,7 +227,7 @@ def c_plus_plus_deps(ws = "@skia"):
     new_git_repository(
         name = "zlib_skia",
         build_file = ws + "//bazel/external/zlib_skia:BUILD.bazel",
-        commit = "c876c8f87101c5a75f6014b0f832499afeb65b73",
+        commit = "646b7f569718921d7d4b5b8e22572ff6c76f2596",
         remote = "https://chromium.googlesource.com/chromium/src/third_party/zlib",
     )
 
@@ -238,4 +251,47 @@ def bazel_deps():
             sha256 = "e52789d4e89c3e2dc0e3446a9684626a626b6bec3fde787d70bae37c6ebcc47f",
             url = "https://github.com/bazelbuild/bazel-toolchains/archive/refs/tags/v5.1.1.tar.gz",
         ),
+    )
+
+def header_based_configs():
+    maybe(
+        download_config_files,
+        name = "expat_config",
+        skia_revision = "7b730016006e6b66d24a6f94eefe8bec00ac1674",
+        files = {
+            "BUILD.bazel": "bazel/external/expat/config/BUILD.bazel",
+            "expat_config.h": "third_party/expat/include/expat_config/expat_config.h",
+        },
+    )
+    maybe(
+        download_config_files,
+        name = "freetype_config",
+        skia_revision = "7b730016006e6b66d24a6f94eefe8bec00ac1674",
+        files = {
+            "BUILD.bazel": "bazel/external/freetype/config/BUILD.bazel",
+            "android/freetype/config/ftmodule.h": "third_party/freetype2/include/freetype-android/freetype/config/ftmodule.h",
+            "android/freetype/config/ftoption.h": "third_party/freetype2/include/freetype-android/freetype/config/ftoption.h",
+            "no-type1/freetype/config/ftmodule.h": "third_party/freetype2/include/freetype-no-type1/freetype/config/ftmodule.h",
+            "no-type1/freetype/config/ftoption.h": "third_party/freetype2/include/freetype-no-type1/freetype/config/ftoption.h",
+        },
+    )
+    maybe(
+        download_config_files,
+        name = "harfbuzz_config",
+        skia_revision = "7b730016006e6b66d24a6f94eefe8bec00ac1674",
+        files = {
+            "BUILD.bazel": "bazel/external/harfbuzz/config/BUILD.bazel",
+            "config-override.h": "third_party/harfbuzz/config-override.h",
+        },
+    )
+    maybe(
+        download_config_files,
+        name = "icu_utils",
+        skia_revision = "7b730016006e6b66d24a6f94eefe8bec00ac1674",
+        files = {
+            "BUILD.bazel": "bazel/external/icu/utils/BUILD.bazel",
+            "icu/SkLoadICU.cpp": "third_party/icu/SkLoadICU.cpp",
+            "icu/SkLoadICU.h": "third_party/icu/SkLoadICU.h",
+            "icu/make_data_cpp.py": "third_party/icu/make_data_cpp.py",
+        },
     )

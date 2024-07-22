@@ -10,6 +10,7 @@
 #include "include/core/SkRect.h"
 #include "include/core/SkTextureCompressionType.h"
 #include "include/gpu/GrBackendSurface.h"
+#include "include/gpu/ganesh/mtl/GrMtlBackendSurface.h"
 #include "src/core/SkCompressedDataUtils.h"
 #include "src/core/SkReadBuffer.h"
 #include "src/gpu/KeyBuilder.h"
@@ -215,16 +216,17 @@ bool GrMtlCaps::getGPUFamily(id<MTLDevice> device, GPUFamily* gpuFamily, int* gr
 #endif
 
         // Older Macs
-        // At the moment MacCatalyst families have the same features as Mac,
-        // so we treat them the same
+        // MTLGPUFamilyMac1, MTLGPUFamilyMacCatalyst1, and MTLGPUFamilyMacCatalyst2 are deprecated.
+        // However, some MTLGPUFamilyMac1 only hardware is still supported.
+        // MacCatalyst families have the same features as Mac, so treat them the same
         if ([device supportsFamily:MTLGPUFamilyMac2] ||
-            [device supportsFamily:MTLGPUFamilyMacCatalyst2]) {
+            [device supportsFamily:(MTLGPUFamily)4002/*MTLGPUFamilyMacCatalyst2*/]) {
             *gpuFamily = GPUFamily::kMac;
             *group = 2;
             return true;
         }
-        if ([device supportsFamily:MTLGPUFamilyMac1] ||
-            [device supportsFamily:MTLGPUFamilyMacCatalyst1]) {
+        if ([device supportsFamily:(MTLGPUFamily)2001/*MTLGPUFamilyMac1*/] ||
+            [device supportsFamily:(MTLGPUFamily)4001/*MTLGPUFamilyMacCatalyst1*/]) {
             *gpuFamily = GPUFamily::kMac;
             *group = 1;
             return true;
@@ -426,13 +428,13 @@ void GrMtlCaps::initGrCaps(id<MTLDevice> device) {
 
     fGpuTracingSupport = false;
 
-    fFenceSyncSupport = true;
     bool supportsMTLEvent = false;
     if (@available(macOS 10.14, iOS 12.0, tvOS 12.0, *)) {
         supportsMTLEvent = true;
     }
     fSemaphoreSupport = supportsMTLEvent;
     fBackendSemaphoreSupport = fSemaphoreSupport;
+    fFinishedProcAsyncCallbackSupport = true;
 
     fCrossContextTextureSupport = true;
     fHalfFloatVertexAttributeSupport = true;
@@ -1067,7 +1069,7 @@ GrBackendFormat GrMtlCaps::onGetDefaultBackendFormat(GrColorType ct) const {
     if (!format) {
         return {};
     }
-    return GrBackendFormat::MakeMtl(format);
+    return GrBackendFormats::MakeMtl(format);
 }
 
 GrBackendFormat GrMtlCaps::getBackendFormatFromCompressionType(
@@ -1078,7 +1080,7 @@ GrBackendFormat GrMtlCaps::getBackendFormatFromCompressionType(
         case SkTextureCompressionType::kETC2_RGB8_UNORM:
             if (@available(macOS 11.0, *)) {
                 if (this->isApple()) {
-                    return GrBackendFormat::MakeMtl(MTLPixelFormatETC2_RGB8);
+                    return GrBackendFormats::MakeMtl(MTLPixelFormatETC2_RGB8);
                 } else {
                     return {};
                 }
@@ -1091,7 +1093,7 @@ GrBackendFormat GrMtlCaps::getBackendFormatFromCompressionType(
         case SkTextureCompressionType::kBC1_RGBA8_UNORM:
 #ifdef SK_BUILD_FOR_MAC
             if (this->isMac()) {
-                return GrBackendFormat::MakeMtl(MTLPixelFormatBC1_RGBA);
+                return GrBackendFormats::MakeMtl(MTLPixelFormatBC1_RGBA);
             } else {
                 return {};
             }
@@ -1211,7 +1213,7 @@ GrProgramDesc GrMtlCaps::makeDesc(GrRenderTarget*, const GrProgramInfo& programI
     skgpu::KeyBuilder b(desc.key());
 
     // If ordering here is changed, update getStencilPixelFormat() below
-    b.add32(programInfo.backendFormat().asMtlFormat());
+    b.add32(GrBackendFormats::AsMtlFormat(programInfo.backendFormat()));
 
     b.add32(programInfo.numSamples());
 
@@ -1227,7 +1229,7 @@ GrProgramDesc GrMtlCaps::makeDesc(GrRenderTarget*, const GrProgramInfo& programI
     return desc;
 }
 
-MTLPixelFormat GrMtlCaps::getStencilPixelFormat(const GrProgramDesc& desc) {
+MTLPixelFormat GrMtlCaps::getStencilPixelFormat(const GrProgramDesc& desc) const {
     // Set up read buffer to point to platform-dependent part of the key
     SkReadBuffer readBuffer(desc.asKey() + desc.initialKeyLength()/sizeof(uint32_t),
                             desc.keyLength() - desc.initialKeyLength());
@@ -1248,29 +1250,29 @@ bool GrMtlCaps::renderTargetSupportsDiscardableMSAA(const GrMtlRenderTarget* rt)
 #if defined(GR_TEST_UTILS)
 std::vector<GrTest::TestFormatColorTypeCombination> GrMtlCaps::getTestingCombinations() const {
     std::vector<GrTest::TestFormatColorTypeCombination> combos = {
-        { GrColorType::kAlpha_8,          GrBackendFormat::MakeMtl(MTLPixelFormatA8Unorm)         },
-        { GrColorType::kAlpha_8,          GrBackendFormat::MakeMtl(MTLPixelFormatR8Unorm)         },
-        { GrColorType::kBGR_565,          GrBackendFormat::MakeMtl(kMTLPixelFormatB5G6R5Unorm)    },
-        { GrColorType::kABGR_4444,        GrBackendFormat::MakeMtl(kMTLPixelFormatABGR4Unorm)     },
-        { GrColorType::kRGBA_8888,        GrBackendFormat::MakeMtl(MTLPixelFormatRGBA8Unorm)      },
-        { GrColorType::kRGBA_8888_SRGB,   GrBackendFormat::MakeMtl(MTLPixelFormatRGBA8Unorm_sRGB) },
-        { GrColorType::kRGB_888x,         GrBackendFormat::MakeMtl(MTLPixelFormatRGBA8Unorm)      },
-        { GrColorType::kRGB_888x,         GrBackendFormat::MakeMtl(kMTLPixelFormatETC2_RGB8)      },
+        { GrColorType::kAlpha_8,          GrBackendFormats::MakeMtl(MTLPixelFormatA8Unorm)         },
+        { GrColorType::kAlpha_8,          GrBackendFormats::MakeMtl(MTLPixelFormatR8Unorm)         },
+        { GrColorType::kBGR_565,          GrBackendFormats::MakeMtl(kMTLPixelFormatB5G6R5Unorm)    },
+        { GrColorType::kABGR_4444,        GrBackendFormats::MakeMtl(kMTLPixelFormatABGR4Unorm)     },
+        { GrColorType::kRGBA_8888,        GrBackendFormats::MakeMtl(MTLPixelFormatRGBA8Unorm)      },
+        { GrColorType::kRGBA_8888_SRGB,   GrBackendFormats::MakeMtl(MTLPixelFormatRGBA8Unorm_sRGB) },
+        { GrColorType::kRGB_888x,         GrBackendFormats::MakeMtl(MTLPixelFormatRGBA8Unorm)      },
+        { GrColorType::kRGB_888x,         GrBackendFormats::MakeMtl(kMTLPixelFormatETC2_RGB8)      },
 #ifdef SK_BUILD_FOR_MAC
-        { GrColorType::kRGBA_8888,        GrBackendFormat::MakeMtl(MTLPixelFormatBC1_RGBA)        },
+        { GrColorType::kRGBA_8888,        GrBackendFormats::MakeMtl(MTLPixelFormatBC1_RGBA)        },
 #endif
-        { GrColorType::kRG_88,            GrBackendFormat::MakeMtl(MTLPixelFormatRG8Unorm)        },
-        { GrColorType::kBGRA_8888,        GrBackendFormat::MakeMtl(MTLPixelFormatBGRA8Unorm)      },
-        { GrColorType::kRGBA_1010102,     GrBackendFormat::MakeMtl(MTLPixelFormatRGB10A2Unorm)    },
-        { GrColorType::kBGRA_1010102,     GrBackendFormat::MakeMtl(MTLPixelFormatBGR10A2Unorm)    },
-        { GrColorType::kGray_8,           GrBackendFormat::MakeMtl(MTLPixelFormatR8Unorm)         },
-        { GrColorType::kAlpha_F16,        GrBackendFormat::MakeMtl(MTLPixelFormatR16Float)        },
-        { GrColorType::kRGBA_F16,         GrBackendFormat::MakeMtl(MTLPixelFormatRGBA16Float)     },
-        { GrColorType::kRGBA_F16_Clamped, GrBackendFormat::MakeMtl(MTLPixelFormatRGBA16Float)     },
-        { GrColorType::kAlpha_16,         GrBackendFormat::MakeMtl(MTLPixelFormatR16Unorm)        },
-        { GrColorType::kRG_1616,          GrBackendFormat::MakeMtl(MTLPixelFormatRG16Unorm)       },
-        { GrColorType::kRGBA_16161616,    GrBackendFormat::MakeMtl(MTLPixelFormatRGBA16Unorm)     },
-        { GrColorType::kRG_F16,           GrBackendFormat::MakeMtl(MTLPixelFormatRG16Float)       },
+        { GrColorType::kRG_88,            GrBackendFormats::MakeMtl(MTLPixelFormatRG8Unorm)        },
+        { GrColorType::kBGRA_8888,        GrBackendFormats::MakeMtl(MTLPixelFormatBGRA8Unorm)      },
+        { GrColorType::kRGBA_1010102,     GrBackendFormats::MakeMtl(MTLPixelFormatRGB10A2Unorm)    },
+        { GrColorType::kBGRA_1010102,     GrBackendFormats::MakeMtl(MTLPixelFormatBGR10A2Unorm)    },
+        { GrColorType::kGray_8,           GrBackendFormats::MakeMtl(MTLPixelFormatR8Unorm)         },
+        { GrColorType::kAlpha_F16,        GrBackendFormats::MakeMtl(MTLPixelFormatR16Float)        },
+        { GrColorType::kRGBA_F16,         GrBackendFormats::MakeMtl(MTLPixelFormatRGBA16Float)     },
+        { GrColorType::kRGBA_F16_Clamped, GrBackendFormats::MakeMtl(MTLPixelFormatRGBA16Float)     },
+        { GrColorType::kAlpha_16,         GrBackendFormats::MakeMtl(MTLPixelFormatR16Unorm)        },
+        { GrColorType::kRG_1616,          GrBackendFormats::MakeMtl(MTLPixelFormatRG16Unorm)       },
+        { GrColorType::kRGBA_16161616,    GrBackendFormats::MakeMtl(MTLPixelFormatRGBA16Unorm)     },
+        { GrColorType::kRG_F16,           GrBackendFormats::MakeMtl(MTLPixelFormatRG16Float)       },
     };
 
     return combos;

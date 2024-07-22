@@ -39,7 +39,7 @@ public:
     const Caps* caps() const { return fCaps.get(); }
 
     BackendApi backend() const { return fBackend; }
-    Protected isProtected() const { return fProtected; }
+    Protected isProtected() const;
 
     GlobalCache* globalCache() { return &fGlobalCache; }
     const GlobalCache* globalCache() const { return &fGlobalCache; }
@@ -53,6 +53,10 @@ public:
                                                                    uint32_t recorderID,
                                                                    size_t resourceBudget) = 0;
 
+    // Called by Context::isContextLost(). Returns true if the backend-specific SharedContext has
+    // gotten into an unrecoverable, lost state.
+    virtual bool isDeviceLost() const { return false; }
+
 protected:
     SharedContext(std::unique_ptr<const Caps>, BackendApi);
 
@@ -65,7 +69,6 @@ private:
     std::unique_ptr<const Caps> fCaps; // Provided by backend subclass
 
     BackendApi fBackend;
-    Protected fProtected;
     GlobalCache fGlobalCache;
     std::unique_ptr<RendererProvider> fRendererProvider;
     ShaderCodeDictionary fShaderDictionary;

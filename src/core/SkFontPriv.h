@@ -76,9 +76,7 @@ public:
                                                    const SkPoint& textLocation);
 
     static bool IsFinite(const SkFont& font) {
-        return SkScalarIsFinite(font.getSize()) &&
-               SkScalarIsFinite(font.getScaleX()) &&
-               SkScalarIsFinite(font.getSkewX());
+        return SkIsFinite(font.getSize(), font.getScaleX(), font.getSkewX());
     }
 
     // Returns the number of elements (characters or glyphs) in the array.
@@ -90,14 +88,6 @@ public:
     static bool Unflatten(SkFont*, SkReadBuffer& buffer);
 
     static inline uint8_t Flags(const SkFont& font) { return font.fFlags; }
-
-    static inline sk_sp<SkTypeface> RefTypefaceOrDefault(const SkFont& font) {
-        return font.refTypefaceOrDefault();
-    }
-
-    static inline SkTypeface* GetTypefaceOrDefault(const SkFont& font) {
-        return font.getTypefaceOrDefault();
-    }
 };
 
 class SkAutoToGlyphs {

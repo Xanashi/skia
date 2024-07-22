@@ -62,7 +62,11 @@ public:
     // shared by multiple draw calls so it's more difficult to reason about how much room is left
     // in a DrawList. Limiting it to this keeps tracking simple and ensures that the sequences in
     // DrawOrder cannot overflow since they are always less than or equal to the number of draws.
-    static constexpr int kMaxRenderSteps = std::numeric_limits<uint16_t>::max();
+    // TODO(b/322840221): The theoretic max for this value is 16-bit, but we see markedly better
+    // performance with smaller values. This should be understood and fixed directly rather than as
+    // a magic side-effect, but for now, let it go fast.
+    static constexpr int kMaxRenderSteps = 4096;
+    static_assert(kMaxRenderSteps <= std::numeric_limits<uint16_t>::max());
 
     // DrawList requires that all Transforms be valid and asserts as much; invalid transforms should
     // be detected at the Device level or similar. The provided Renderer must be compatible with the
@@ -103,11 +107,11 @@ private:
     // The returned Transform reference remains valid for the lifetime of the DrawList.
     const Transform& deduplicateTransform(const Transform&);
 
-    SkTBlockList<Transform, 16> fTransforms;
-    SkTBlockList<Draw, 16>      fDraws;
+    SkTBlockList<Transform, 16> fTransforms{SkBlockAllocator::GrowthPolicy::kFibonacci};
+    SkTBlockList<Draw, 16>      fDraws{SkBlockAllocator::GrowthPolicy::kFibonacci};
 
     // Running total of RenderSteps for all draws, assuming nothing is culled
-    int fRenderStepCount;
+    int fRenderStepCount = 0;
 
 #if defined(SK_DEBUG)
     // The number of CoverageMask draws that have been recorded. Used in debugging.

@@ -5,6 +5,8 @@
  * found in the LICENSE file.
  */
 
+#include "src/gpu/vk/VulkanInterface.h"
+#include "tools/gpu/vk/VkTestMemoryAllocator.h"
 #include "tools/gpu/vk/VkTestUtils.h"
 
 #ifdef SK_VULKAN
@@ -28,7 +30,6 @@
 #if defined(__GLIBC__)
 #include <execinfo.h>
 #endif
-#include "include/gpu/vk/GrVkBackendContext.h"
 #include "include/gpu/vk/VulkanBackendContext.h"
 #include "include/gpu/vk/VulkanExtensions.h"
 #include "src/base/SkAutoMalloc.h"
@@ -457,41 +458,6 @@ static bool setup_features(const skgpu::VulkanGetProc& getProc, VkInstance inst,
 }
 
 bool CreateVkBackendContext(PFN_vkGetInstanceProcAddr getInstProc,
-                            GrVkBackendContext* ctx,
-                            skgpu::VulkanExtensions* extensions,
-                            VkPhysicalDeviceFeatures2* features,
-                            VkDebugReportCallbackEXT* debugCallback,
-                            uint32_t* presentQueueIndexPtr,
-                            const CanPresentFn& canPresent,
-                            bool isProtected) {
-    skgpu::VulkanBackendContext skgpuCtx;
-    if (!CreateVkBackendContext(getInstProc,
-                                &skgpuCtx,
-                                extensions,
-                                features,
-                                debugCallback,
-                                presentQueueIndexPtr,
-                                canPresent,
-                                isProtected)) {
-        return false;
-    }
-
-    SkASSERT(skgpuCtx.fProtectedContext == skgpu::Protected(isProtected));
-    ctx->fInstance = skgpuCtx.fInstance;
-    ctx->fPhysicalDevice = skgpuCtx.fPhysicalDevice;
-    ctx->fDevice = skgpuCtx.fDevice;
-    ctx->fQueue = skgpuCtx.fQueue;
-    ctx->fGraphicsQueueIndex = skgpuCtx.fGraphicsQueueIndex;
-    ctx->fMaxAPIVersion = skgpuCtx.fMaxAPIVersion;
-    ctx->fVkExtensions = skgpuCtx.fVkExtensions;
-    ctx->fDeviceFeatures2 = skgpuCtx.fDeviceFeatures2;
-    ctx->fGetProc = skgpuCtx.fGetProc;
-    ctx->fOwnsInstanceAndDevice = false;
-    ctx->fProtectedContext = skgpuCtx.fProtectedContext;
-    return true;
-}
-
-bool CreateVkBackendContext(PFN_vkGetInstanceProcAddr getInstProc,
                             skgpu::VulkanBackendContext* ctx,
                             skgpu::VulkanExtensions* extensions,
                             VkPhysicalDeviceFeatures2* features,
@@ -747,12 +713,15 @@ bool CreateVkBackendContext(PFN_vkGetInstanceProcAddr getInstProc,
         if (0 != strncmp(deviceExtensions[i].extensionName, "VK_KHX", 6) &&
             0 != strncmp(deviceExtensions[i].extensionName, "VK_NVX", 6)) {
 
-            // This is an nvidia extension that isn't supported by the debug layers so we get lots
-            // of warnings. We don't actually use it, so it is easiest to just not enable it.
-            if (0 == strcmp(deviceExtensions[i].extensionName, "VK_EXT_provoking_vertex") ||
+            // There are some extensions that are not supported by the debug layers which result in
+            // many warnings even though we don't actually use them. It's easiest to just
+            // avoid enabling those.
+            if (0 == strcmp(deviceExtensions[i].extensionName, "VK_EXT_provoking_vertex")     ||
+                0 == strcmp(deviceExtensions[i].extensionName, "VK_EXT_shader_object")        ||
+                0 == strcmp(deviceExtensions[i].extensionName, "VK_KHR_dynamic_rendering")    ||
                 0 == strcmp(deviceExtensions[i].extensionName, "VK_NV_acquire_winrt_display") ||
-                0 == strcmp(deviceExtensions[i].extensionName, "VK_NV_cuda_kernel_launch") ||
-                0 == strcmp(deviceExtensions[i].extensionName, "VK_NV_low_latency") ||
+                0 == strcmp(deviceExtensions[i].extensionName, "VK_NV_cuda_kernel_launch")    ||
+                0 == strcmp(deviceExtensions[i].extensionName, "VK_NV_low_latency")           ||
                 0 == strcmp(deviceExtensions[i].extensionName, "VK_NV_present_barrier")) {
                 continue;
             }
@@ -862,6 +831,13 @@ bool CreateVkBackendContext(PFN_vkGetInstanceProcAddr getInstProc,
         grVkGetDeviceQueue(device, graphicsQueueIndex, 0, &queue);
     }
 
+    skgpu::VulkanInterface interface = skgpu::VulkanInterface(
+            getProc, inst, device, instanceVersion, physDeviceVersion, extensions);
+    SkASSERT(interface.validate(instanceVersion, physDeviceVersion, extensions));
+
+    sk_sp<skgpu::VulkanMemoryAllocator> memoryAllocator = VkTestMemoryAllocator::Make(
+            inst, physDev, device, physDeviceVersion, extensions, &interface);
+
     ctx->fInstance = inst;
     ctx->fPhysicalDevice = physDev;
     ctx->fDevice = device;
@@ -872,6 +848,7 @@ bool CreateVkBackendContext(PFN_vkGetInstanceProcAddr getInstProc,
     ctx->fDeviceFeatures2 = features;
     ctx->fGetProc = getProc;
     ctx->fProtectedContext = skgpu::Protected(isProtected);
+    ctx->fMemoryAllocator = memoryAllocator;
 
     return true;
 }

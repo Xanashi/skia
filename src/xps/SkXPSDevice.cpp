@@ -120,9 +120,9 @@ HRESULT SkXPSDevice::createId(wchar_t* buffer, size_t bufferSize, wchar_t sep) {
 }
 
 SkXPSDevice::SkXPSDevice(SkISize s)
-    : SkClipStackDevice(SkImageInfo::MakeUnknown(s.width(), s.height()),
-                        SkSurfaceProps(0, kUnknown_SkPixelGeometry))
-    , fCurrentPage(0), fTopTypefaces(&fTypefaces) {}
+        : SkClipStackDevice(SkImageInfo::MakeUnknown(s.width(), s.height()), SkSurfaceProps())
+        , fCurrentPage(0)
+        , fTopTypefaces(&fTypefaces) {}
 
 SkXPSDevice::~SkXPSDevice() {}
 
@@ -342,7 +342,7 @@ static HRESULT subset_typeface(const SkXPSDevice::TypefaceUse& current) {
     unsigned long fontPackageBufferSize;
     unsigned long bytesWritten;
     unsigned long result = CreateFontPackage(
-        (unsigned char *) current.fontData->getMemoryBase(),
+        (const unsigned char *) current.fontData->getMemoryBase(),
         (unsigned long) current.fontData->getLength(),
         &fontPackageBufferRaw,
         &fontPackageBufferSize,
@@ -1720,7 +1720,7 @@ HRESULT SkXPSDevice::clipToPath(IXpsOMVisual* xpsVisual,
 
 HRESULT SkXPSDevice::CreateTypefaceUse(const SkFont& font,
                                        TypefaceUse** typefaceUse) {
-    SkTypeface* typeface = SkFontPriv::GetTypefaceOrDefault(font);
+    SkTypeface* typeface = font.getTypeface();
 
     //Check cache.
     const SkTypefaceID typefaceID = typeface->uniqueID();
@@ -1765,10 +1765,10 @@ HRESULT SkXPSDevice::CreateTypefaceUse(const SkFont& font,
         "Could not create font resource.");
 
     //TODO: change openStream to return -1 for non-ttc, get rid of this.
-    uint8_t* data = (uint8_t*)fontData->getMemoryBase();
+    const uint8_t* data = (const uint8_t*)fontData->getMemoryBase();
     bool isTTC = (data &&
                   fontData->getLength() >= sizeof(SkTTCFHeader) &&
-                  ((SkTTCFHeader*)data)->ttcTag == SkTTCFHeader::TAG);
+                  ((const SkTTCFHeader*)data)->ttcTag == SkTTCFHeader::TAG);
 
     int glyphCount = typeface->countGlyphs();
 
@@ -1887,8 +1887,7 @@ static bool text_must_be_pathed(const SkPaint& paint, const SkMatrix& matrix) {
 
 void SkXPSDevice::onDrawGlyphRunList(SkCanvas*,
                                      const sktext::GlyphRunList& glyphRunList,
-                                     const SkPaint& initailPaint,
-                                     const SkPaint& drawingPaint) {
+                                     const SkPaint& paint) {
     SkASSERT(!glyphRunList.hasRSXForm());
 
     for (const auto& run : glyphRunList) {
@@ -1902,7 +1901,7 @@ void SkXPSDevice::onDrawGlyphRunList(SkCanvas*,
 
         TypefaceUse* typeface;
         if (FAILED(CreateTypefaceUse(font, &typeface)) ||
-            text_must_be_pathed(drawingPaint, this->localToDevice())) {
+            text_must_be_pathed(paint, this->localToDevice())) {
             SkPath path;
             //TODO: make this work, Draw currently does not handle as well.
             //paint.getTextPath(text, byteLength, x, y, &path);
@@ -1951,7 +1950,7 @@ void SkXPSDevice::onDrawGlyphRunList(SkCanvas*,
                       SkScalarToFLOAT(font.getSize()),
                       XPS_STYLE_SIMULATION_NONE,
                       this->localToDevice(),
-                      drawingPaint));
+                      paint));
     }
 }
 

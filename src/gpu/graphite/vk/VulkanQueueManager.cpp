@@ -38,10 +38,11 @@ public:
         : GpuWorkSubmission(std::move(cmdBuffer), queueManager) {}
     ~VulkanWorkSubmission() override {}
 
-    bool isFinished() override {
+private:
+    bool onIsFinished(const SharedContext*) override {
         return static_cast<VulkanCommandBuffer*>(this->commandBuffer())->isFinished();
     }
-    void waitUntilFinished() override {
+    void onWaitUntilFinished(const SharedContext*) override {
         return static_cast<VulkanCommandBuffer*>(this->commandBuffer())->waitUntilFinished();
     }
 };

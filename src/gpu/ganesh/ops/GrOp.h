@@ -249,7 +249,7 @@ public:
      * chain or null if this was already a tail.
      */
     GrOp::Owner cutChain();
-    SkDEBUGCODE(void validateChain(GrOp* expectedTail = nullptr) const);
+    SkDEBUGCODE(void validateChain(GrOp* expectedTail = nullptr) const;)
 
 #ifdef SK_DEBUG
     virtual void validate() const {}
@@ -336,9 +336,7 @@ private:
         fBoundsFlags |= (IsHairline ::kYes == zeroArea) ? kZeroArea_BoundsFlag : 0;
     }
 
-    enum {
-        kIllegalOpID = 0,
-    };
+    static constexpr uint16_t kIllegalOpID = 0;
 
     enum BoundsFlags {
         kAABloat_BoundsFlag                     = 0x1,

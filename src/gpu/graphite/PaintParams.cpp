@@ -50,25 +50,9 @@ bool should_dither(const PaintParams& p, SkColorType dstCT) {
 
 } // anonymous namespace
 
-PaintParams::PaintParams(const SkColor4f& color,
-                         sk_sp<SkBlender> finalBlender,
-                         sk_sp<SkShader> shader,
-                         sk_sp<SkColorFilter> colorFilter,
-                         sk_sp<SkBlender> primitiveBlender,
-                         DstReadRequirement dstReadReq,
-                         bool skipColorXform,
-                         bool dither)
-        : fColor(color)
-        , fFinalBlender(std::move(finalBlender))
-        , fShader(std::move(shader))
-        , fColorFilter(std::move(colorFilter))
-        , fPrimitiveBlender(std::move(primitiveBlender))
-        , fDstReadReq(dstReadReq)
-        , fSkipColorXform(skipColorXform)
-        , fDither(dither) {}
-
 PaintParams::PaintParams(const SkPaint& paint,
                          sk_sp<SkBlender> primitiveBlender,
+                         sk_sp<SkShader> clipShader,
                          DstReadRequirement dstReadReq,
                          bool skipColorXform)
         : fColor(paint.getColor4f())
@@ -76,6 +60,7 @@ PaintParams::PaintParams(const SkPaint& paint,
         , fShader(paint.refShader())
         , fColorFilter(paint.refColorFilter())
         , fPrimitiveBlender(std::move(primitiveBlender))
+        , fClipShader(std::move(clipShader))
         , fDstReadReq(dstReadReq)
         , fSkipColorXform(skipColorXform)
         , fDither(paint.isDither()) {}
@@ -186,7 +171,8 @@ void AddDitherBlock(const KeyContext& keyContext,
                     SkColorType ct) {
     static const SkBitmap gLUT = skgpu::MakeDitherLUT();
 
-    sk_sp<TextureProxy> proxy = RecorderPriv::CreateCachedProxy(keyContext.recorder(), gLUT);
+    sk_sp<TextureProxy> proxy = RecorderPriv::CreateCachedProxy(keyContext.recorder(), gLUT,
+                                                                "DitherLUT");
     if (keyContext.recorder() && !proxy) {
         SKGPU_LOG_W("Couldn't create dither shader's LUT");
         builder->addBlock(BuiltInCodeSnippetID::kPriorOutput);
@@ -225,7 +211,7 @@ void PaintParams::handlePrimitiveColor(const KeyContext& keyContext,
                   this->addPaintColorToKey(keyContext, keyBuilder, gatherer);
               },
               /* addDstToKey= */ [&]() -> void {
-                  keyBuilder->addBlock(BuiltInCodeSnippetID::kPrimitiveColor);
+                  PrimitiveColorBlock::AddBlock(keyContext, keyBuilder, gatherer);
               });
     } else {
         this->addPaintColorToKey(keyContext, keyBuilder, gatherer);
@@ -333,12 +319,40 @@ void PaintParams::toKey(const KeyContext& keyContext,
         finalBlendMode = SkBlendMode::kSrc;
     }
 
+    if (fClipShader) {
+        ClipShaderBlock::BeginBlock(keyContext, builder, gatherer);
+
+            AddToKey(keyContext, builder, gatherer, fClipShader.get());
+
+        builder->endBlock();
+    }
+
     // Set the hardware blend mode.
     SkASSERT(finalBlendMode);
     BuiltInCodeSnippetID fixedFuncBlendModeID = static_cast<BuiltInCodeSnippetID>(
             kFixedFunctionBlendModeIDOffset + static_cast<int>(*finalBlendMode));
 
     builder->addBlock(fixedFuncBlendModeID);
+}
+
+// TODO(b/330864257): Can be deleted once keys are determined by the Device draw.
+void PaintParams::notifyImagesInUse(Recorder* recorder,
+                                    DrawContext* drawContext) const {
+    if (fShader) {
+        NotifyImagesInUse(recorder, drawContext, fShader.get());
+    }
+    if (fPrimitiveBlender) {
+        NotifyImagesInUse(recorder, drawContext, fPrimitiveBlender.get());
+    }
+    if (fColorFilter) {
+        NotifyImagesInUse(recorder, drawContext, fColorFilter.get());
+    }
+    if (fFinalBlender) {
+        NotifyImagesInUse(recorder, drawContext, fFinalBlender.get());
+    }
+    if (fClipShader) {
+        NotifyImagesInUse(recorder, drawContext, fClipShader.get());
+    }
 }
 
 } // namespace skgpu::graphite

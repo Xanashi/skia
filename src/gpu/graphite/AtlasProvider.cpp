@@ -8,9 +8,9 @@
 #include "src/gpu/graphite/AtlasProvider.h"
 
 #include "include/gpu/graphite/Recorder.h"
+#include "src/gpu/graphite/ComputePathAtlas.h"
 #include "src/gpu/graphite/DrawContext.h"
 #include "src/gpu/graphite/Log.h"
-#include "src/gpu/graphite/PathAtlas.h"
 #include "src/gpu/graphite/RasterPathAtlas.h"
 #include "src/gpu/graphite/RecorderPriv.h"
 #include "src/gpu/graphite/RendererProvider.h"
@@ -20,8 +20,8 @@
 namespace skgpu::graphite {
 
 AtlasProvider::PathAtlasFlagsBitMask AtlasProvider::QueryPathAtlasSupport(const Caps* caps) {
-    PathAtlasFlagsBitMask flags = PathAtlasFlags::kNone;
-    flags |= PathAtlasFlags::kRaster;
+    // The raster-backend path atlas is always supported.
+    PathAtlasFlagsBitMask flags = PathAtlasFlags::kRaster;
     if (RendererProvider::IsVelloRendererSupported(caps)) {
         flags |= PathAtlasFlags::kCompute;
     }
@@ -30,12 +30,12 @@ AtlasProvider::PathAtlasFlagsBitMask AtlasProvider::QueryPathAtlasSupport(const 
 
 AtlasProvider::AtlasProvider(Recorder* recorder)
         : fTextAtlasManager(std::make_unique<TextAtlasManager>(recorder))
-        , fRasterPathAtlas(std::make_unique<RasterPathAtlas>())
+        , fRasterPathAtlas(std::make_unique<RasterPathAtlas>(recorder))
         , fPathAtlasFlags(QueryPathAtlasSupport(recorder->priv().caps())) {}
 
-std::unique_ptr<ComputePathAtlas> AtlasProvider::createComputePathAtlas() const {
+std::unique_ptr<ComputePathAtlas> AtlasProvider::createComputePathAtlas(Recorder* recorder) const {
     if (this->isAvailable(PathAtlasFlags::kCompute)) {
-        return ComputePathAtlas::CreateDefault();
+        return ComputePathAtlas::CreateDefault(recorder);
     }
     return nullptr;
 }
@@ -59,24 +59,22 @@ sk_sp<TextureProxy> AtlasProvider::getAtlasTexture(Recorder* recorder,
         return iter->second;
     }
 
-    sk_sp<TextureProxy> proxy;
-    if (requireStorageUsage) {
-        proxy = TextureProxy::MakeStorage(recorder->priv().caps(),
-                                          SkISize::Make(int32_t(width), int32_t(height)),
-                                          colorType,
-                                          skgpu::Budgeted::kYes);
-    } else {
-        // We currently only make the distinction between a storage texture (written by a
-        // compute pass) and a plain sampleable texture (written via upload) that won't be
-        // used as a render attachment.
-        proxy = TextureProxy::Make(recorder->priv().caps(),
-                                   SkISize::Make(int32_t(width), int32_t(height)),
-                                   colorType,
-                                   skgpu::Mipmapped::kNo,
-                                   skgpu::Protected::kNo,
-                                   skgpu::Renderable::kNo,
-                                   skgpu::Budgeted::kYes);
-    }
+    // We currently only make the distinction between a storage texture (written by a
+    // compute pass) and a plain sampleable texture (written via upload) that won't be
+    // used as a render attachment.
+    const Caps* caps = recorder->priv().caps();
+    auto textureInfo = requireStorageUsage
+            ? caps->getDefaultStorageTextureInfo(colorType)
+            : caps->getDefaultSampledTextureInfo(colorType,
+                                                 Mipmapped::kNo,
+                                                 recorder->priv().isProtected(),
+                                                 Renderable::kNo);
+    sk_sp<TextureProxy> proxy = TextureProxy::Make(caps,
+                                                   recorder->priv().resourceProvider(),
+                                                   SkISize::Make((int32_t) width, (int32_t) height),
+                                                   textureInfo,
+                                                   "AtlasProviderTexture",
+                                                   Budgeted::kYes);
     if (!proxy) {
         return nullptr;
     }
@@ -85,17 +83,31 @@ sk_sp<TextureProxy> AtlasProvider::getAtlasTexture(Recorder* recorder,
     return proxy;
 }
 
-void AtlasProvider::clearTexturePool() {
+void AtlasProvider::freeGpuResources() {
+    fTextAtlasManager->freeAll();
+    if (fRasterPathAtlas) {
+        fRasterPathAtlas->freeAll();
+    }
+    // Release any textures held directly by the provider. These textures are used by transient
+    // ComputePathAtlases that are reset every time a DrawContext snaps a DrawTask so there is
+    // no need to reset those atlases explicitly here.
     fTexturePool.clear();
 }
 
-void AtlasProvider::recordUploads(DrawContext* dc, Recorder* recorder) {
-    if (!dc->recordTextUploads(fTextAtlasManager.get())) {
+void AtlasProvider::recordUploads(DrawContext* dc) {
+    if (!fTextAtlasManager->recordUploads(dc)) {
         SKGPU_LOG_E("TextAtlasManager uploads have failed -- may see invalid results.");
     }
 
     if (fRasterPathAtlas) {
-        fRasterPathAtlas->recordUploads(dc, recorder);
+        fRasterPathAtlas->recordUploads(dc);
+    }
+}
+
+void AtlasProvider::postFlush() {
+    fTextAtlasManager->postFlush();
+    if (fRasterPathAtlas) {
+        fRasterPathAtlas->postFlush();
     }
 }
 

@@ -26,6 +26,7 @@ class SkString;
 
 namespace skgpu::graphite {
 class Context;
+class Recorder;
 }
 
 using skwindow::DisplayParams;
@@ -63,7 +64,7 @@ public:
 #ifdef SK_GL
         kNativeGL_BackendType,
 #endif
-#if SK_ANGLE && defined(SK_BUILD_FOR_WIN)
+#if SK_ANGLE && (defined(SK_BUILD_FOR_WIN) || defined(SK_BUILD_FOR_MAC))
         kANGLE_BackendType,
 #endif
 #ifdef SK_DAWN
@@ -161,6 +162,12 @@ public:
     // Returns null if there is not a GPU backend or if the backend is not yet created.
     GrDirectContext* directContext() const;
     skgpu::graphite::Context* graphiteContext() const;
+    skgpu::graphite::Recorder* graphiteRecorder() const;
+
+#if defined(SK_GRAPHITE)
+    // Will snap a Recording and submit to the Context if using Graphite
+    void snapRecordingAndSubmit();
+#endif
 
 protected:
     Window();

@@ -227,22 +227,55 @@ def _RegenerateAllExamplesCPP(input_api, output_api):
              for f in input_api.AffectedFiles()):
     return []
   command_str = 'tools/fiddle/make_all_examples_cpp.py'
-  cmd = ['python3', command_str]
-  if 0 != subprocess.call(cmd):
+  cmd = ['python3', command_str, '--print-diff']
+  proc = subprocess.run(cmd, capture_output=True)
+  if proc.returncode != 0:
     return [output_api.PresubmitError('`%s` failed' % ' '.join(cmd))]
 
   results = []
-  git_diff_output = input_api.subprocess.check_output(
-      ['git', 'diff', '--no-ext-diff'])
-  if git_diff_output:
+  diff_output = proc.stdout.decode('utf-8').strip()
+  if diff_output:
     results += [output_api.PresubmitError(
         'Diffs found after running "%s":\n\n%s\n'
         'Please commit or discard the above changes.' % (
             command_str,
-            git_diff_output,
+            diff_output,
         )
     )]
   return results
+
+
+def _CheckIncludeForOutsideDeps(input_api, output_api):
+  """The include directory should consist of only public APIs.
+
+     This check makes sure we don't have anything in the include directory
+     depend on outside folders. If we had include/core/SkDonut.h depend on
+     src/core/SkPastry.h, then clients would have transitive access to the
+     private SkPastry class and any symbols in there, even if they don't
+     directly include src/core/SkPastry.h (which can be detected/blocked
+     with build systems like GN or Bazel). By keeping include/ self-contained,
+     we keep a tighter grip on our public API and make Skia easier to distribute
+     (one can ship a .a/.so and a single directory of .h files).
+  """
+  banned_includes = [
+    input_api.re.compile(r'#\s*include\s+("src/.*)'),
+    input_api.re.compile(r'#\s*include\s+("tools/.*)'),
+  ]
+  file_filter = lambda x: (x.LocalPath().startswith('include/'))
+  errors = []
+  for affected_file in input_api.AffectedSourceFiles(file_filter):
+    affected_filepath = affected_file.LocalPath()
+    for (line_num, line) in affected_file.ChangedContents():
+      for re in banned_includes:
+        match = re.search(line)
+        if match:
+          errors.append(('%s:%s: include/* should only depend on other things in include/*. ' +
+                        'Please remove #include of %s, perhaps making it a forward-declare.') % (
+                affected_filepath, line_num, match.group(1)))
+
+  if errors:
+    return [output_api.PresubmitError('\n'.join(errors))]
+  return []
 
 
 def _CheckExamplesForPrivateAPIs(input_api, output_api):
@@ -300,12 +333,6 @@ def _CheckBazelBUILDFiles(input_api, output_api):
     if is_bazel and not is_excluded:
       with open(affected_file_path, 'r') as file:
         contents = file.read()
-        if 'exports_files_legacy(' not in contents:
-          results.append(output_api.PresubmitError(
-            ('%s needs to call exports_files_legacy() to support legacy G3 ' +
-             'rules.\nPut this near the top of the file, beneath ' +
-             'licenses(["notice"]).') % affected_file_path
-          ))
         if 'licenses(["notice"])' not in contents:
           results.append(output_api.PresubmitError(
             ('%s needs to have\nlicenses(["notice"])\nimmediately after ' +
@@ -318,28 +345,12 @@ def _CheckBazelBUILDFiles(input_api, output_api):
              'Add "skia_cc_library" to load("//bazel:macros.bzl", ...)')
             % affected_file_path
           ))
-  return results
-
-
-def _CheckPublicBzl(input_api, output_api):
-  """Reminds devs to add/remove files from public.bzl."""
-  results = []
-  public_bzl = ''
-  with open('public.bzl', 'r', encoding='utf-8') as f:
-    public_bzl = f.read().strip()
-  for affected_file in input_api.AffectedFiles(include_deletes=True):
-    # action is A for newly added, D for newly deleted, M for modified
-    action = affected_file.Action()
-    affected_file_path = affected_file.LocalPath()
-    if ((affected_file_path.startswith("include") or affected_file_path.startswith("src")) and
-        (affected_file_path.endswith(".cpp") or affected_file_path.endswith(".h"))):
-      affected_file_path = '"' + affected_file_path + '"'
-      if action == "D" and affected_file_path in public_bzl:
-        results.append(output_api.PresubmitError(
-              "Need to delete %s from public.bzl (or rename it)" % affected_file_path))
-      elif action == "A" and affected_file_path not in public_bzl:
-        results.append(output_api.PresubmitPromptWarning(
-              "You may need to add %s to public.bzl" % affected_file_path))
+        if 'default_applicable_licenses' not in contents:
+          # See https://opensource.google/documentation/reference/thirdparty/new_license_rules
+          results.append(output_api.PresubmitError(
+            ('%s needs to have\npackage(default_applicable_licenses = ["//:license"])\n'+
+             'to comply with G3 policies') % affected_file_path
+          ))
   return results
 
 
@@ -414,12 +425,15 @@ def _CheckBuildifier(input_api, output_api):
   BUILD.bazel or *.bzl files.
   """
   files = []
+  # Please keep the below exclude patterns in sync with those in the //:buildifier rule definition.
   for affected_file in input_api.AffectedFiles(include_deletes=False):
     affected_file_path = affected_file.LocalPath()
     if affected_file_path.endswith('BUILD.bazel') or affected_file_path.endswith('.bzl'):
       if not affected_file_path.endswith('public.bzl') and \
         not affected_file_path.endswith('go_repositories.bzl') and \
-        not "bazel/rbe/gce_linux/" in affected_file_path:  # Skip generated files.
+        not "bazel/rbe/gce_linux/" in affected_file_path and \
+        not affected_file_path.startswith("third_party/externals/") and \
+        not "node_modules/" in affected_file_path:  # Skip generated files.
         files.append(affected_file_path)
   if not files:
     return []
@@ -436,7 +450,19 @@ def _CheckBuildifier(input_api, output_api):
     # One can change --lint=warn to --lint=fix to have things automatically fixed where possible.
     # However, --lint=fix will not cause a presubmit error if there are things that require
     # manual intervention, so we leave --lint=warn on by default.
-    output_api, ['buildifier', '--mode=fix', '--lint=warn'] + files)
+    #
+    # Please keep the below arguments in sync with those in the //:buildifier rule definition.
+    output_api, [
+      'buildifier',
+      '--mode=fix',
+      '--lint=warn',
+      '--warnings',
+      ','.join([
+        '-native-android',
+        '-native-cc',
+        '-native-py',
+      ])
+    ] + files)
 
 
 def _CheckBannedAPIs(input_api, output_api):
@@ -547,6 +573,7 @@ def _CommonChecks(input_api, output_api):
   results.extend(_CheckGitConflictMarkers(input_api, output_api))
   results.extend(_RegenerateAllExamplesCPP(input_api, output_api))
   results.extend(_CheckExamplesForPrivateAPIs(input_api, output_api))
+  results.extend(_CheckIncludeForOutsideDeps(input_api, output_api))
   results.extend(_CheckBazelBUILDFiles(input_api, output_api))
   results.extend(_CheckBannedAPIs(input_api, output_api))
   return results
@@ -561,9 +588,6 @@ def CheckChangeOnUpload(input_api, output_api):
   results.extend(_InfraTests(input_api, output_api))
   results.extend(_CheckTopReleaseNotesChanged(input_api, output_api))
   results.extend(_CheckReleaseNotesForPublicAPI(input_api, output_api))
-  # Only check public.bzl on upload because new files are likely to be a source
-  # of false positives and we don't want to unnecessarily block commits.
-  results.extend(_CheckPublicBzl(input_api, output_api))
   # Buildifier might not be on the CI machines.
   results.extend(_CheckBuildifier(input_api, output_api))
   # We don't want this to block the CQ (for now).

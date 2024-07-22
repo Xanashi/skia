@@ -23,10 +23,13 @@
 #include "include/gpu/ganesh/SkImageGanesh.h"
 #include "include/gpu/ganesh/SkSurfaceGanesh.h"
 #include "include/gpu/ganesh/gl/GrGLBackendSurface.h"
+#include "include/gpu/ganesh/vk/GrVkBackendSemaphore.h"
 #include "include/gpu/ganesh/vk/GrVkBackendSurface.h"
 #include "include/gpu/ganesh/vk/GrVkDirectContext.h"
-#include "include/gpu/vk/GrVkBackendContext.h"
+#include "include/gpu/vk/VulkanBackendContext.h"
 #include "include/gpu/vk/VulkanExtensions.h"
+#include "include/gpu/vk/VulkanMemoryAllocator.h"
+#include "include/gpu/vk/VulkanMutableTextureState.h"
 #include "src/base/SkAutoMalloc.h"
 #include "src/gpu/ganesh/GrDirectContextPriv.h"
 #include "src/gpu/ganesh/GrGpu.h"
@@ -420,7 +423,8 @@ public:
     }
 
     void releaseSurfaceToExternal(SkSurface* surface) override {
-        skgpu::MutableTextureState newState(VK_IMAGE_LAYOUT_UNDEFINED, VK_QUEUE_FAMILY_EXTERNAL);
+        skgpu::MutableTextureState newState = skgpu::MutableTextureStates::MakeVulkan(
+                VK_IMAGE_LAYOUT_UNDEFINED, VK_QUEUE_FAMILY_EXTERNAL);
         fDirectContext->flush(surface, {}, &newState);
     }
 
@@ -522,7 +526,7 @@ private:
 
     VkDevice fDevice = VK_NULL_HANDLE;
 
-    GrVkBackendContext fBackendContext;
+    skgpu::VulkanBackendContext fBackendContext;
     sk_sp<GrDirectContext> fDirectContext;
 };
 
@@ -919,13 +923,13 @@ bool VulkanTestHelper::setupSemaphoreForSignaling(skiatest::Reporter* reporter,
         ERRORF(reporter, "Failed to create signal semaphore, err: %d", err);
         return false;
     }
-    beSemaphore->initVulkan(semaphore);
+    *beSemaphore = GrBackendSemaphores::MakeVk(semaphore);
     return true;
 }
 
 bool VulkanTestHelper::exportSemaphore(skiatest::Reporter* reporter,
                                        const GrBackendSemaphore& beSemaphore) {
-    VkSemaphore semaphore = beSemaphore.vkSemaphore();
+    VkSemaphore semaphore = GrBackendSemaphores::GetVkSemaphore(beSemaphore);
     if (VK_NULL_HANDLE == semaphore) {
         ERRORF(reporter, "Invalid vulkan handle in export call");
         return false;
@@ -974,8 +978,7 @@ bool VulkanTestHelper::importAndWaitOnSemaphore(skiatest::Reporter* reporter, in
         return false;
     }
 
-    GrBackendSemaphore beSemaphore;
-    beSemaphore.initVulkan(semaphore);
+    GrBackendSemaphore beSemaphore = GrBackendSemaphores::MakeVk(semaphore);
     if (!surface->wait(1, &beSemaphore)) {
         ERRORF(reporter, "Failed to add wait semaphore to surface");
         fVkDestroySemaphore(fDevice, semaphore, nullptr);

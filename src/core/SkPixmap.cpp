@@ -140,6 +140,11 @@ float SkPixmap::getAlphaf(int x, int y) const {
             value = (u32 >> 30) * (1.0f/3);
             break;
         }
+        case kBGRA_10101010_XR_SkColorType: {
+            uint64_t u64 = static_cast<const uint64_t*>(srcPtr)[0];
+            value = ((u64 >> 54) - 384) / 510.f;
+            break;
+        }
         case kRGBA_10x6_SkColorType: {
             uint64_t u64 = static_cast<const uint64_t*>(srcPtr)[0];
             value = (u64 >> 54) * (1.0f/1023);
@@ -152,9 +157,7 @@ float SkPixmap::getAlphaf(int x, int y) const {
         }
         case kRGBA_F16Norm_SkColorType:
         case kRGBA_F16_SkColorType: {
-            uint64_t px;
-            memcpy(&px, srcPtr, sizeof(px));
-            value = SkHalfToFloat_finite_ftz(px)[3];
+            value = from_half(skvx::half4::Load(srcPtr))[3];
             break;
         }
         case kRGBA_F32_SkColorType:
@@ -255,7 +258,7 @@ SkColor SkPixmap::getColor(int x, int y) const {
         case kSRGBA_8888_SkColorType: {
             auto srgb_to_linear = [](float x) {
                 return (x <= 0.04045f) ? x * (1 / 12.92f)
-                                       : sk_float_pow(x * (1 / 1.055f) + (0.055f / 1.055f), 2.4f);
+                                       : std::pow(x * (1 / 1.055f) + (0.055f / 1.055f), 2.4f);
             };
 
             uint32_t value = *this->addr32(x, y);
@@ -317,6 +320,10 @@ SkColor SkPixmap::getColor(int x, int y) const {
                  | (uint32_t)( b * 255.0f ) <<  0
                  | (uint32_t)( a * 255.0f ) << 24;
         }
+        case kBGRA_10101010_XR_SkColorType: {
+            SkASSERT(false);
+            return 0;
+        }
         case kRGBA_10x6_SkColorType: {
             uint64_t value = *this->addr64(x, y);
             float r = ((value >>  6) & 0x3ff) * (1/1023.0f),
@@ -349,7 +356,7 @@ SkColor SkPixmap::getColor(int x, int y) const {
         case kRGBA_F16_SkColorType: {
             const uint64_t* addr =
                 (const uint64_t*)fPixels + y * (fRowBytes >> 3) + x;
-            skvx::float4 p4 = SkHalfToFloat_finite_ftz(*addr);
+            skvx::float4 p4 = from_half(skvx::half4::Load(addr));
             if (p4[3] && needsUnpremul) {
                 float inva = 1 / p4[3];
                 p4 = p4 * skvx::float4(inva, inva, inva, 1);
@@ -455,7 +462,7 @@ SkColor4f SkPixmap::getColor4f(int x, int y) const {
         case kSRGBA_8888_SkColorType: {
             auto srgb_to_linear = [](float x) {
                 return (x <= 0.04045f) ? x * (1 / 12.92f)
-                                       : sk_float_pow(x * (1 / 1.055f) + (0.055f / 1.055f), 2.4f);
+                                       : std::pow(x * (1 / 1.055f) + (0.055f / 1.055f), 2.4f);
             };
 
             uint32_t value = *this->addr32(x, y);
@@ -513,6 +520,10 @@ SkColor4f SkPixmap::getColor4f(int x, int y) const {
             }
             return SkColor4f{r, g, b, a};
         }
+        case kBGRA_10101010_XR_SkColorType: {
+            SkASSERT(false);
+            return {};
+        }
         case kRGBA_10x6_SkColorType: {
             uint64_t value = *this->addr64(x, y);
 
@@ -539,7 +550,7 @@ SkColor4f SkPixmap::getColor4f(int x, int y) const {
         case kRGBA_F16Norm_SkColorType:
         case kRGBA_F16_SkColorType: {
             const uint64_t* addr = (const uint64_t*)fPixels + y * (fRowBytes >> 3) + x;
-            skvx::float4 p4 = SkHalfToFloat_finite_ftz(*addr);
+            skvx::float4 p4 = from_half(skvx::half4::Load(addr));
             if (p4[3] && needsUnpremul) {
                 float inva = 1 / p4[3];
                 p4 = p4 * skvx::float4(inva, inva, inva, 1);
@@ -679,6 +690,18 @@ bool SkPixmap::computeIsOpaque() const {
                 }
                 if (0b11 != c >> 30) {
                     return false;
+                }
+            }
+            return true;
+        }
+        case kBGRA_10101010_XR_SkColorType:{
+            static constexpr uint64_t kOne = 510 + 384;
+            for (int y = 0; y < height; ++y) {
+                const uint64_t* row = this->addr64(0, y);
+                for (int x = 0; x < width; ++x) {
+                    if ((row[x] >> 54) < kOne) {
+                        return false;
+                    }
                 }
             }
             return true;

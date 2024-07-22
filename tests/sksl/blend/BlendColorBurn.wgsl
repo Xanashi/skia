@@ -1,12 +1,5 @@
-/*
-
-:31:3 warning: code is unreachable
-  return f32();
-  ^^^^^^
-
-*/
-
 diagnostic(off, derivative_uniformity);
+diagnostic(off, chromium.unreachable_code);
 struct FSOut {
   @location(0) sk_FragColor: vec4<f32>,
 };
@@ -30,7 +23,7 @@ fn color_burn_component_Qhh2h2(s: vec2<f32>, d: vec2<f32>) -> f32 {
       } else {
         {
           let _skTemp0 = max(0.0, d.y - ((d.y - d.x) * s.y) / (s.x + sk_PrivkGuardedDivideEpsilon));
-          var delta: f32 = _skTemp0;
+          let delta: f32 = _skTemp0;
           return (delta * s.y + s.x * (1.0 - d.y)) + d.x * (1.0 - s.y);
         }
       }

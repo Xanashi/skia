@@ -15,6 +15,7 @@
 #include "tests/Test.h"
 #include "tests/TestHarness.h"
 #include "tools/flags/CommandLineFlags.h"
+#include "tools/testrunners/common/TestRunner.h"
 
 #if defined(SK_GANESH)
 #include "include/gpu/GrContextOptions.h"
@@ -34,17 +35,37 @@
 
 struct tm;
 
-static DEFINE_string(skip, "", "Space-separated list of test cases to skip.");
+static DEFINE_string(skip, "", "Space-separated list of test cases (regexps) to skip.");
+static DEFINE_string(
+        match,
+        "",
+        "Space-separated list of test cases (regexps) to run. Will run all tests if omitted.");
+
+// Set in //bazel/devicesrc but consumed by other C++ test runners.
+static DEFINE_string(key, "", "Ignored by this test runner.");
+static DEFINE_string(cpuName, "", "Ignored by this test runner.");
+static DEFINE_string(gpuName, "", "Ignored by this test runner.");
+
+// Set in //bazel/devicesrc but only consumed by adb_test_runner.go. We cannot use the
+// DEFINE_string macro because the flag name includes dashes.
+[[maybe_unused]] static bool unused =
+        SkFlagInfo::CreateStringFlag("device-specific-bazel-config",
+                                     nullptr,
+                                     new CommandLineFlags::StringArray(),
+                                     nullptr,
+                                     "Ignored by this test runner.",
+                                     nullptr);
 
 class BazelReporter : public skiatest::Reporter {
 public:
     void reportFailed(const skiatest::Failure& failure) override {
-            SkDebugf("FAIL: %s\n", failure.toString().c_str());
-            fFailed = true;
+        TestRunner::Log("FAIL: %s", failure.toString().c_str());
+        fFailed = true;
     }
     bool allowExtendedTest() const override { return false; }
     bool verbose() const override { return false; }
     bool ok() { return !fFailed; }
+
 private:
     bool fFailed = false;
 };
@@ -63,34 +84,34 @@ bool IsMetalContextType(skgpu::ContextType type) {
 bool IsDirect3DContextType(skgpu::ContextType type) {
     return skgpu::ganesh::ContextTypeBackend(type) == GrBackendApi::kDirect3D;
 }
-bool IsMockContextType(skgpu::ContextType type) {
-    return type == skgpu::ContextType::kMock;
-}
+bool IsMockContextType(skgpu::ContextType type) { return type == skgpu::ContextType::kMock; }
 
 skgpu::ContextType compiledInContextTypes[] = {
 #if defined(SK_GL)
-    // Use "native" instead of explicitly trying both OpenGL and OpenGL ES. Do not use GLES on
-    // desktop since tests do not account for not fixing http://skbug.com/2809
+// Use "native" instead of explicitly trying both OpenGL and OpenGL ES. Do not use GLES on
+// desktop since tests do not account for not fixing http://skbug.com/2809
 #if defined(SK_BUILD_FOR_UNIX) || defined(SK_BUILD_FOR_WIN) || defined(SK_BUILD_FOR_MAC)
-    skgpu::ContextType::kGL,
+        skgpu::ContextType::kGL,
 #else
-    skgpu::ContextType::kGLES,
+        skgpu::ContextType::kGLES,
 #endif
-#endif // defined(SK_GL)
+#endif  // defined(SK_GL)
 #if defined(SK_VULKAN)
-    skgpu::ContextType::kVulkan,
+        skgpu::ContextType::kVulkan,
 #endif
 #if defined(SK_DAWN)
-    skgpu::ContextType::kDawn,
+        skgpu::ContextType::kDawn,
 #endif
-// TODO(kjlubick) Other Ganesh backends
-    skgpu::ContextType::kMock,
+        // TODO(kjlubick) Other Ganesh backends
+        skgpu::ContextType::kMock,
 };
 
 // The macros defined in Test.h eventually call into this function. For each GPU backend that is
 // compiled in, we run the testFn with a freshly created
-void RunWithGaneshTestContexts(GrContextTestFn* testFn, ContextTypeFilterFn* filter,
-                               Reporter* reporter, const GrContextOptions& options) {
+void RunWithGaneshTestContexts(GrContextTestFn* testFn,
+                               ContextTypeFilterFn* filter,
+                               Reporter* reporter,
+                               const GrContextOptions& options) {
     sk_gpu_test::GrContextFactory factory(options);
 
     for (skgpu::ContextType ctxType : compiledInContextTypes) {
@@ -107,65 +128,38 @@ void RunWithGaneshTestContexts(GrContextTestFn* testFn, ContextTypeFilterFn* fil
             // Sync so any release/finished procs get called.
             ctxInfo.directContext()->flushAndSubmit(GrSyncCpu::kYes);
         } else {
-            SkDebugf("Unable to make direct context for Ganesh test.\n");
+            TestRunner::Log("Unable to make direct context for Ganesh test.");
             SkASSERT(false);
             return;
         }
     }
 }
 
-} // namespace skiatest
-#endif // #if defined(SK_GANESH)
+}  // namespace skiatest
+#endif  // #if defined(SK_GANESH)
 
-TestHarness CurrentTestHarness() {
-    return TestHarness::kBazelUnitTestRunner;
-}
-
-std::string now() {
-    std::time_t t = std::time(nullptr);
-    std::tm *now = std::gmtime(&t);
-
-    std::ostringstream oss;
-    oss << std::put_time(now, "%Y-%m-%d %H:%M:%S UTC");
-    return oss.str();
-}
+TestHarness CurrentTestHarness() { return TestHarness::kBazelUnitTestRunner; }
 
 void maybeRunTest(const char* name, std::function<void()> testFn) {
-    if (FLAGS_skip.contains(name)) {
-        SkDebugf("[%s] Skipping %s\n", now().c_str(), name);
+    if (!TestRunner::ShouldRunTestCase(name, FLAGS_match, FLAGS_skip)) {
+        TestRunner::Log("Skipping %s", name);
         return;
     }
 
-    SkDebugf("[%s] Running %s\n", now().c_str(), name);
+    TestRunner::Log("Running %s", name);
     testFn();
-    SkDebugf("[%s]\tDone\n", now().c_str());
+    TestRunner::Log("\tDone");
 }
 
 int main(int argc, char** argv) {
-#ifdef SK_BUILD_FOR_ANDROID
-    extern bool gSkDebugToStdOut; // If true, sends SkDebugf to stdout as well.
-    gSkDebugToStdOut = true;
-#endif
-
-    if (argc < 2) {
-        SkDebugf("Test runner invoked with no arguments.\n");
-    } else {
-        std::ostringstream oss;
-        oss << "Test runner invoked with arguments:";
-        for (int i = 1; i < argc; i++) {
-            oss << " " << argv[i];
-        }
-        SkDebugf("%s\n", oss.str().c_str());
-    }
+    TestRunner::InitAndLogCmdlineArgs(argc, argv);
 
     CommandLineFlags::Parse(argc, argv);
 
     BazelReporter reporter;
     for (skiatest::Test test : skiatest::TestRegistry::Range()) {
         if (test.fTestType == skiatest::TestType::kCPU) {
-            maybeRunTest(test.fName, [&]() {
-                test.cpu(&reporter);
-            });
+            maybeRunTest(test.fName, [&]() { test.cpu(&reporter); });
         }
     }
 
@@ -182,9 +176,7 @@ int main(int argc, char** argv) {
     grCtxOptions.fReduceOpsTaskSplitting = GrContextOptions::Enable::kNo;
     for (skiatest::Test test : skiatest::TestRegistry::Range()) {
         if (test.fTestType == skiatest::TestType::kGanesh) {
-            maybeRunTest(test.fName, [&]() {
-                test.ganesh(&reporter, grCtxOptions);
-            });
+            maybeRunTest(test.fName, [&]() { test.ganesh(&reporter, grCtxOptions); });
         }
     }
 #endif
@@ -192,9 +184,9 @@ int main(int argc, char** argv) {
     // TODO(kjlubick) Graphite support
 
     if (reporter.ok()) {
-        SkDebugf("PASS\n");
+        TestRunner::Log("PASS");
         return 0;
     }
-    SkDebugf("FAIL\n");
+    TestRunner::Log("FAIL");
     return 1;
 }

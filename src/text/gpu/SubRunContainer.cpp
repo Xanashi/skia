@@ -24,6 +24,7 @@
 #include "include/core/SkTypes.h"
 #include "include/effects/SkDashPathEffect.h"
 #include "include/private/SkColorData.h"
+#include "include/private/base/SkFloatingPoint.h"
 #include "include/private/base/SkOnce.h"
 #include "include/private/base/SkTArray.h"
 #include "include/private/base/SkTLogic.h"
@@ -65,7 +66,7 @@
 
 class GrRecordingContext;
 
-#if defined(SK_GANESH)
+#if defined(SK_GANESH) || defined(SK_USE_LEGACY_GANESH_TEXT_APIS)
 #include "src/gpu/ganesh/GrClip.h"
 #include "src/gpu/ganesh/GrColorInfo.h"
 #include "src/gpu/ganesh/GrFragmentProcessor.h"
@@ -75,7 +76,7 @@ class GrRecordingContext;
 #include "src/gpu/ganesh/effects/GrDistanceFieldGeoProc.h"
 #include "src/gpu/ganesh/ops/AtlasTextOp.h"
 using AtlasTextOp = skgpu::ganesh::AtlasTextOp;
-#endif  // defined(SK_GANESH)
+#endif  // defined(SK_GANESH) || defined(SK_USE_LEGACY_GANESH_TEXT_APIS)
 
 using namespace skia_private;
 using namespace skglyph;
@@ -113,7 +114,7 @@ using namespace sktext;
 using namespace sktext::gpu;
 
 namespace {
-#if defined(SK_GANESH)
+#if defined(SK_GANESH) || defined(SK_USE_LEGACY_GANESH_TEXT_APIS)
 SkPMColor4f calculate_colors(skgpu::ganesh::SurfaceDrawContext* sdc,
                              const SkPaint& paint,
                              const SkMatrix& matrix,
@@ -135,7 +136,7 @@ SkMatrix position_matrix(const SkMatrix& drawMatrix, SkPoint drawOrigin) {
     SkMatrix position_matrix = drawMatrix;
     return position_matrix.preTranslate(drawOrigin.x(), drawOrigin.y());
 }
-#endif  // defined(SK_GANESH)
+#endif  // defined(SK_GANESH) || defined(SK_USE_LEGACY_GANESH_TEXT_APIS)
 
 SkSpan<const SkPackedGlyphID> get_packedIDs(SkZip<const SkPackedGlyphID, const SkPoint> accepted) {
     return accepted.get<0>();
@@ -509,7 +510,10 @@ std::optional<DrawableOpSubmitter> DrawableOpSubmitter::MakeFromBuffer(
         idsOrDrawables[i].fGlyphID = SkTo<SkGlyphID>(buffer.readInt());
     }
 
-    SkASSERT(buffer.isValid());
+    if (!buffer.isValid()) {
+        return std::nullopt;
+    }
+
     return DrawableOpSubmitter{strikeToSourceScale,
                                positions,
                                SkSpan(idsOrDrawables, glyphCount),
@@ -633,7 +637,7 @@ const AtlasSubRun* DrawableSubRun::testingOnly_atlasSubRun() const {
     return nullptr;
 }
 
-#if defined(SK_GANESH)
+#if defined(SK_GANESH) || defined(SK_USE_LEGACY_GANESH_TEXT_APIS)
 enum ClipMethod {
     kClippedOut,
     kUnclipped,
@@ -673,7 +677,7 @@ calculate_clip(const GrClip* clip, SkRect deviceBounds, SkRect glyphBounds) {
     }
     return {kGPUClipped, SkIRect::MakeEmpty()};
 }
-#endif  // defined(SK_GANESH)
+#endif  // defined(SK_GANESH) || defined(SK_USE_LEGACY_GANESH_TEXT_APIS)
 
 // -- DirectMaskSubRun -----------------------------------------------------------------------------
 class DirectMaskSubRun final : public SubRun, public AtlasSubRun {
@@ -725,7 +729,7 @@ public:
               sk_sp<SkRefCnt> subRunStorage,
               const AtlasDrawDelegate& drawAtlas) const override {
         drawAtlas(this, drawOrigin, paint, std::move(subRunStorage),
-                  {/* isSDF = */false, fVertexFiller.isLCD()});
+                  {/* isSDF = */false, fVertexFiller.isLCD(), fVertexFiller.grMaskType()});
     }
 
     int unflattenSize() const override {
@@ -754,7 +758,7 @@ public:
         fGlyphs.packedGlyphIDToGlyph(cache);
     }
 
-#if defined(SK_GANESH)
+#if defined(SK_GANESH) || defined(SK_USE_LEGACY_GANESH_TEXT_APIS)
     size_t vertexStride(const SkMatrix& drawMatrix) const override {
         return fVertexFiller.vertexStride(drawMatrix);
     }
@@ -841,7 +845,7 @@ public:
                                      clip,
                                      vertexDst);
     }
-#endif  // defined(SK_GANESH)
+#endif  // defined(SK_GANESH) || defined(SK_USE_LEGACY_GANESH_TEXT_APIS)
 
     std::tuple<bool, int> regenerateAtlas(int begin, int end,
                                           RegenerateAtlasDelegate regenerateAtlas) const override {
@@ -965,10 +969,10 @@ public:
               sk_sp<SkRefCnt> subRunStorage,
               const AtlasDrawDelegate& drawAtlas) const override {
         drawAtlas(this, drawOrigin, paint, std::move(subRunStorage),
-                  {/* isSDF = */false, fVertexFiller.isLCD()});
+                  {/* isSDF = */false, fVertexFiller.isLCD(), fVertexFiller.grMaskType()});
     }
 
-#if defined(SK_GANESH)
+#if defined(SK_GANESH) || defined(SK_USE_LEGACY_GANESH_TEXT_APIS)
 
     size_t vertexStride(const SkMatrix& drawMatrix) const override {
         return fVertexFiller.vertexStride(drawMatrix);
@@ -1025,7 +1029,7 @@ public:
                                      clip,
                                      vertexDst);
     }
-#endif  // defined(SK_GANESH)
+#endif  // defined(SK_GANESH) || defined(SK_USE_LEGACY_GANESH_TEXT_APIS)
 
     std::tuple<bool, int> regenerateAtlas(int begin, int end,
                                           RegenerateAtlasDelegate regenerateAtlas) const override {
@@ -1066,7 +1070,7 @@ bool has_some_antialiasing(const SkFont& font ) {
 
 #if !defined(SK_DISABLE_SDF_TEXT)
 
-#if defined(SK_GANESH)
+#if defined(SK_GANESH) || defined(SK_USE_LEGACY_GANESH_TEXT_APIS)
 
 static std::tuple<AtlasTextOp::MaskType, uint32_t, bool> calculate_sdf_parameters(
         const skgpu::ganesh::SurfaceDrawContext& sdc,
@@ -1075,13 +1079,11 @@ static std::tuple<AtlasTextOp::MaskType, uint32_t, bool> calculate_sdf_parameter
         bool isAntiAliased) {
     const GrColorInfo& colorInfo = sdc.colorInfo();
     const SkSurfaceProps& props = sdc.surfaceProps();
-    bool isBGR = SkPixelGeometryIsBGR(props.pixelGeometry());
-    bool isLCD = useLCDText && SkPixelGeometryIsH(props.pixelGeometry());
     using MT = AtlasTextOp::MaskType;
+    bool isLCD = useLCDText && props.pixelGeometry() != kUnknown_SkPixelGeometry;
     MT maskType = !isAntiAliased ? MT::kAliasedDistanceField
-                  : isLCD ? (isBGR ? MT::kLCDBGRDistanceField
-                                          : MT::kLCDDistanceField)
-                                 : MT::kGrayscaleDistanceField;
+                                 : isLCD ? MT::kLCDDistanceField
+                                         : MT::kGrayscaleDistanceField;
 
     bool useGammaCorrectDistanceTable = colorInfo.isLinearlyBlended();
     uint32_t DFGPFlags = drawMatrix.isSimilarity() ? kSimilarity_DistanceFieldEffectFlag : 0;
@@ -1091,13 +1093,16 @@ static std::tuple<AtlasTextOp::MaskType, uint32_t, bool> calculate_sdf_parameter
     DFGPFlags |= drawMatrix.hasPerspective() ? kPerspective_DistanceFieldEffectFlag : 0;
 
     if (isLCD) {
+        bool isBGR = SkPixelGeometryIsBGR(props.pixelGeometry());
+        bool isVertical = SkPixelGeometryIsV(props.pixelGeometry());
         DFGPFlags |= kUseLCD_DistanceFieldEffectFlag;
-        DFGPFlags |= MT::kLCDBGRDistanceField == maskType ? kBGR_DistanceFieldEffectFlag : 0;
+        DFGPFlags |= isBGR ? kBGR_DistanceFieldEffectFlag : 0;
+        DFGPFlags |= isVertical ? kPortrait_DistanceFieldEffectFlag : 0;
     }
     return {maskType, DFGPFlags, useGammaCorrectDistanceTable};
 }
 
-#endif  // defined(SK_GANESH)
+#endif  // defined(SK_GANESH) || defined(SK_USE_LEGACY_GANESH_TEXT_APIS)
 
 class SDFTSubRun final : public SubRun, public AtlasSubRun {
 public:
@@ -1195,10 +1200,10 @@ public:
               sk_sp<SkRefCnt> subRunStorage,
               const AtlasDrawDelegate& drawAtlas) const override {
         drawAtlas(this, drawOrigin, paint, std::move(subRunStorage),
-                  {/* isSDF = */true, /* isLCD = */fUseLCDText});
+                  {/* isSDF = */true, /* isLCD = */fUseLCDText, skgpu::MaskFormat::kA8});
     }
 
-#if defined(SK_GANESH)
+#if defined(SK_GANESH) || defined(SK_USE_LEGACY_GANESH_TEXT_APIS)
     size_t vertexStride(const SkMatrix& drawMatrix) const override {
         return fVertexFiller.vertexStride(drawMatrix);
     }
@@ -1262,7 +1267,7 @@ public:
                                      vertexDst);
     }
 
-#endif  // defined(SK_GANESH)
+#endif  // defined(SK_GANESH) || defined(SK_USE_LEGACY_GANESH_TEXT_APIS)
 
     std::tuple<bool, int> regenerateAtlas(int begin, int end,
                                           RegenerateAtlasDelegate regenerateAtlas) const override {
@@ -1349,7 +1354,6 @@ SubRunOwner SubRun::MakeFromBuffer(SkReadBuffer& buffer,
             DrawableSubRun::MakeFromBuffer,
     };
     int subRunTypeInt = buffer.readInt();
-    SkASSERT(kBad < subRunTypeInt && subRunTypeInt < kSubRunStreamTagCount);
     if (!buffer.validate(kBad < subRunTypeInt && subRunTypeInt < kSubRunStreamTagCount)) {
         return nullptr;
     }
@@ -1402,7 +1406,6 @@ SubRunContainerOwner SubRunContainer::MakeFromBufferInAlloc(SkReadBuffer& buffer
     SubRunContainerOwner container = alloc->makeUnique<SubRunContainer>(positionMatrix);
 
     int subRunCount = buffer.readInt();
-    SkASSERT(subRunCount > 0);
     if (!buffer.validate(subRunCount > 0)) { return nullptr; }
     for (int i = 0; i < subRunCount; ++i) {
         auto subRunOwner = SubRun::MakeFromBuffer(buffer, alloc, client);
@@ -1449,7 +1452,7 @@ prepare_for_SDFT_drawing(StrikeForGPU* strike,
     SkGlyphRect boundingRect = skglyph::empty_rect();
     StrikeMutationMonitor m{strike};
     for (const auto [glyphID, pos] : source) {
-        if (!SkScalarsAreFinite(pos.x(), pos.y())) {
+        if (!SkIsFinite(pos.x(), pos.y())) {
             continue;
         }
 
@@ -1503,7 +1506,7 @@ prepare_for_direct_mask_drawing(StrikeForGPU* strike,
     SkGlyphRect boundingRect = skglyph::empty_rect();
     StrikeMutationMonitor m{strike};
     for (auto [glyphID, pos] : source) {
-        if (!SkScalarsAreFinite(pos.x(), pos.y())) {
+        if (!SkIsFinite(pos.x(), pos.y())) {
             continue;
         }
 
@@ -1546,7 +1549,7 @@ prepare_for_mask_drawing(StrikeForGPU* strike,
     SkGlyphRect boundingRect = skglyph::empty_rect();
     StrikeMutationMonitor m{strike};
     for (auto [glyphID, pos] : source) {
-        if (!SkScalarsAreFinite(pos.x(), pos.y())) {
+        if (!SkIsFinite(pos.x(), pos.y())) {
             continue;
         }
 
@@ -1583,7 +1586,7 @@ prepare_for_path_drawing(StrikeForGPU* strike,
     int rejectedSize = 0;
     StrikeMutationMonitor m{strike};
     for (const auto [glyphID, pos] : source) {
-        if (!SkScalarsAreFinite(pos.x(), pos.y())) {
+        if (!SkIsFinite(pos.x(), pos.y())) {
             continue;
         }
 
@@ -1611,7 +1614,7 @@ std::tuple<SkZip<const SkGlyphID, const SkPoint>, SkZip<SkGlyphID, SkPoint>>
     int rejectedSize = 0;
     StrikeMutationMonitor m{strike};
     for (const auto [glyphID, pos] : source) {
-        if (!SkScalarsAreFinite(pos.x(), pos.y())) {
+        if (!SkIsFinite(pos.x(), pos.y())) {
             continue;
         }
 
@@ -1888,7 +1891,7 @@ SubRunContainerOwner SubRunContainer::MakeInAlloc(
                 SkPoint center = glyphRunList.sourceBounds().center();
                 SkScalar maxAreaScale = SkMatrixPriv::DifferentialAreaScale(creationMatrix, center);
                 SkScalar perspectiveFactor = 1;
-                if (SkScalarIsFinite(maxAreaScale) && !SkScalarNearlyZero(maxAreaScale)) {
+                if (SkIsFinite(maxAreaScale) && !SkScalarNearlyZero(maxAreaScale)) {
                     perspectiveFactor = SkScalarSqrt(maxAreaScale);
                 }
 
@@ -1913,24 +1916,18 @@ SubRunContainerOwner SubRunContainer::MakeInAlloc(
                         strikeSpec.findOrCreateScopedStrike(strikeCache);
                 const SkScalar maxDimension =
                         find_maximum_glyph_dimension(gaugingStrike.get(), glyphs);
-                if (maxDimension == 0) {
-                    // Text Scalers don't create glyphs with a dimension larger than 65535. For very
-                    // large sizes, this will cause all the dimensions to go to zero. Use 65535 as
-                    // the dimension.
-                    // TODO: There is a problem where a small character (say .) and a large
-                    //  character (say M) are in the same run. If the run is scaled to be very
-                    //  large, then the M may return 0 because its dimensions are > 65535, but
-                    //  the small character produces regular result because its largest dimension
-                    //  is < 65535. This will create an improper scale factor causing the M to be
-                    //  too large to fit in the atlas. Tracked by skia:13714.
-                    return 65535.0f;
-                }
+                // TODO: There is a problem where a small character (say .) and a large
+                //  character (say M) are in the same run. If the run is scaled to be very
+                //  large, then the M may return 0 because its dimensions are > 65535, but
+                //  the small character produces regular result because its largest dimension
+                //  is < 65535. This will create an improper scale factor causing the M to be
+                //  too large to fit in the atlas. Tracked by skia:13714.
                 return maxDimension;
             };
 
             // Condition the creationMatrix so that glyphs fit in the atlas.
             for (SkScalar maxDimension = maxGlyphDimension(creationMatrix);
-                 maxDimension <= 0 || kMaxBilerpAtlasDimension < maxDimension;
+                 kMaxBilerpAtlasDimension < maxDimension;
                  maxDimension = maxGlyphDimension(creationMatrix))
             {
                 // The SkScalerContext has a limit of 65536 maximum dimension.

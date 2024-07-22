@@ -162,12 +162,12 @@
     M(load_af16)   M(load_af16_dst) M(store_af16)  M(gather_af16)              \
     M(load_rgf16)  M(load_rgf16_dst) M(store_rgf16) M(gather_rgf16)            \
     M(load_f32)    M(load_f32_dst)  M(store_f32)   M(gather_f32)               \
-    M(load_rgf32)                   M(store_rgf32)                             \
     M(load_1010102) M(load_1010102_dst) M(store_1010102) M(gather_1010102)     \
     M(load_1010102_xr) M(load_1010102_xr_dst) M(store_1010102_xr)              \
     M(gather_1010102_xr)                                                       \
     M(load_10x6) M(load_10x6_dst) M(store_10x6) M(gather_10x6)                 \
-    M(store_u16_be)                                                            \
+    M(gather_10101010_xr) M(load_10101010_xr) M(load_10101010_xr_dst)          \
+    M(store_10101010_xr)                                                       \
     M(store_src_rg) M(load_src_rg)                                             \
     M(byte_tables)                                                             \
     M(colorburn) M(colordodge) M(softlight)                                    \
@@ -176,6 +176,7 @@
     M(parametric) M(gamma_) M(PQish) M(HLGish) M(HLGinvish)                    \
     M(rgb_to_hsl) M(hsl_to_rgb)                                                \
     M(css_lab_to_xyz) M(css_oklab_to_linear_srgb)                              \
+    M(css_oklab_gamut_map_to_linear_srgb)                                      \
     M(css_hcl_to_lab)                                                          \
     M(css_hsl_to_srgb) M(css_hwb_to_srgb)                                      \
     M(gauss_a_to_rgba)                                                         \
@@ -189,6 +190,7 @@
     M(bicubic_n3x) M(bicubic_n1x) M(bicubic_p1x) M(bicubic_p3x)                \
     M(bicubic_n3y) M(bicubic_n1y) M(bicubic_p1y) M(bicubic_p3y)                \
     M(accumulate)                                                              \
+    M(perlin_noise)                                                            \
     M(mipmap_linear_init) M(mipmap_linear_update) M(mipmap_linear_finish)      \
     M(xy_to_2pt_conical_strip)                                                 \
     M(xy_to_2pt_conical_focal_on_circle)                                       \

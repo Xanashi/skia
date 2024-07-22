@@ -10,13 +10,14 @@
 
 #include "include/core/SkRefCnt.h"
 #include "include/gpu/vk/GrVkTypes.h"
+#include "include/gpu/vk/VulkanTypes.h"
 
 namespace skgpu {
-class MutableTextureStateRef;
+class MutableTextureState;
 }
 
 GrVkImageInfo GrVkImageInfoWithMutableState(const GrVkImageInfo&,
-                                            const skgpu::MutableTextureStateRef*);
+                                            const skgpu::MutableTextureState*);
 
 struct GrVkImageSpec {
     GrVkImageSpec()
@@ -35,7 +36,7 @@ struct GrVkImageSpec {
     VkImageTiling fImageTiling;
     VkFormat fFormat;
     VkImageUsageFlags fImageUsageFlags;
-    GrVkYcbcrConversionInfo fYcbcrConversionInfo;
+    skgpu::VulkanYcbcrConversionInfo fYcbcrConversionInfo;
     VkSharingMode fSharingMode;
 };
 
