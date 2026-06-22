@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 Google Inc.
+ * Copyright 2017 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -11,10 +11,10 @@
 #include "include/core/SkRect.h"
 #include "include/core/SkSize.h"
 #include "include/gpu/GpuTypes.h"
-#include "include/gpu/GrDirectContext.h"
-#include "include/gpu/GrRecordingContext.h"
-#include "include/gpu/GrTypes.h"
-#include "include/private/base/SkAssert.h"
+#include "include/gpu/ganesh/GrDirectContext.h"
+#include "include/gpu/ganesh/GrRecordingContext.h"
+#include "include/gpu/ganesh/GrTypes.h"
+#include "include/private/SkAssert.h"
 #include "include/private/gpu/ganesh/GrTypesPriv.h"
 #include "src/gpu/RefCntedCallback.h"
 #include "src/gpu/SkBackingFit.h"
@@ -33,6 +33,7 @@
 #include "src/gpu/ganesh/GrSurfaceProxy.h"
 #include "src/gpu/ganesh/GrTexture.h"
 #include "src/gpu/ganesh/GrTextureProxy.h"
+#include "src/gpu/ganesh/SkGaneshRecorder.h"
 #include "src/gpu/ganesh/SkGr.h"
 
 #include <functional>
@@ -94,6 +95,14 @@ GrBackendTextureImageGenerator::~GrBackendTextureImageGenerator() {
 
 bool GrBackendTextureImageGenerator::onIsProtected() const {
     return fBackendTexture.isProtected();
+}
+
+bool GrBackendTextureImageGenerator::onIsValid(SkRecorder* recorder) const {
+    auto gRecorder = AsGaneshRecorder(recorder);
+    if (!gRecorder) {
+        return false;
+    }
+    return !gRecorder->recordingContext()->abandoned();
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////

@@ -8,15 +8,15 @@
 #include "include/core/SkPoint.h"
 #include "include/core/SkScalar.h"
 #include "include/core/SkTypes.h"
-#include "include/private/base/SkDebug.h"
-#include "include/private/base/SkFixed.h"
-#include "include/private/base/SkFloatingPoint.h"
-#include "include/private/base/SkMath.h"
-#include "include/private/base/SkTPin.h"
-#include "src/base/SkEndian.h"
-#include "src/base/SkHalf.h"
-#include "src/base/SkMathPriv.h"
-#include "src/base/SkRandom.h"
+#include "include/private/SkDebug.h"
+#include "include/private/SkFixed.h"
+#include "include/private/SkFloatingPoint.h"
+#include "include/private/SkMath.h"
+#include "include/private/SkTPin.h"
+#include "src/core/SkEndian.h"
+#include "src/core/SkHalf.h"
+#include "src/core/SkMathPriv.h"
+#include "src/core/SkRandom.h"
 #include "tests/Test.h"
 
 #include <array>
@@ -24,44 +24,6 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-
-static void test_clz(skiatest::Reporter* reporter) {
-    REPORTER_ASSERT(reporter, 32 == SkCLZ(0));
-    REPORTER_ASSERT(reporter, 31 == SkCLZ(1));
-    REPORTER_ASSERT(reporter, 1 == SkCLZ(1 << 30));
-    REPORTER_ASSERT(reporter, 1 == SkCLZ((1 << 30) | (1 << 24) | 1));
-    REPORTER_ASSERT(reporter, 0 == SkCLZ(~0U));
-
-    SkRandom rand;
-    for (int i = 0; i < 1000; ++i) {
-        uint32_t mask = rand.nextU();
-        // need to get some zeros for testing, but in some obscure way so the
-        // compiler won't "see" that, and work-around calling the functions.
-        mask >>= (mask & 31);
-        int intri = SkCLZ(mask);
-        int porta = SkCLZ_portable(mask);
-        REPORTER_ASSERT(reporter, intri == porta, "mask:%u intri:%d porta:%d", mask, intri, porta);
-    }
-}
-
-static void test_ctz(skiatest::Reporter* reporter) {
-    REPORTER_ASSERT(reporter, 32 == SkCTZ(0));
-    REPORTER_ASSERT(reporter, 0 == SkCTZ(1));
-    REPORTER_ASSERT(reporter, 30 == SkCTZ(1 << 30));
-    REPORTER_ASSERT(reporter, 2 == SkCTZ((1 << 30) | (1 << 24) | (1 << 2)));
-    REPORTER_ASSERT(reporter, 0 == SkCTZ(~0U));
-
-    SkRandom rand;
-    for (int i = 0; i < 1000; ++i) {
-        uint32_t mask = rand.nextU();
-        // need to get some zeros for testing, but in some obscure way so the
-        // compiler won't "see" that, and work-around calling the functions.
-        mask >>= (mask & 31);
-        int intri = SkCTZ(mask);
-        int porta = SkCTZ_portable(mask);
-        REPORTER_ASSERT(reporter, intri == porta, "mask:%u intri:%d porta:%d", mask, intri, porta);
-    }
-}
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -436,60 +398,15 @@ DEF_TEST(PopCount, reporter) {
     }
 }
 
-DEF_TEST(NthSet, reporter) {
-    {
-        uint32_t testVal = 0x1;
-        uint32_t recreated = 0;
-        int result = SkNthSet(testVal, 0);
-        recreated |= (0x1 << result);
-        REPORTER_ASSERT(reporter, testVal == recreated);
-    }
+static void test_clz(skiatest::Reporter* reporter) {
+    auto expect = [reporter](uint32_t value, int count) {
+        REPORTER_ASSERT(reporter, SkCLZ(value)          == count);
+    };
 
-    {
-        uint32_t testVal = 0x80000000;
-        uint32_t recreated = 0;
-        int result = SkNthSet(testVal, 0);
-        recreated |= (0x1 << result);
-        REPORTER_ASSERT(reporter, testVal == recreated);
-    }
-
-    {
-        uint32_t testVal = 0x55555555;
-        uint32_t recreated = 0;
-        for (int i = 0; i < 16; ++i) {
-            int result = SkNthSet(testVal, i);
-            REPORTER_ASSERT(reporter, result == 2*i);
-            recreated |= (0x1 << result);
-        }
-        REPORTER_ASSERT(reporter, testVal == recreated);
-    }
-
-    SkRandom rand;
-    for (int i = 0; i < 100; ++i) {
-        int expectedNumSetBits = 0;
-        uint32_t testVal = 0;
-
-        int numTries = rand.nextULessThan(33);
-        for (int j = 0; j < numTries; ++j) {
-            int bit = rand.nextRangeU(0, 31);
-
-            if (testVal & (0x1 << bit)) {
-                continue;
-            }
-
-            ++expectedNumSetBits;
-            testVal |= 0x1 << bit;
-        }
-
-        REPORTER_ASSERT(reporter, SkPopCount(testVal) == expectedNumSetBits);
-        uint32_t recreated = 0;
-
-        for (int j = 0; j < expectedNumSetBits; ++j) {
-            int index = SkNthSet(testVal, j);
-            recreated |= (0x1 << index);
-        }
-
-        REPORTER_ASSERT(reporter, recreated == testVal);
+    expect(0, 32);
+    for (int i = 0; i < 32; ++i) {
+        uint32_t value = 0xFFFFFFFF;
+        expect(value >> i, i);
     }
 }
 
@@ -561,7 +478,6 @@ DEF_TEST(Math, reporter) {
     unittest_isfinite<double>(reporter);
     unittest_half(reporter);
     test_rsqrt(reporter, sk_float_rsqrt);
-    test_rsqrt(reporter, sk_float_rsqrt_portable);
 
     for (i = 0; i < 10000; i++) {
         SkFixed numer = rand.nextS();
@@ -591,7 +507,6 @@ DEF_TEST(Math, reporter) {
     if ((false)) test_blend31();  // avoid bit rot, suppress warning
 
     test_clz(reporter);
-    test_ctz(reporter);
 }
 
 template <typename T> struct PairRec {
@@ -633,7 +548,6 @@ DEF_TEST(TestEndian, reporter) {
 
 template <typename T>
 static void test_divmod(skiatest::Reporter* r) {
-#if !defined(__MSVC_RUNTIME_CHECKS)
     const struct {
         T numer;
         T denom;
@@ -669,7 +583,6 @@ static void test_divmod(skiatest::Reporter* r) {
         REPORTER_ASSERT(r, numer/denom == div);
         REPORTER_ASSERT(r, numer%denom == mod);
     }
-#endif
 }
 
 DEF_TEST(divmod_u8, r) {
@@ -705,13 +618,13 @@ DEF_TEST(divmod_s64, r) {
 }
 
 static void test_nextsizepow2(skiatest::Reporter* r, size_t test, size_t expectedAns) {
-    size_t ans = GrNextSizePow2(test);
+    size_t ans = SkNextSizePow2(test);
 
     REPORTER_ASSERT(r, ans == expectedAns);
     //SkDebugf("0x%zx -> 0x%zx (0x%zx)\n", test, ans, expectedAns);
 }
 
-DEF_TEST(GrNextSizePow2, reporter) {
+DEF_TEST(SkNextSizePow2, reporter) {
     constexpr int kNumSizeTBits = 8 * sizeof(size_t);
 
     size_t test = 0, expectedAns = 1;
@@ -787,6 +700,40 @@ DEF_TEST(FloatSaturate64, reporter) {
     for (auto r : recs) {
         int64_t i = sk_float_saturate2int64(r.fFloat);
         REPORTER_ASSERT(reporter, r.fExpected64 == i);
+    }
+}
+
+DEF_TEST(SkNextPow2, reporter) {
+    // start off with some easy-to verify cases and some edge cases.
+    const struct {
+        int fInput;
+        int fExpected;
+    } cases[] = {
+        // 0 is undefined for the current implementation.
+        { 1, 1 },
+        { 2, 2 },
+        { 3, 4 },
+        { 4, 4 },
+        { 5, 8 },
+        { 1073741822, 1073741824},
+        { 1073741823, 1073741824},
+        { 1073741824, 1073741824}, // Anything larger than this will overflow
+    };
+
+    for (auto c : cases) {
+        int actual = SkNextPow2(c.fInput);
+        REPORTER_ASSERT(reporter, c.fExpected == actual,
+            "SkNextPow2(%d) == %d not %d", c.fInput, actual, c.fExpected);
+        REPORTER_ASSERT(reporter, actual == SkNextPow2(c.fInput));
+    }
+
+    // exhaustive search for all the between numbers
+    for (int i = 6; i < 63356; i++) {
+        int actual = SkNextPow2(i);
+        int expected = std::pow(2.f, std::ceil(logf(i)/logf(2)));
+        REPORTER_ASSERT(reporter, expected == actual,
+            "SkNextPow2(%d) == %d not %d", i, actual, expected);
+        REPORTER_ASSERT(reporter, actual == SkNextPow2(i));
     }
 }
 

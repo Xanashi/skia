@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Google Inc.
+ * Copyright 2023 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -177,7 +177,7 @@ private:
 };
 
 namespace {
-SkFourByteTag constexpr operator"" _t(const char* tagName, size_t size) {
+SkFourByteTag constexpr operator""_t(const char* tagName, size_t size) {
     SkASSERT(size == 4);
     return SkSetFourByteTag(tagName[0], tagName[1], tagName[2], tagName[3]);
 }

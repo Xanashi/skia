@@ -170,7 +170,7 @@ func TestRunSteps_PostSubmit_Success(t *testing.T) {
 	}
 
 	res := td.RunTestSteps(t, false, func(ctx context.Context) error {
-		ctx = now.TimeTravelingContext(fakeNow).WithContext(ctx)
+		ctx = now.TimeTravelingContext(ctx, fakeNow)
 		ctx = td.WithExecRunFn(ctx, commandCollector.Run)
 		// Be in a temporary directory. We must restore the working directory after this test case
 		// finishes, or subsequent test cases that call os.Getwd() might fail with "getwd: no such file
@@ -341,7 +341,7 @@ func TestRunSteps_Tryjob_Success(t *testing.T) {
 	}
 
 	res := td.RunTestSteps(t, false, func(ctx context.Context) error {
-		ctx = now.TimeTravelingContext(fakeNow).WithContext(ctx)
+		ctx = now.TimeTravelingContext(ctx, fakeNow)
 		ctx = td.WithExecRunFn(ctx, commandCollector.Run)
 		// Be in a temporary directory. We must restore the working directory after this test case
 		// finishes, or subsequent test cases that call os.Getwd() might fail with "getwd: no such file
@@ -466,7 +466,7 @@ func setupMockGit(t *testing.T, repoState types.RepoState) (*gerrit_testutils.Mo
 
 	// Mock a Gitiles client.
 	urlMock := mockhttpclient.NewURLMock()
-	mockRepo := gitiles_testutils.NewMockRepo(t, gitBuilder.RepoUrl(), git.GitDir(gitBuilder.Dir()), urlMock)
+	mockRepo := gitiles_testutils.NewMockRepo(t, gitBuilder.RepoUrl(), git.CheckoutDir(gitBuilder.Dir()), urlMock)
 	mockRepo.MockGetCommit(ctx, repoState.Revision)
 	mockGitiles := gitiles.NewRepo(gitBuilder.RepoUrl(), urlMock.Client())
 	return mockGerrit, mockGitiles, repoState

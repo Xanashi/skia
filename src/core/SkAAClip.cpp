@@ -11,16 +11,17 @@
 #include "include/core/SkPath.h"
 #include "include/core/SkRegion.h"
 #include "include/core/SkTypes.h"
-#include "include/private/SkColorData.h"
-#include "include/private/base/SkCPUTypes.h"
-#include "include/private/base/SkDebug.h"
-#include "include/private/base/SkMacros.h"
-#include "include/private/base/SkMalloc.h"
-#include "include/private/base/SkMath.h"
-#include "include/private/base/SkTDArray.h"
-#include "include/private/base/SkTo.h"
+#include "include/private/SkCPUTypes.h"
+#include "include/private/SkDebug.h"
+#include "include/private/SkMacros.h"
+#include "include/private/SkMalloc.h"
+#include "include/private/SkMath.h"
+#include "include/private/SkTDArray.h"
+#include "include/private/SkTo.h"
 #include "src/core/SkBlitter.h"
+#include "src/core/SkColorData.h"
 #include "src/core/SkMask.h"
+#include "src/core/SkPathPriv.h"
 #include "src/core/SkScan.h"
 
 #include <algorithm>
@@ -836,12 +837,13 @@ bool SkAAClip::Builder::blitPath(SkAAClip* target, const SkPath& path, bool doAA
     Blitter blitter(this);
     SkRegion clip(fBounds);
 
+    const auto rc = SkResolveConvexity::kYes;
+    SkPathRaw raw = SkPathPriv::Raw(path, rc).value_or(SkPathRaw::Empty(path.getFillType()));
     if (doAA) {
-        SkScan::AntiFillPath(path, clip, &blitter, true);
+        SkScan::AntiFillPath(raw, clip, &blitter, true);
     } else {
-        SkScan::FillPath(path, clip, &blitter);
+        SkScan::FillPath(raw, clip, &blitter);
     }
-
     blitter.finish();
     return this->finish(target);
 }
@@ -1412,7 +1414,11 @@ bool SkAAClip::setPath(const SkPath& path, const SkIRect& clip, bool doAA) {
         ibounds = clip;
     } else {
         path.getBounds().roundOut(&ibounds);
-        if (ibounds.isEmpty() || !ibounds.intersect(clip)) {
+        // It's possible the bounds of our path might exceed SK_MaxS32 in width
+        // but since our clip is within that width (otherwise isEmpty() above
+        // would catch it), we can use isEmpty64() safely here. blitPath will
+        // interesect the two bounds before drawing.
+        if (ibounds.isEmpty64() || !ibounds.intersect(clip)) {
             return this->setEmpty();
         }
     }

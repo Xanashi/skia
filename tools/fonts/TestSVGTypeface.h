@@ -21,8 +21,8 @@
 #include "include/core/SkTypeface.h"
 #include "include/core/SkTypes.h"
 #include "include/pathops/SkPathOps.h"
-#include "include/private/base/SkMutex.h"
-#include "include/private/base/SkTArray.h"
+#include "include/private/SkMutex.h"
+#include "include/private/SkTArray.h"
 #include "src/core/SkTHash.h"
 
 #include <memory>
@@ -51,6 +51,17 @@ struct SkSVGTestTypefaceGlyphData {
 
 class TestSVGTypeface : public SkTypeface {
 public:
+    // OpenType EBDT/CBDT (non-PNG) bitmap data subtable formats. The same
+    // numeric values are defined by both the EBDT and CBDT tables for their
+    // alpha/monochrome subtables.
+    enum class BitmapDataFormat : int {
+        kSmallByteAligned = 1,  // small metrics, byte-aligned rows
+        kSmallBitAligned  = 2,  // small metrics, bit-aligned data
+        kSmallNoMetrics   = 5,  // bit-aligned, metrics live in EBLC
+        kBigByteAligned   = 6,  // big metrics, byte-aligned rows
+        kBigBitAligned    = 7,  // big metrics, bit-aligned data
+    };
+
     ~TestSVGTypeface() override;
     SkVector getAdvance(SkGlyphID) const;
     void getFontMetrics(SkFontMetrics* metrics) const;
@@ -58,6 +69,14 @@ public:
     static sk_sp<TestSVGTypeface> Default();
     static sk_sp<TestSVGTypeface> Planets();
     void                          exportTtxCbdt(SkWStream*, SkSpan<unsigned> strikeSizes) const;
+    void                          exportTtxCbdtAlpha(
+            SkWStream*,
+            SkSpan<unsigned> strikeSizes,
+            BitmapDataFormat imageFormat = BitmapDataFormat::kSmallByteAligned) const;
+    void                          exportTtxEbdt(
+            SkWStream*,
+            SkSpan<unsigned> strikeSizes,
+            BitmapDataFormat imageFormat = BitmapDataFormat::kSmallByteAligned) const;
     void                          exportTtxSbix(SkWStream*, SkSpan<unsigned> strikeSizes) const;
     void                          exportTtxColr(SkWStream*) const;
     virtual bool                  getPathOp(SkColor, SkPathOp*) const = 0;
@@ -81,7 +100,7 @@ protected:
     std::unique_ptr<SkScalerContext> onCreateScalerContext(const SkScalerContextEffects&,
                                                            const SkDescriptor* desc) const override;
     void onFilterRec(SkScalerContextRec* rec) const override;
-    void getGlyphToUnicodeMap(SkUnichar*) const override;
+    void getGlyphToUnicodeMap(SkSpan<SkUnichar>) const override;
     std::unique_ptr<SkAdvancedTypefaceMetrics> onGetAdvancedMetrics() const override;
 
     sk_sp<SkTypeface> onMakeClone(const SkFontArguments& args) const override {
@@ -90,7 +109,7 @@ protected:
 
     void onGetFontDescriptor(SkFontDescriptor* desc, bool* isLocal) const override = 0;
 
-    void onCharsToGlyphs(const SkUnichar* chars, int count, SkGlyphID glyphs[]) const override;
+    void onCharsToGlyphs(SkSpan<const SkUnichar>, SkSpan<SkGlyphID>) const override;
 
     void getPostScriptGlyphNames(SkString*) const override {}
 
@@ -104,17 +123,16 @@ protected:
 
     bool onGlyphMaskNeedsCurrentColor() const override { return false; }
 
-    int onGetVariationDesignPosition(SkFontArguments::VariationPosition::Coordinate coordinates[],
-                                     int coordinateCount) const override {
+    int onGetVariationDesignPosition(
+                         SkSpan<SkFontArguments::VariationPosition::Coordinate>) const override {
         return 0;
     }
 
-    int onGetVariationDesignParameters(SkFontParameters::Variation::Axis parameters[],
-                                       int parameterCount) const override {
+    int onGetVariationDesignParameters(SkSpan<SkFontParameters::Variation::Axis>) const override {
         return 0;
     }
 
-    int onGetTableTags(SkFontTableTag tags[]) const override { return 0; }
+    int onGetTableTags(SkSpan<SkFontTableTag>) const override { return 0; }
 
     size_t onGetTableData(SkFontTableTag tag,
                           size_t         offset,

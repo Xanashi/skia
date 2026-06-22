@@ -11,18 +11,19 @@
 #include "include/core/SkCanvas.h"
 #include "include/core/SkColorSpace.h"
 #include "include/core/SkImage.h"
+#include "include/core/SkSpan.h"
 #include "include/core/SkSurface.h"
 #include "include/gpu/GpuTypes.h"
 #include "include/gpu/graphite/Image.h"
 #include "include/gpu/graphite/Recorder.h"
 #include "include/gpu/graphite/Surface.h"
+#include "include/private/SkLog.h"
 #include "src/core/SkYUVAInfoLocation.h"
 #include "src/gpu/graphite/Caps.h"
-#include "src/gpu/graphite/Image_Graphite.h"
-#include "src/gpu/graphite/Log.h"
 #include "src/gpu/graphite/RecorderPriv.h"
 #include "src/gpu/graphite/ResourceProvider.h"
 #include "src/gpu/graphite/Texture.h"
+#include "src/gpu/graphite/TextureInfoPriv.h"
 #include "src/gpu/graphite/TextureProxy.h"
 #include "src/gpu/graphite/TextureProxyView.h"
 #include "src/gpu/graphite/TextureUtils.h"
@@ -42,8 +43,8 @@ static constexpr int kA = static_cast<int>(SkYUVAInfo::kA);
 
 static SkAlphaType yuva_alpha_type(const SkYUVAInfo& yuvaInfo) {
     // If an alpha channel is present we always use kPremul. This is because, although the planar
-    // data is always un-premul, the final interleaved RGBA sample produced in the shader is premul
-    // (and similar if flattened).
+    // data is always un-premul and the final interleaved RGBA sample produced in the shader is
+    // unpremul (and similar if flattened), the client is expecting premul.
     return yuvaInfo.hasAlpha() ? kPremul_SkAlphaType : kOpaque_SkAlphaType;
 }
 
@@ -56,10 +57,16 @@ Image_YUVA::Image_YUVA(const YUVAProxies& proxies,
                                        kAssumedColorType,
                                        yuva_alpha_type(yuvaInfo),
                                        std::move(imageColorSpace)),
-                     kNeedNewImageUniqueID)
+                     kNeedNewImageUniqueID,
+                     /*backingStorage=*/nullptr)
         , fProxies(std::move(proxies))
         , fYUVAInfo(yuvaInfo)
         , fUVSubsampleFactors(SkYUVAInfo::SubsamplingFactors(yuvaInfo.subsampling())) {
+    for (auto &proxy : fProxies) {
+        if (proxy) {
+            fPixelStorages.push_back(proxy.refProxy());
+        }
+    }
     // The caller should have checked this, just verifying.
     SkASSERT(fYUVAInfo.isValid());
     for (int i = 0; i < SkYUVAInfo::kYUVAChannelCount; ++i) {
@@ -70,7 +77,7 @@ Image_YUVA::Image_YUVA(const YUVAProxies& proxies,
         if (fProxies[i].proxy()->mipmapped() == Mipmapped::kNo) {
             fMipmapped = Mipmapped::kNo;
         }
-        if (fProxies[i].proxy()->isProtected()) {
+        if (fProxies[i].proxy()->isProtected() == Protected::kYes) {
             fProtected = Protected::kYes;
         }
     }
@@ -105,7 +112,7 @@ sk_sp<Image_YUVA> Image_YUVA::Make(const Caps* caps,
         if (planes[i].dimensions() != planeDimensions[i]) {
             return nullptr;
         }
-        pixmapChannelmasks[i] = caps->channelMask(planes[i].proxy()->textureInfo());
+        pixmapChannelmasks[i] = TextureInfoPriv::ChannelMask(planes[i].proxy()->textureInfo());
     }
 
     // Re-arrange the proxies from planes to channels
@@ -139,15 +146,25 @@ sk_sp<Image_YUVA> Image_YUVA::Make(const Caps* caps,
     for (int i = 0; i < SkYUVAInfo::kYUVAChannelCount; ++i) {
         auto [plane, channel] = locations[i];
         if (plane >= 0) {
-            // Compose the YUVA location with the data swizzle. replaceSwizzle() is used since
-            // selectChannelInR() effectively does the composition (vs. Swizzle::Concat).
+            // Compose the YUVA location with the data's read swizzle. This maps the data into the
+            // R channel for the rest of the YUV shader logic. We add an extra check to detect alpha
+            // only colortype swizzles (e.g. 000r), which can show up when wrapping single-channel
+            // planar data (the public APIs accept A8 or R8 for instance).
+            if (planes[plane].swizzle() == Swizzle("000r") ||
+                planes[plane].proxy()->format() == TextureFormat::kA8) {
+                // Pull the alpha channel into R, this is equivalent to having concatenated
+                // Swizzle("aaaa") with the plane's read swizzle.
+                channel = SkColorChannel::kA;
+            }
             Swizzle channelSwizzle = planes[plane].swizzle().selectChannelInR((int) channel);
+
+            // Use replaceSwizzle() since selectChannelInR effectively includes a Swizzle::Concat.
             channelProxies[i] = planes[plane].replaceSwizzle(channelSwizzle);
         } else if (i == kA) {
             // The alpha channel is allowed to be not provided, set it to an empty view
             channelProxies[i] = {};
         } else {
-            SKGPU_LOG_W("YUVA channel %d does not have a valid location", i);
+            SKIA_LOG_W("YUVA channel %d does not have a valid location", i);
             return nullptr;
         }
     }
@@ -171,11 +188,6 @@ sk_sp<Image_YUVA> Image_YUVA::WrapImages(const Caps* caps,
         if (!planes[i]) {
             // A null image, or not graphite-backed, or not backed by a single texture.
             return nullptr;
-        }
-        // The YUVA shader expects to sample from the red channel for single-channel textures, so
-        // reset the swizzle for alpha-only textures to compensate for that
-        if (images[i]->isAlphaOnly()) {
-            planes[i] = planes[i].makeSwizzle(Swizzle("aaaa"));
         }
     }
 
@@ -204,7 +216,7 @@ size_t Image_YUVA::textureSize() const {
             continue; // Null channels (A) have no size.
         }
         bool repeat = false;
-        for (int j = 0; j < i - 1; ++j) {
+        for (int j = i - 1; j >= 0; --j) {
             if (fProxies[i].proxy() == fProxies[j].proxy()) {
                 repeat = true;
                 break;

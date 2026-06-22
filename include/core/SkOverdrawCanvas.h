@@ -14,7 +14,7 @@
 #include "include/core/SkPaint.h"
 #include "include/core/SkSamplingOptions.h"
 #include "include/core/SkScalar.h"
-#include "include/private/base/SkAPI.h"
+#include "include/private/SkAPI.h"
 #include "include/utils/SkNWayCanvas.h"
 
 #include <cstddef>
@@ -44,7 +44,7 @@ struct SkRect;
 class SK_API SkOverdrawCanvas : public SkCanvasVirtualEnforcer<SkNWayCanvas> {
 public:
     /* Does not take ownership of canvas */
-    SkOverdrawCanvas(SkCanvas*);
+    explicit SkOverdrawCanvas(SkCanvas*);
 
     void onDrawTextBlob(const SkTextBlob*, SkScalar, SkScalar, const SkPaint&) override;
     void onDrawGlyphRunList(

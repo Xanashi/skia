@@ -9,9 +9,9 @@
 #include "include/core/SkPoint.h"
 #include "include/core/SkScalar.h"
 #include "include/core/SkTypes.h"
-#include "include/private/base/SkTo.h"
+#include "include/private/SkTo.h"
 #include "modules/skshaper/include/SkShaper.h"
-#include "src/base/SkUTF.h"
+#include "src/core/SkUTF.h"
 
 #if !defined(SK_DISABLE_LEGACY_SKSHAPER_FUNCTIONS)
 #include "include/core/SkFontMgr.h"
@@ -192,10 +192,10 @@ void SkShaperPrimitive::shape(const char* utf8,
     }
 
     std::unique_ptr<SkGlyphID[]> glyphs(new SkGlyphID[glyphCount]);
-    font.textToGlyphs(utf8, utf8Bytes, SkTextEncoding::kUTF8, glyphs.get(), glyphCount);
+    font.textToGlyphs(utf8, utf8Bytes, SkTextEncoding::kUTF8, {glyphs.get(), (size_t)glyphCount});
 
     std::unique_ptr<SkScalar[]> advances(new SkScalar[glyphCount]);
-    font.getWidthsBounds(glyphs.get(), glyphCount, advances.get(), nullptr, nullptr);
+    font.getWidths({glyphs.get(), (size_t)glyphCount}, {advances.get(), (size_t)glyphCount});
 
     size_t glyphOffset = 0;
     size_t utf8Offset = 0;
@@ -207,8 +207,7 @@ void SkShaperPrimitive::shape(const char* utf8,
 
         size_t numGlyphs = SkUTF::CountUTF8(utf8, bytesVisible);
         const RunHandler::RunInfo info = {
-            font,
-            0,
+            font, 0, 0, "",
             { font.measureText(utf8, bytesVisible, SkTextEncoding::kUTF8), 0 },
             numGlyphs,
             RunHandler::Range(utf8Offset, bytesVisible)

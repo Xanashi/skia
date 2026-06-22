@@ -1,17 +1,22 @@
 /*
- * Copyright 2020 Google Inc.
+ * Copyright 2020 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
 
-#include <vector>
-
 #include "include/utils/SkNoDrawCanvas.h"
+#include "modules/skresources/include/SkResources.h"
 #include "modules/skshaper/utils/FactoryHelpers.h"
+#include "modules/svg/include/SkSVGIDMapper.h"
+#include "modules/svg/include/SkSVGRenderContext.h"
+#include "modules/svg/include/SkSVGText.h"
+#include "modules/svg/include/SkSVGTypes.h"
 #include "modules/svg/src/SkSVGTextPriv.h"
 #include "tests/Test.h"
 #include "tools/fonts/FontToolUtils.h"
+
+#include <vector>
 
 DEF_TEST(Svg_Text_PosProvider, r) {
     const auto L = [](float x) { return SkSVGLength(x); };

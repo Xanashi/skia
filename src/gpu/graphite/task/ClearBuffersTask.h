@@ -8,33 +8,44 @@
 #ifndef skgpu_graphite_task_ClearBuffersTask_DEFINED
 #define skgpu_graphite_task_ClearBuffersTask_DEFINED
 
-#include "include/private/base/SkTArray.h"
+#include "include/core/SkRefCnt.h"
+#include "include/private/SkTArray.h"
 #include "src/gpu/graphite/ResourceTypes.h"
 #include "src/gpu/graphite/task/Task.h"
 
+#include <utility>
+
 namespace skgpu::graphite {
+
+class CommandBuffer;
+class Context;
+class ResourceProvider;
+class RuntimeEffectDictionary;
+class ScratchResourceManager;
 
 /**
  * Task that clears a region of a list of buffers to 0.
  */
 class ClearBuffersTask final : public Task {
 public:
-    static sk_sp<ClearBuffersTask> Make(skia_private::TArray<ClearBufferInfo>);
+    static sk_sp<ClearBuffersTask> Make(skia_private::TArray<BindBufferInfo>);
     ~ClearBuffersTask() override;
 
     Status prepareResources(ResourceProvider*,
                             ScratchResourceManager*,
-                            const RuntimeEffectDictionary*) override {
+                            sk_sp<const RuntimeEffectDictionary>) override {
         return Status::kSuccess;
     }
 
     Status addCommands(Context*, CommandBuffer*, ReplayTargetData) override;
 
+    SK_DUMP_TASKS_CODE(const char* getTaskName() const override { return "Clear Buffers Task"; })
+
 private:
-    explicit ClearBuffersTask(skia_private::TArray<ClearBufferInfo> clearList)
+    explicit ClearBuffersTask(skia_private::TArray<BindBufferInfo> clearList)
             : fClearList(std::move(clearList)) {}
 
-    skia_private::TArray<ClearBufferInfo> fClearList;
+    skia_private::TArray<BindBufferInfo> fClearList;
 };
 
 }  // namespace skgpu::graphite

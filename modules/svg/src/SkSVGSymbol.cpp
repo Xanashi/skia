@@ -25,12 +25,12 @@ void SkSVGSymbol::onSetAttribute(SkSVGAttribute attr, const SkSVGValue& v) {
     switch (attr) {
         case SkSVGAttribute::kViewBox:
             if (const auto* vb = v.as<SkSVGViewBoxValue>()) {
-                this->setViewBox(*vb);
+                this->setViewBox(SkSVGViewBoxType(*vb));
             }
             break;
         case SkSVGAttribute::kPreserveAspectRatio:
             if (const auto* par = v.as<SkSVGPreserveAspectRatioValue>()) {
-                this->setPreserveAspectRatio(*par);
+                this->setPreserveAspectRatio(SkSVGPreserveAspectRatio(*par));
             }
             break;
         default:
@@ -45,7 +45,7 @@ void SkSVGSymbol::renderSymbol(const SkSVGRenderContext& ctx) const {
     auto contentMatrix = SkMatrix::Translate(viewPortRect.x(), viewPortRect.y());
     auto viewPort = SkSize::Make(viewPortRect.width(), viewPortRect.height());
 
-    if (fViewBox.isValid()) {
+    if (fViewBox.has_value()) {
         const SkRect& viewBox = *fViewBox;
         viewPort = SkSize::Make(viewBox.width(), viewBox.height());
         contentMatrix.preConcat(ComputeViewboxMatrix(viewBox, viewPortRect, fPreserveAspectRatio));

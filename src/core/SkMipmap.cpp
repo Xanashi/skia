@@ -10,9 +10,9 @@
 #include "include/core/SkColorSpace.h"
 #include "include/core/SkColorType.h"
 #include "include/core/SkTypes.h"
-#include "include/private/base/SkTo.h"
-#include "src/base/SkMathPriv.h"
+#include "include/private/SkTo.h"
 #include "src/core/SkImageInfoPriv.h"
+#include "src/core/SkMathPriv.h"
 #include "src/core/SkMipmapBuilder.h"
 
 #include <new>
@@ -102,6 +102,7 @@ SkMipmap* SkMipmap::Build(const SkPixmap& src, SkDiscardableFactoryProc fact,
     if (computeContents) {
         downsampler = MakeDownSampler(src);
         if (!downsampler) {
+            delete mipmap;
             return nullptr;
         }
     }

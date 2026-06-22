@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Google Inc.
+ * Copyright 2024 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -17,9 +17,10 @@
 #include "include/core/SkStream.h"
 #include "include/core/SkString.h"
 #include "include/core/SkTypes.h"
-#include "include/private/base/SkDebug.h"
-#include "include/private/base/SkTPin.h"
-#include "include/private/base/SkTo.h"
+#include "include/private/SkDebug.h"
+#include "include/private/SkTPin.h"
+#include "include/private/SkTo.h"
+#include "modules/jsonreader/SkJSONReader.h"
 #include "modules/skottie/include/ExternalLayer.h"
 #include "modules/skottie/include/Skottie.h"
 #include "modules/skottie/include/SkottieProperty.h"
@@ -29,11 +30,10 @@
 #include "modules/skottie/src/text/TextValue.h"
 #include "modules/skresources/include/SkResources.h"
 #include "modules/skshaper/include/SkShaper_factory.h"
-#include "src/base/SkArenaAlloc.h"
-#include "src/base/SkUTF.h"
+#include "src/core/SkArenaAlloc.h"
 #include "src/core/SkGeometry.h"
 #include "src/core/SkPathPriv.h"
-#include "src/utils/SkJSON.h"
+#include "src/core/SkUTF.h"
 
 #include <cstddef>
 #include <iostream>
@@ -46,13 +46,12 @@
 
 using ResourceProvider = skresources::ResourceProvider;
 
-using skjson::Value;
-using skjson::NullValue;
+using skjson::ArrayValue;
 using skjson::BoolValue;
 using skjson::NumberValue;
-using skjson::ArrayValue;
-using skjson::StringValue;
 using skjson::ObjectValue;
+using skjson::StringValue;
+using skjson::Value;
 
 namespace {
 
@@ -196,7 +195,9 @@ public:
         }
 
         SkPath path;
-        if (!font.getPath(glyph, &path)) {
+        if (auto result = font.getPath(glyph)) {
+            path = *result;
+        } else {
             // Only glyphs that can be represented as paths are supported for now, color glyphs are
             // ignored.  We could look into converting these to comp-based Lottie fonts if needed.
 
@@ -204,8 +205,7 @@ public:
             std::cerr << "Glyph ID %d could not be converted to a path, discarding.";
         }
 
-        float width;
-        font.getWidths(&glyph, 1, &width);
+        float width = font.getWidth(glyph);
 
         // Lottie glyph shapes are always defined at a normalized size of 100.
         const float scale = 100 / font.getSize();

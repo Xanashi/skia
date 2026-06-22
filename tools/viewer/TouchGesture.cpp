@@ -9,9 +9,10 @@
 
 #include "include/core/SkMatrix.h"
 #include "include/core/SkTypes.h"
-#include "include/private/base/SkDebug.h"
-#include "include/private/base/SkFloatingPoint.h"
-#include "src/base/SkTime.h"
+#include "include/private/SkDebug.h"
+#include "include/private/SkFloatingPoint.h"
+#include "src/core/SkTime.h"
+#include "tools/timer/TimeUtils.h"
 
 #include <algorithm>
 #include <cmath>
@@ -94,7 +95,7 @@ bool TouchGesture::FlingState::evaluateMatrix(SkMatrix* matrix) {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-static const SkMSec MAX_DBL_TAP_INTERVAL = 300;
+static const TimeUtils::MSec MAX_DBL_TAP_INTERVAL = 300;
 static const float MAX_DBL_TAP_DISTANCE = 100;
 static const float MAX_JITTER_RADIUS = 2;
 

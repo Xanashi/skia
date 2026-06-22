@@ -17,11 +17,11 @@
 #include "include/core/SkSpan.h"
 #include "include/core/SkStream.h"
 #include "include/core/SkTypeface.h"
-#include "include/private/base/SkAssert.h"
-#include "include/private/base/SkTDArray.h"
-#include "src/base/SkUTF.h"
+#include "include/private/SkAssert.h"
+#include "include/private/SkTDArray.h"
 #include "src/core/SkOSFile.h"
 #include "src/core/SkPathPriv.h"
+#include "src/core/SkUTF.h"
 #include "src/utils/SkOSPath.h"
 
 #include <stdio.h>
@@ -32,6 +32,7 @@
 
 #if defined(SK_FONTMGR_FONTCONFIG_AVAILABLE)
 #include "include/ports/SkFontMgr_fontconfig.h"
+#include "include/ports/SkFontScanner_FreeType.h"
 #endif
 
 #if defined(SK_FONTMGR_FREETYPE_EMPTY_AVAILABLE)
@@ -139,9 +140,8 @@ static void output_path_data(const SkFont& font,
         int emSize, SkString* ptsOut, SkTDArray<SkPath::Verb>* verbs,
         SkTDArray<unsigned>* charCodes, SkTDArray<SkScalar>* widths) {
     for (SkUnichar index = 0x00; index < 0x7f; ++index) {
-        uint16_t glyphID = font.unicharToGlyph(index);
-        SkPath path;
-        font.getPath(glyphID, &path);
+        SkGlyphID glyphID = font.unicharToGlyph(index);
+        SkPath path = font.getPath(glyphID).value_or(SkPath());
         for (auto [verb, pts, w] : SkPathPriv::Iterate(path)) {
             *verbs->append() = (SkPath::Verb)verb;
             switch (verb) {
@@ -166,8 +166,7 @@ static void output_path_data(const SkFont& font,
         }
         *verbs->append() = SkPath::kDone_Verb;
         *charCodes->append() = index;
-        SkScalar width;
-        font.getWidths(&glyphID, 1, &width);
+        SkScalar width = font.getWidth(glyphID);
      // SkASSERT(floor(width) == width);  // not true for Hiragino Maru Gothic Pro
         *widths->append() = width;
         if (0 == index) {
@@ -429,7 +428,7 @@ int main(int , char * const []) {
 
     sk_sp<SkFontMgr> mgr;
 #if defined(SK_FONTMGR_FONTCONFIG_AVAILABLE)
-    mgr = SkFontMgr_New_FontConfig(nullptr);
+    mgr = SkFontMgr_New_FontConfig(nullptr, SkFontScanner_Make_FreeType());
 #elif defined(SK_FONTMGR_CORETEXT_AVAILABLE)
     mgr = SkFontMgr_New_CoreText(nullptr);
 #elif defined(SK_FONTMGR_FREETYPE_EMPTY_AVAILABLE)

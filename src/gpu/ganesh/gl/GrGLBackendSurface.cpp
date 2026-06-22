@@ -8,11 +8,11 @@
 
 #include "include/core/SkRefCnt.h"
 #include "include/core/SkTextureCompressionType.h"
-#include "include/gpu/GrBackendSurface.h"
-#include "include/gpu/GrTypes.h"
-#include "include/gpu/gl/GrGLTypes.h"
-#include "include/private/base/SkAssert.h"
-#include "include/private/base/SkDebug.h"
+#include "include/gpu/ganesh/GrBackendSurface.h"
+#include "include/gpu/ganesh/GrTypes.h"
+#include "include/gpu/ganesh/gl/GrGLTypes.h"
+#include "include/private/SkAssert.h"
+#include "include/private/SkDebug.h"
 #include "include/private/gpu/ganesh/GrTypesPriv.h"
 #include "src/gpu/ganesh/GrBackendSurfacePriv.h"
 #include "src/gpu/ganesh/gl/GrGLBackendSurfacePriv.h"
@@ -71,7 +71,7 @@ private:
     }
 
     std::string toString() const override {
-#if defined(SK_DEBUG) || defined(GR_TEST_UTILS)
+#if defined(SK_DEBUG) || defined(GPU_TEST_UTILS)
         return GrGLFormatToStr(fGLFormat);
 #else
         return "";
@@ -116,6 +116,19 @@ GrBackendFormat MakeGL(GrGLenum format, GrGLenum target) {
             gl_target_to_gr_target(target), GrBackendApi::kOpenGL, GrGLBackendFormatData(format));
 }
 
+GrBackendFormat MakeGL(GrGLenum format) {
+    return GrBackendSurfacePriv::MakeGrBackendFormat(
+            GrTextureType::k2D, GrBackendApi::kOpenGL, GrGLBackendFormatData(format));
+}
+
+GrBackendFormat MakeGLExternal() {
+    // For external backend formats, GL_RGBA8 likely does not match the actual bit depth of the
+    // underlying data. However, we just need a value that is defined in the GrGLFormat enum to
+    // avoid thinking that it's unsupported.
+    return GrBackendSurfacePriv::MakeGrBackendFormat(
+            GrTextureType::kExternal, GrBackendApi::kOpenGL, GrGLBackendFormatData(GR_GL_RGBA8));
+}
+
 GrGLFormat AsGLFormat(const GrBackendFormat& format) {
     if (format.isValid() && format.backend() == GrBackendApi::kOpenGL) {
         const GrGLBackendFormatData* data = get_and_cast_data(format);
@@ -145,6 +158,7 @@ void GrGLBackendTextureData::copyTo(AnyTextureData& textureData) const {
 
 bool GrGLBackendTextureData::isProtected() const { return fGLInfo.isProtected(); }
 
+#if defined(GPU_TEST_UTILS)
 bool GrGLBackendTextureData::equal(const GrBackendTextureData* that) const {
     SkASSERT(!that || that->type() == GrBackendApi::kOpenGL);
     if (auto otherGL = static_cast<const GrGLBackendTextureData*>(that)) {
@@ -152,6 +166,7 @@ bool GrGLBackendTextureData::equal(const GrBackendTextureData* that) const {
     }
     return false;
 }
+#endif
 
 bool GrGLBackendTextureData::isSameTexture(const GrBackendTextureData* that) const {
     SkASSERT(!that || that->type() == GrBackendApi::kOpenGL);
@@ -243,6 +258,7 @@ private:
 
     bool isProtected() const override { return fGLInfo.isProtected(); }
 
+#if defined(GPU_TEST_UTILS)
     bool equal(const GrBackendRenderTargetData* that) const override {
         SkASSERT(!that || that->type() == GrBackendApi::kOpenGL);
         if (auto otherGL = static_cast<const GrGLBackendRenderTargetData*>(that)) {
@@ -250,6 +266,7 @@ private:
         }
         return false;
     }
+#endif
 
     void copyTo(AnyRenderTargetData& rtData) const override {
         rtData.emplace<GrGLBackendRenderTargetData>(fGLInfo);

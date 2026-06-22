@@ -9,8 +9,8 @@
 #define PathRenderer_DEFINED
 
 #include "include/core/SkRefCnt.h"
-#include "include/private/base/SkAssert.h"
-#include "include/private/base/SkDebug.h"
+#include "include/private/SkAssert.h"
+#include "include/private/SkDebug.h"
 #include "src/gpu/ganesh/GrPaint.h"
 
 #include <string.h>
@@ -40,6 +40,10 @@ class SurfaceDrawContext;
  */
 class PathRenderer : public SkRefCnt {
 public:
+    // Used to guard TriangulatingPathRenderer and DefaultPathRenderer from excessively complex
+    // paths, which may cause OOM or other stalls
+    static constexpr int kMaxGPUPathRendererVerbs = 1 << 14;
+
     PathRenderer() = default;
 
     virtual const char* name() const = 0;

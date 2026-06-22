@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Google LLC.
+ * Copyright 2021 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -8,11 +8,12 @@
 #include "src/sksl/SkSLParser.h"
 
 #include "include/core/SkSpan.h"
-#include "include/private/base/SkTArray.h"
+#include "include/private/SkTArray.h"
 #include "include/sksl/SkSLVersion.h"
-#include "src/base/SkEnumBitMask.h"
-#include "src/base/SkNoDestructor.h"
+#include "src/core/SkEnumBitMask.h"
+#include "src/core/SkNoDestructor.h"
 #include "src/core/SkTHash.h"
+#include "src/partition_alloc/raw_ptr.h"
 #include "src/sksl/SkSLBuiltinTypes.h"
 #include "src/sksl/SkSLCompiler.h"
 #include "src/sksl/SkSLConstantFolder.h"
@@ -121,7 +122,7 @@ public:
     }
 
 private:
-    Parser* fParser;
+    raw_ptr<Parser> fParser;
     int fDepth;
 };
 
@@ -423,6 +424,7 @@ std::unique_ptr<SkSL::Module> Parser::moduleInheritingFrom(const SkSL::Module* p
     result->fParent = parentModule;
     result->fSymbols = std::move(fCompiler.fGlobalSymbols);
     result->fElements = std::move(fProgramElements);
+    result->fModuleType = fCompiler.context().fConfig->fModuleType;
     return result;
 }
 
@@ -637,8 +639,7 @@ bool Parser::prototypeFunction(SkSL::FunctionDeclaration* decl) {
     if (!decl) {
         return false;
     }
-    fProgramElements.push_back(std::make_unique<SkSL::FunctionPrototype>(
-            decl->fPosition, decl, fCompiler.context().fConfig->fIsBuiltinCode));
+    fProgramElements.push_back(std::make_unique<SkSL::FunctionPrototype>(decl->fPosition, decl));
     return true;
 }
 
@@ -674,8 +675,7 @@ bool Parser::defineFunction(SkSL::FunctionDeclaration* decl) {
     std::unique_ptr<FunctionDefinition> function = FunctionDefinition::Convert(context,
                                                                                pos,
                                                                                *decl,
-                                                                               std::move(block),
-                                                                               /*builtin=*/false);
+                                                                               std::move(block));
     if (!function) {
         return false;
     }
@@ -1262,7 +1262,7 @@ const Type* Parser::findType(Position pos,
         return context.fTypes.fPoison.get();
     }
     const SkSL::Type* type = &symbol->as<Type>();
-    if (!context.fConfig->fIsBuiltinCode) {
+    if (!context.fConfig->isBuiltinCode()) {
         if (!TypeReference::VerifyType(context, type, pos)) {
             return context.fTypes.fPoison.get();
         }
@@ -1357,9 +1357,6 @@ bool Parser::interfaceBlock(const Modifiers& modifiers) {
                 }
                 this->expect(Token::Kind::TK_RBRACKET, "']'");
             }
-            if (!this->expect(Token::Kind::TK_SEMICOLON, "';'")) {
-                return false;
-            }
 
             fields.push_back(SkSL::Field(this->rangeFrom(fieldPos),
                                          fieldModifiers.fLayout,
@@ -1367,6 +1364,10 @@ bool Parser::interfaceBlock(const Modifiers& modifiers) {
                                          this->text(fieldName),
                                          actualType));
         } while (this->checkNext(Token::Kind::TK_COMMA));
+
+        if (!this->expect(Token::Kind::TK_SEMICOLON, "';'")) {
+            return false;
+        }
     }
     std::string_view instanceName;
     Token instanceNameToken;
@@ -1701,7 +1702,7 @@ std::unique_ptr<Statement> Parser::continueStatement() {
 /* DISCARD SEMICOLON */
 std::unique_ptr<Statement> Parser::discardStatement() {
     Token start;
-    if (!this->expect(Token::Kind::TK_DISCARD, "'continue'", &start)) {
+    if (!this->expect(Token::Kind::TK_DISCARD, "'discard'", &start)) {
         return nullptr;
     }
     if (!this->expect(Token::Kind::TK_SEMICOLON, "';'")) {

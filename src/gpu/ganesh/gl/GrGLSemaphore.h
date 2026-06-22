@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 Google Inc.
+ * Copyright 2017 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -8,9 +8,9 @@
 #ifndef GrGLSemaphore_DEFINED
 #define GrGLSemaphore_DEFINED
 
-#include "include/gpu/GrBackendSemaphore.h"
-#include "include/gpu/gl/GrGLTypes.h"
-#include "include/private/base/SkAssert.h"
+#include "include/gpu/ganesh/GrBackendSemaphore.h"
+#include "include/gpu/ganesh/gl/GrGLTypes.h"
+#include "include/private/SkAssert.h"
 #include "src/gpu/ganesh/GrSemaphore.h"
 
 #include <memory>

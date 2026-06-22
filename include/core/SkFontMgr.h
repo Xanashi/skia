@@ -8,7 +8,9 @@
 #ifndef SkFontMgr_DEFINED
 #define SkFontMgr_DEFINED
 
+#include "include/core/SkFontArguments.h"
 #include "include/core/SkRefCnt.h"
+#include "include/core/SkSpan.h"
 #include "include/core/SkTypes.h"
 #include "src/core/SkTypefaceCache.h"
 
@@ -87,6 +89,38 @@ public:
                                                 const char* bcp47[], int bcp47Count,
                                                 SkUnichar character) const;
 
+    struct SK_API Request {
+        struct CMapEntry {
+            SkUnichar character;
+            SkUnichar variation;  // Zero for default variation.
+        };
+        SkSpan<const CMapEntry> cmapEntries;
+
+        /**
+         *  bcp47[0] is the least significant fallback, bcp47[bcp47Count-1] is the most significant.
+         *  If no specified bcp47 codes match any font with the requested character will be matched.
+         */
+        SkSpan<const char*> bcp47;
+
+        const char* familyName;
+
+        SkSpan<const SkFontArguments::VariationPosition::Coordinate> model;
+        SkFontStyle fontStyleFromModel() const;
+        static void SetModel(SkFontStyle s, SkFontArguments::VariationPosition::Coordinate(&m)[4]);
+
+        std::optional<bool> syntheticBold;
+        std::optional<bool> syntheticOblique;
+    };
+
+    /** The familyName must strongly match, everything else is tie breakers. */
+    sk_sp<SkTypeface> match(const Request&) const;
+
+    /**
+     * The first cmapEntry must match. Then matched by bcp47, then familyName,
+     * then model (italic, slant, width, weight), with synthetics allowed or not.
+     */
+    sk_sp<SkTypeface> fallback(const Request&) const;
+
     /**
      *  Create a typeface for the specified data and TTC index (pass 0 for none)
      *  or NULL if the data is not recognized. The caller must call unref() on
@@ -140,6 +174,8 @@ protected:
                                                           const SkFontStyle&,
                                                           const char* bcp47[], int bcp47Count,
                                                           SkUnichar character) const = 0;
+    virtual sk_sp<SkTypeface> onMatch(const Request&) const; // TODO: pure virtual
+    virtual sk_sp<SkTypeface> onFallback(const Request&) const; // TODO: pure virtual
 
     virtual sk_sp<SkTypeface> onMakeFromData(sk_sp<SkData>, int ttcIndex) const = 0;
     virtual sk_sp<SkTypeface> onMakeFromStreamIndex(std::unique_ptr<SkStreamAsset>,

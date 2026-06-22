@@ -11,7 +11,11 @@
 #include "include/core/SkData.h"
 #include "include/core/SkImage.h"
 #include "include/core/SkRefCnt.h"
+#include "include/core/SkSpan.h"
 #include "include/core/SkTypes.h"
+#include "include/private/SkPixelStorage.h"
+#include "include/private/SkTDArray.h"
+#include "src/capture/SkCaptureManager.h"
 #include "src/core/SkMipmap.h"
 
 #include <atomic>
@@ -23,8 +27,8 @@ class GrImageContext;
 class SkBitmap;
 class SkColorSpace;
 class SkPixmap;
+class SkRecorder;
 class SkSurface;
-enum SkColorType : int;
 enum SkYUVColorSpace : int;
 struct SkIRect;
 struct SkISize;
@@ -34,29 +38,16 @@ enum {
     kNeedNewImageUniqueID = 0
 };
 
-namespace skgpu { namespace graphite { class Recorder; } }
-
 class SkImage_Base : public SkImage {
 public:
     ~SkImage_Base() override;
 
     // From SkImage.h
-    sk_sp<SkImage> makeColorSpace(GrDirectContext*, sk_sp<SkColorSpace>) const override;
-    sk_sp<SkImage> makeColorSpace(skgpu::graphite::Recorder*,
+    sk_sp<SkImage> makeColorSpace(SkRecorder*,
                                   sk_sp<SkColorSpace>,
                                   RequiredProperties) const override;
-    sk_sp<SkImage> makeColorTypeAndColorSpace(GrDirectContext* dContext,
-                                              SkColorType targetColorType,
-                                              sk_sp<SkColorSpace> targetCS) const override;
-    sk_sp<SkImage> makeColorTypeAndColorSpace(skgpu::graphite::Recorder*,
-                                              SkColorType,
-                                              sk_sp<SkColorSpace>,
-                                              RequiredProperties) const override;
-    sk_sp<SkImage> makeSubset(GrDirectContext* direct, const SkIRect& subset) const override;
-    sk_sp<SkImage> makeSubset(skgpu::graphite::Recorder*,
-                              const SkIRect&,
-                              RequiredProperties) const override;
 
+    sk_sp<SkImage> makeSubset(SkRecorder*, const SkIRect&, RequiredProperties) const override;
     size_t textureSize() const override { return 0; }
 
     // Methods that we want to use elsewhere in Skia, but not be a part of the public API.
@@ -72,16 +63,9 @@ public:
                               int srcY,
                               CachingHint) const = 0;
 
-    // used by makeScaled()
-    virtual sk_sp<SkSurface> onMakeSurface(skgpu::graphite::Recorder*,
-                                           const SkImageInfo&) const = 0;
-
-#if defined(GRAPHITE_TEST_UTILS)
-    virtual bool onReadPixelsGraphite(skgpu::graphite::Recorder*,
-                                      const SkPixmap& dst,
-                                      int srcX,
-                                      int srcY) const { return false; }
-#endif
+    virtual bool readPixelsGraphite(SkRecorder*, const SkPixmap& dst, int srcX, int srcY) const {
+        return false;
+    }
 
     virtual bool onHasMipmaps() const = 0;
     virtual bool onIsProtected() const = 0;
@@ -128,17 +112,22 @@ public:
     virtual bool getROPixels(GrDirectContext*, SkBitmap*,
                              CachingHint = kAllow_CachingHint) const = 0;
 
-    virtual sk_sp<SkImage> onMakeSubset(GrDirectContext*, const SkIRect&) const = 0;
+    virtual sk_sp<SkImage> onMakeSubset(SkRecorder*, const SkIRect&, RequiredProperties) const = 0;
 
-    virtual sk_sp<SkData> onRefEncoded() const { return nullptr; }
+    virtual sk_sp<const SkData> onRefEncoded() const { return nullptr; }
 
     virtual bool onAsLegacyBitmap(GrDirectContext*, SkBitmap*) const;
+
+    // Create the surface used by makeScaled. If this is a GPU backed image, the surface
+    // should be Ganesh or Graphite backed (as appropriate), otherwise this can raster backed.
+    virtual sk_sp<SkSurface> onMakeSurface(SkRecorder*, const SkImageInfo&) const = 0;
 
     enum class Type {
         kRaster,
         kRasterPinnable,
         kLazy,
         kLazyPicture,
+        kLazyTexture,
         kGanesh,
         kGaneshYUVA,
         kGraphite,
@@ -149,7 +138,8 @@ public:
 
     // True for picture-backed and codec-backed
     bool isLazyGenerated() const override {
-        return this->type() == Type::kLazy || this->type() == Type::kLazyPicture;
+        return this->type() == Type::kLazy || this->type() == Type::kLazyPicture ||
+               this->type() == Type::kLazyTexture;
     }
 
     bool isRasterBacked() const {
@@ -180,9 +170,6 @@ public:
         fAddedToRasterCache.store(true);
     }
 
-    virtual sk_sp<SkImage> onMakeColorTypeAndColorSpace(SkColorType, sk_sp<SkColorSpace>,
-                                                        GrDirectContext*) const = 0;
-
     virtual sk_sp<SkImage> onReinterpretColorSpace(sk_sp<SkColorSpace>) const = 0;
 
     // on failure, returns nullptr
@@ -191,15 +178,17 @@ public:
         return nullptr;
     }
 
-    virtual sk_sp<SkImage> onMakeSubset(skgpu::graphite::Recorder*,
-                                        const SkIRect&,
-                                        RequiredProperties) const = 0;
+    SkSpan<const sk_sp<SkPixelStorage>> getPixelStorages() const {
+        return fPixelStorages;
+    }
 
 protected:
-    SkImage_Base(const SkImageInfo& info, uint32_t uniqueID);
-
+    SkImage_Base(const SkImageInfo& info, uint32_t uniqueID, sk_sp<SkPixelStorage> backingStorage);
+    // fPixelStorages is protected since SkImage_Raster needs access in ctor
+    skia_private::STArray<1, sk_sp<SkPixelStorage>> fPixelStorages;
 private:
     // Set true by caches when they cache content that's derived from the current pixels.
+
     mutable std::atomic<bool> fAddedToRasterCache;
 };
 

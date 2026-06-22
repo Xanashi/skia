@@ -10,7 +10,7 @@
 
 #include "include/core/SkSpan.h"
 #include "include/core/SkTypes.h"
-#include "include/private/base/SkTArray.h"
+#include "include/private/SkTArray.h"
 #include "src/sksl/SkSLDefines.h"
 #include "src/sksl/SkSLPosition.h"
 #include "src/sksl/ir/SkSLIRNode.h"
@@ -27,6 +27,12 @@
 #include <string>
 #include <string_view>
 #include <tuple>
+
+// IWYU wants this, but it's C++20 and beyond. We can remove
+// this guard once C++ core is allowed to use C++20
+#if __cplusplus >= 202002L
+#include <compare>
+#endif
 
 namespace SkSL {
 
@@ -266,8 +272,8 @@ public:
     }
 
     /** Returns true if these types are equal after alias resolution. */
-    bool matches(const Type& other) const {
-        return this->resolve().name() == other.resolve().name();
+    virtual bool matches(const Type& that) const {
+        return &this->resolve() == &that.resolve();
     }
 
     /**

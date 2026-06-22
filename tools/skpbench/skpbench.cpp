@@ -6,6 +6,8 @@
  */
 
 #include "bench/BigPath.h"
+#include "include/codec/SkCodec.h"
+#include "include/codec/SkJpegDecoder.h"
 #include "include/core/SkCanvas.h"
 #include "include/core/SkGraphics.h"
 #include "include/core/SkPicture.h"
@@ -15,7 +17,7 @@
 #include "include/core/SkSurfaceProps.h"
 #include "include/docs/SkMultiPictureDocument.h"
 #include "include/effects/SkPerlinNoiseShader.h"
-#include "include/gpu/GrDirectContext.h"
+#include "include/gpu/ganesh/GrDirectContext.h"
 #include "include/gpu/ganesh/SkSurfaceGanesh.h"
 #include "include/private/chromium/GrDeferredDisplayList.h"
 #include "src/core/SkOSFile.h"
@@ -25,22 +27,30 @@
 #include "src/gpu/ganesh/SkGr.h"
 #include "src/gpu/ganesh/image/GrImageUtils.h"
 #include "src/utils/SkOSPath.h"
-#include "tools/DDLPromiseImageHelper.h"
-#include "tools/DDLTileHelper.h"
+#include "tools/DeserialProcsUtils.h"
 #include "tools/EncodeUtils.h"
 #include "tools/SkSharingProc.h"
 #include "tools/flags/CommandLineFlags.h"
 #include "tools/flags/CommonFlags.h"
 #include "tools/flags/CommonFlagsConfig.h"
+#include "tools/flags/CommonFlagsGanesh.h"
 #include "tools/fonts/FontToolUtils.h"
+#include "tools/ganesh/DDLPromiseImageHelper.h"
+#include "tools/ganesh/DDLTileHelper.h"
+#include "tools/ganesh/GpuTimer.h"
+#include "tools/ganesh/GrContextFactory.h"
 #include "tools/gpu/FlushFinishTracker.h"
-#include "tools/gpu/GpuTimer.h"
-#include "tools/gpu/GrContextFactory.h"
 
 #if defined(SK_ENABLE_SVG)
 #include "modules/skshaper/utils/FactoryHelpers.h"
 #include "modules/svg/include/SkSVGDOM.h"
 #include "src/xml/SkDOM.h"
+#endif
+
+#if defined(SK_CODEC_DECODES_PNG_WITH_RUST)
+#include "include/codec/SkPngRustDecoder.h"
+#else
+#include "include/codec/SkPngDecoder.h"
 #endif
 
 #include <stdlib.h>
@@ -178,7 +188,7 @@ public:
         // Attempt to deserialize with an image sharing serial proc.
         auto deserialContext = std::make_unique<SkSharingDeserialContext>();
         SkDeserialProcs procs;
-        procs.fImageProc = SkSharingDeserialContext::deserializeImage;
+        procs.fImageDataProc = SkSharingContext::deserializeImage;
         procs.fImageCtx = deserialContext.get();
 
         // The outer format of multi-frame skps is the multi-picture document, which is a
@@ -521,6 +531,12 @@ int main(int argc, char** argv) {
     }
 
     SkGraphics::Init();
+#if defined(SK_CODEC_DECODES_PNG_WITH_RUST)
+    SkCodecs::Register(SkPngRustDecoder::Decoder());
+#else
+    SkCodecs::Register(SkPngDecoder::Decoder());
+#endif
+    SkCodecs::Register(SkJpegDecoder::Decoder());
 
     sk_sp<SkPicture> skp;
     std::unique_ptr<MultiFrameSkp> mskp; // populated if the file is multi frame.
@@ -541,7 +557,8 @@ int main(int argc, char** argv) {
             // populate skp with it's first frame, for width height determination.
             skp = mskp->frame(0);
         } else {
-            skp = SkPicture::MakeFromStream(srcstream.get());
+            SkDeserialProcs procs = ToolUtils::get_default_skp_deserial_procs();
+            skp = SkPicture::MakeFromStream(srcstream.get(), &procs);
         }
         if (!skp) {
             exitf(ExitErr::kData, "failed to parse file %s", srcfile.c_str());

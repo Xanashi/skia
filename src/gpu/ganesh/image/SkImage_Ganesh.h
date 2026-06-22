@@ -10,9 +10,9 @@
 
 #include "include/core/SkRefCnt.h"
 #include "include/core/SkSamplingOptions.h"
-#include "include/private/base/SkDebug.h"
-#include "include/private/base/SkThreadAnnotations.h"
-#include "src/base/SkSpinlock.h"
+#include "include/private/SkDebug.h"
+#include "include/private/SkThreadAnnotations.h"
+#include "src/core/SkSpinlock.h"
 #include "src/gpu/Swizzle.h"
 #include "src/gpu/ganesh/GrSurfaceProxyView.h"
 #include "src/gpu/ganesh/image/SkImage_GaneshBase.h"
@@ -29,6 +29,7 @@ class GrDirectContext;
 class GrFragmentProcessor;
 class GrImageContext;
 class GrRecordingContext;
+class GrRenderTargetProxy;
 class GrRenderTask;
 class GrSurfaceProxy;
 class SkColorInfo;
@@ -52,6 +53,7 @@ namespace skgpu {
 enum class Mipmapped : bool;
 enum class Protected : bool;
 }
+namespace skgpu::ganesh { class SurfaceDrawContext; }
 
 class SkImage_Ganesh final : public SkImage_GaneshBase {
 public:
@@ -75,10 +77,9 @@ public:
     bool onHasMipmaps() const override;
     bool onIsProtected() const override;
 
-    using SkImage_GaneshBase::onMakeColorTypeAndColorSpace;
-    sk_sp<SkImage> onMakeColorTypeAndColorSpace(SkColorType,
-                                                sk_sp<SkColorSpace>,
-                                                GrDirectContext*) const final;
+    sk_sp<SkImage> onMakeColorTypeAndColorSpace(GrDirectContext*,
+                                                SkColorType,
+                                                sk_sp<SkColorSpace>) const final;
 
     sk_sp<SkImage> onReinterpretColorSpace(sk_sp<SkColorSpace>) const final;
 
@@ -106,9 +107,10 @@ public:
 
     std::tuple<GrSurfaceProxyView, GrColorType> asView(GrRecordingContext*,
                                                        skgpu::Mipmapped,
-                                                       GrImageTexGenPolicy) const override;
+                                                       GrImageTexGenPolicy,
+                                                       GrRenderTargetProxy*) const override;
 
-    std::unique_ptr<GrFragmentProcessor> asFragmentProcessor(GrRecordingContext*,
+    std::unique_ptr<GrFragmentProcessor> asFragmentProcessor(skgpu::ganesh::SurfaceDrawContext*,
                                                              SkSamplingOptions,
                                                              const SkTileMode[2],
                                                              const SkMatrix&,
@@ -134,7 +136,7 @@ private:
                    int volatileSrcTargetCount,
                    SkColorInfo);
 
-    GrSurfaceProxyView makeView(GrRecordingContext*) const;
+    GrSurfaceProxyView makeView(GrRecordingContext*, GrRenderTargetProxy* targetProxy) const;
 
     // Thread-safe wrapper around the proxies backing this image. Handles dynamically switching
     // from a "volatile" proxy that may be overwritten (by an SkSurface that this image was snapped
@@ -152,9 +154,12 @@ private:
 
         ~ProxyChooser();
 
-        // Checks if there is a volatile proxy that is safe to use. If so returns it, otherwise
-        // returns the stable proxy (and drops the volatile one if it exists).
-        sk_sp<GrSurfaceProxy> chooseProxy(GrRecordingContext* context) SK_EXCLUDES(fLock);
+        // Checks if there is a volatile proxy that is safe to use. If the targetProxy is not
+        // nullptr, this will also check if it is safe to draw the volatile proxy into the
+        // targetProxy. If so returns it, otherwise returns the stable proxy (and drops the volatile
+        // one if it exists).
+        sk_sp<GrSurfaceProxy> chooseProxy(GrRecordingContext* context,
+                                          GrRenderTargetProxy* targetProxy) SK_EXCLUDES(fLock);
         // Call when it is known copy is necessary.
         sk_sp<GrSurfaceProxy> switchToStableProxy() SK_EXCLUDES(fLock);
         // Call when it is known for sure copy won't be necessary.

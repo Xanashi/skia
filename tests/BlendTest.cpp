@@ -20,10 +20,10 @@
 #include "include/core/SkSurface.h"
 #include "include/core/SkTypes.h"
 #include "include/gpu/GpuTypes.h"
-#include "include/gpu/GrDirectContext.h"
-#include "include/gpu/GrTypes.h"
+#include "include/gpu/ganesh/GrDirectContext.h"
+#include "include/gpu/ganesh/GrTypes.h"
 #include "include/gpu/ganesh/SkSurfaceGanesh.h"
-#include "include/private/base/SkTemplates.h"
+#include "include/private/SkTemplates.h"
 #include "tests/CtsEnforcement.h"
 #include "tests/Test.h"
 #include "tools/gpu/BackendSurfaceFactory.h"
@@ -190,11 +190,11 @@ DEF_GANESH_TEST_FOR_GL_CONTEXT(ES2BlendWithNoTexture,
 
 // Test that dst reads when large coordinates read the correct pixels.
 // When we use half-width floats for dst read coordinates, we can end up reading the wrong pixel
-// from dst and consequently writing the wrong blended color (skbug.com/14347).
+// from dst and consequently writing the wrong blended color (skbug.com/40045423).
 DEF_GANESH_TEST_FOR_RENDERING_CONTEXTS(BlendRequiringDstReadWithLargeCoordinates,
                                        reporter,
                                        contextInfo,
-                                       CtsEnforcement::kNextRelease) {
+                                       CtsEnforcement::kApiLevel_202404) {
     static constexpr SkColorType kColorType = kRGBA_8888_SkColorType;
 
     GrDirectContext* context = contextInfo.directContext();

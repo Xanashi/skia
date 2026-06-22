@@ -1,4 +1,4 @@
-// Copyright 2019 Google LLC.
+// Copyright 2019 Google LLC
 // Use of this source code is governed by a BSD-style license that can be found in the LICENSE file.
 #include "tools/fiddle/examples.h"
 REG_FIDDLE(Canvas_concat, 256, 256, false, 0) {
@@ -11,7 +11,7 @@ void draw(SkCanvas* canvas) {
     canvas->drawRect(rect[1], paint);
     paint.setColor(SK_ColorWHITE);
     canvas->drawString("Here", rect[0].fLeft + 10, rect[0].fBottom - 10, font, paint);
-    canvas->concat(SkMatrix::RectToRect(rect[0], rect[1]));
+    canvas->concat(SkMatrix::Rect2Rect(rect[0], rect[1]).value());
     canvas->drawString("There", rect[0].fLeft + 10, rect[0].fBottom - 10, font, paint);
 }
 }  // END FIDDLE

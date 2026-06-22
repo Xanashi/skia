@@ -8,8 +8,8 @@
 #include "bench/Benchmark.h"
 #include "include/core/SkM44.h"
 #include "include/core/SkString.h"
-#include "src/base/SkRandom.h"
 #include "src/core/SkMatrixPriv.h"
+#include "src/core/SkRandom.h"
 
 class M4Bench : public Benchmark {
     SkString    fName;
@@ -135,7 +135,7 @@ protected:
         SkMatrix m;
         m.setRotate(1);
         for (int i = 0; i < 100000; ++i) {
-            fV = m.mapXY(5, 6);
+            fV = m.mapPoint({5, 6});
         }
     }
 private:

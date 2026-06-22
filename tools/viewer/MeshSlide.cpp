@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Google Inc.
+ * Copyright 2023 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -16,8 +16,8 @@
 #include "include/core/SkShader.h"
 #include "include/core/SkTileMode.h"
 #include "include/core/SkVertices.h"
-#include "include/effects/SkGradientShader.h"
-#include "include/private/base/SkFloatingPoint.h"
+#include "include/effects/SkGradient.h"
+#include "include/private/SkFloatingPoint.h"
 #include "tools/DecodeUtils.h"
 #include "tools/Resources.h"
 #include "tools/timer/TimeUtils.h"
@@ -68,11 +68,11 @@ static constexpr struct ShaderFactory {
     {
         "Radial Gradient",
         []() ->sk_sp<SkShader> {
-            static constexpr SkColor gColors[] = {
-                SK_ColorGREEN, SK_ColorRED, SK_ColorBLUE, SK_ColorGREEN
+            static constexpr SkColor4f gColors[] = {
+                SkColors::kGreen, SkColors::kRed, SkColors::kBlue, SkColors::kGreen
             };
-            return SkGradientShader::MakeRadial({0.5f, 0.5f}, 0.5f, gColors, nullptr,
-                                                std::size(gColors), SkTileMode::kRepeat);
+            return SkShaders::RadialGradient({0.5f, 0.5f}, 0.5f,
+                                             {{gColors, {}, SkTileMode::kRepeat}, {}});
         }
     },
     {
@@ -219,7 +219,7 @@ public:
 
             p.setStrokeCap(SkPaint::kRound_Cap);
             p.setStrokeWidth(5/mesh_size);
-            canvas->drawPoints(SkCanvas::kPoints_PointMode, fVertices.size(), fVertices.data(), p);
+            canvas->drawPoints(SkCanvas::kPoints_PointMode, fVertices, p);
         }
 
         this->drawControls();

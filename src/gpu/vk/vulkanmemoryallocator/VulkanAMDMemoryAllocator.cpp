@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Google Inc.
+ * Copyright 2018 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -9,15 +9,14 @@
 
 #include "include/gpu/vk/VulkanBackendContext.h"
 #include "include/gpu/vk/VulkanExtensions.h"
-#include "include/private/base/SkAssert.h"
-#include "include/private/base/SkTo.h"
+#include "include/private/SkAssert.h"
+#include "include/private/SkTo.h"
 #include "src/core/SkTraceEvent.h"
 #include "src/gpu/GpuTypesPriv.h"
 #include "src/gpu/vk/VulkanInterface.h"
 #include "src/gpu/vk/VulkanUtilsPriv.h"
 #include "src/gpu/vk/vulkanmemoryallocator/VulkanMemoryAllocatorPriv.h"
 
-#include <algorithm>
 #include <cstring>
 
 namespace skgpu {
@@ -69,11 +68,8 @@ sk_sp<VulkanMemoryAllocator> VulkanAMDMemoryAllocator::Make(VkInstance instance,
     if (threadSafe == ThreadSafe::kNo) {
         info.flags |= VMA_ALLOCATOR_CREATE_EXTERNALLY_SYNCHRONIZED_BIT;
     }
-    if (physicalDeviceVersion >= VK_MAKE_VERSION(1, 1, 0) ||
-        (extensions->hasExtension(VK_KHR_DEDICATED_ALLOCATION_EXTENSION_NAME, 1) &&
-         extensions->hasExtension(VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME, 1))) {
-        info.flags |= VMA_ALLOCATOR_CREATE_KHR_DEDICATED_ALLOCATION_BIT;
-    }
+    // Dedicated allocation is always available since Vulkan 1.1 is the minimum requirement.
+    info.flags |= VMA_ALLOCATOR_CREATE_KHR_DEDICATED_ALLOCATION_BIT;
 
     info.physicalDevice = physicalDevice;
     info.device = device;
@@ -81,15 +77,17 @@ sk_sp<VulkanMemoryAllocator> VulkanAMDMemoryAllocator::Make(VkInstance instance,
     // It seems to be a good compromise of not wasting unused allocated space and not making too
     // many small allocations. The AMD allocator will start making blocks at 1/8 the max size and
     // builds up block size as needed before capping at the max set here.
-    info.preferredLargeHeapBlockSize = 4 * 1024 * 1024;
+    constexpr size_t kBlockSize = 4 * 1024 * 1024;
+    info.preferredLargeHeapBlockSize = kBlockSize;
     info.pAllocationCallbacks = nullptr;
     info.pDeviceMemoryCallbacks = nullptr;
     info.pHeapSizeLimit = nullptr;
     info.pVulkanFunctions = &functions;
     info.instance = instance;
     // TODO: Update our interface and headers to support vulkan 1.3 and add in the new required
-    // functions for 1.3 that the allocator needs. Until then we just clamp the version to 1.1.
-    info.vulkanApiVersion = std::min(physicalDeviceVersion, VK_MAKE_VERSION(1, 1, 0));
+    // functions for 1.3 that the allocator needs. Until then we just clamp the version to 1.1,
+    // which is also Skia's minimum requirement.
+    info.vulkanApiVersion = VK_API_VERSION_1_1;
     info.pTypeExternalMemoryHandleTypes = nullptr;
 
     VmaAllocator allocator;
@@ -110,7 +108,7 @@ VkResult VulkanAMDMemoryAllocator::allocateImageMemory(VkImage image,
                                                        uint32_t allocationPropertyFlags,
                                                        skgpu::VulkanBackendMemory* backendMemory) {
     TRACE_EVENT0_ALWAYS("skia.gpu", TRACE_FUNC);
-    VmaAllocationCreateInfo info;
+    VmaAllocationCreateInfo info = {};
     info.flags = 0;
     info.usage = VMA_MEMORY_USAGE_UNKNOWN;
     info.requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
@@ -142,7 +140,7 @@ VkResult VulkanAMDMemoryAllocator::allocateBufferMemory(VkBuffer buffer,
                                                         uint32_t allocationPropertyFlags,
                                                         skgpu::VulkanBackendMemory* backendMemory) {
     TRACE_EVENT0("skia.gpu", TRACE_FUNC);
-    VmaAllocationCreateInfo info;
+    VmaAllocationCreateInfo info = {};
     info.flags = 0;
     info.usage = VMA_MEMORY_USAGE_UNKNOWN;
     info.memoryTypeBits = 0;
@@ -193,6 +191,10 @@ VkResult VulkanAMDMemoryAllocator::allocateBufferMemory(VkBuffer buffer,
     if (kPersistentlyMapped_AllocationPropertyFlag & allocationPropertyFlags) {
         SkASSERT(BufferUsage::kGpuOnly != usage);
         info.flags |= VMA_ALLOCATION_CREATE_MAPPED_BIT;
+    }
+
+    if (kProtected_AllocationPropertyFlag & allocationPropertyFlags) {
+        info.requiredFlags |= VK_MEMORY_PROPERTY_PROTECTED_BIT;
     }
 
     VmaAllocation allocation;

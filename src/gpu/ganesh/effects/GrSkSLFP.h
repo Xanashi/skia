@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Google Inc.
+ * Copyright 2018 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -9,13 +9,13 @@
 #define GrSkSLFP_DEFINED
 
 #include "include/core/SkRefCnt.h"
+#include "include/core/SkSpan.h"
 #include "include/effects/SkRuntimeEffect.h"
-#include "include/gpu/GrTypes.h"
-#include "include/private/SkColorData.h"
-#include "include/private/base/SkAssert.h"
-#include "include/private/base/SkDebug.h"
-#include "include/private/base/SkSpan_impl.h"
-#include "src/base/SkVx.h" // IWYU pragma: keep
+#include "include/private/SkAssert.h"
+#include "include/private/SkDebug.h"
+#include "include/private/SkMacros.h"
+#include "src/core/SkColorData.h"
+#include "src/core/SkVx.h" // IWYU pragma: keep
 #include "src/gpu/ganesh/GrFragmentProcessor.h"
 #include "src/gpu/ganesh/GrProcessorUnitTest.h"
 #include "src/gpu/ganesh/glsl/GrGLSLProgramDataManager.h"
@@ -176,7 +176,7 @@ public:
         size_t uniformPayloadSize = UniformPayloadSize(effect);
         std::unique_ptr<GrSkSLFP> fp(new (uniformPayloadSize) GrSkSLFP(sk_ref_sp(effect),
                                                                        name, optFlags));
-        fp->appendArgs(fp->uniformData(), fp->specialized(), std::forward<Args>(args)...);
+        fp->appendArgs(fp->uniformData(), fp->specialized(), std::forward<Args>(args)...); // NOLINT
         if (inputFP) {
             fp->setInput(std::move(inputFP));
         }
@@ -445,6 +445,6 @@ private:
     friend class GrSkSLFPFactory;
 };
 
-GR_MAKE_BITFIELD_CLASS_OPS(GrSkSLFP::OptFlags)
+SK_MAKE_BITFIELD_CLASS_OPS(GrSkSLFP::OptFlags)
 
 #endif

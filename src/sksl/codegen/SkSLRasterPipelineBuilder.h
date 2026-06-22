@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Google Inc.
+ * Copyright 2022 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -12,13 +12,14 @@
 
 #include "include/core/SkSpan.h"
 #include "include/core/SkTypes.h"
-#include "include/private/base/SkTArray.h"
-#include "src/base/SkUtils.h"
+#include "include/private/SkTArray.h"
 #include "src/core/SkRasterPipelineOpList.h"
+#include "src/core/SkUtils.h"
 
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 
 class SkArenaAlloc;
 class SkRasterPipeline;
@@ -176,7 +177,7 @@ private:
         SkSpan<float> stack;
         SkSpan<float> immutable;
     };
-    SlotData allocateSlotData(SkArenaAlloc* alloc) const;
+    std::optional<SlotData> allocateSlotData(SkArenaAlloc* alloc) const;
 
     struct Stage {
         ProgramOp op;
@@ -186,7 +187,6 @@ private:
                     SkArenaAlloc* alloc,
                     SkSpan<const float> uniforms,
                     const SlotData& slots) const;
-    void optimize();
     StackDepths tempStackMaxDepths() const;
 
     // These methods are used to split up multi-slot copies into multiple ops as needed.
@@ -296,7 +296,7 @@ private:
 
 class Builder {
 public:
-    /** Finalizes and optimizes the program. */
+    /** Finalizes and returns a completed program. */
     std::unique_ptr<Program> finish(int numValueSlots,
                                     int numUniformSlots,
                                     int numImmutableSlots,

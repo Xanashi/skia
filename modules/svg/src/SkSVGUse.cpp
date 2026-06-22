@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 Google Inc.
+ * Copyright 2017 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -8,6 +8,9 @@
 #include "modules/svg/include/SkSVGUse.h"
 
 #include "include/core/SkCanvas.h"
+#include "include/core/SkScalar.h"
+#include "include/private/SkDebug.h"
+#include "modules/svg/include/SkSVGAttributeParser.h"
 #include "modules/svg/include/SkSVGRenderContext.h"
 #include "modules/svg/include/SkSVGValue.h"
 #include "modules/svg/include/SkSVGAnimate.h"
@@ -20,7 +23,7 @@ void SkSVGUse::appendChild(sk_sp<SkSVGNode> node) {
         if (!isTransformSet()) {
             const auto [n, v] = static_cast<const SkSVGAnimate*>(node.get())->getFirstAttributeValue();
             auto parseResult = SkSVGAttributeParser::parse<SkSVGTransformType>(v.c_str());
-            if (parseResult.isValid()) {
+            if (parseResult.has_value()) {
                 this->setTransform(SkSVGTransformValue(*parseResult));
             }        
         }
@@ -94,13 +97,13 @@ SkPath SkSVGUse::onAsPath(const SkSVGRenderContext& ctx) const {
     const SkScalar y = lctx.resolve(fY, SkSVGLengthContext::LengthType::kVertical);
 
     if (x != 0 || y != 0) {
-        path.offset(x, y);
+        path = path.makeOffset(x, y);
     }
 
     return path;
 }
 
-SkRect SkSVGUse::onObjectBoundingBox(const SkSVGRenderContext& ctx) const {
+SkRect SkSVGUse::onTransformableObjectBoundingBox(const SkSVGRenderContext& ctx) const {
     const auto ref = ctx.findNodeById(fHref);
     if (!ref) {
         return SkRect::MakeEmpty();

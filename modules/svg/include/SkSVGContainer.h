@@ -10,10 +10,16 @@
 
 #include <vector>
 
-#include "include/private/base/SkTArray.h"
+#include "include/core/SkPath.h"
+#include "include/core/SkRect.h"
+#include "include/core/SkRefCnt.h"
+#include "include/private/SkAPI.h"
+#include "include/private/SkTArray.h"
+#include "modules/svg/include/SkSVGNode.h"
 #include "modules/svg/include/SkSVGTransformableNode.h"
 
 class INodeSelector;
+class SkSVGRenderContext;
 
 class SK_API SkSVGContainer : public SkSVGTransformableNode {
 public:
@@ -42,7 +48,7 @@ protected:
 
     SkPath onAsPath(const SkSVGRenderContext&) const override;
 
-    SkRect onObjectBoundingBox(const SkSVGRenderContext&) const override;
+    SkRect onTransformableObjectBoundingBox(const SkSVGRenderContext&) const final;
 
     bool hasChildren() const final;
 

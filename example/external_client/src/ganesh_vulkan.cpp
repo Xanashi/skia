@@ -13,7 +13,7 @@
 #include "include/core/SkRRect.h"
 #include "include/core/SkRefCnt.h"
 #include "include/core/SkSurface.h"
-#include "include/gpu/GrDirectContext.h"
+#include "include/gpu/ganesh/GrDirectContext.h"
 #include "include/gpu/ganesh/SkSurfaceGanesh.h"
 #include "include/gpu/ganesh/vk/GrVkDirectContext.h"
 #include "include/gpu/vk/VulkanBackendContext.h"
@@ -27,6 +27,7 @@ int main(int argc, char** argv) {
     std::unique_ptr<skgpu::VulkanExtensions> extensions(new skgpu::VulkanExtensions());
     backendContext.fInstance = VK_NULL_HANDLE;
     backendContext.fDevice = VK_NULL_HANDLE;
+    backendContext.fMemoryAllocator = nullptr;
 
     // This call will fail if run, due to the context not being set up.
     sk_sp<GrDirectContext> ctx = GrDirectContexts::MakeVulkan(backendContext);

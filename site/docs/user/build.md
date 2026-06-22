@@ -35,6 +35,19 @@ Skia against the headers and libraries found on the system paths.
 use `extra_cflags` and `extra_ldflags` to add include or library paths if
 needed.
 
+### Rust code in third_party
+
+Skia has some third party dependencies that are written in Rust. In order
+to build these from Skia's GN build, you will need to have
+[Bazel](https://bazel.build/) installed (or use `bazelisk`), which will
+download a Rust toolchain and build these.
+
+### Dawn
+
+Skia uses [Dawn](https://dawn.googlesource.com/dawn) for some of its GPU
+backends, which it builds using CMake. In order to build Dawn from GN, you
+must have `cmake` 3.30 or later installed.
+
 ## Supported and Preferred Compilers
 
 While Skia should compile with GCC, MSVC, and other compilers, a number of
@@ -45,9 +58,9 @@ will see dramatically worse performance. This choice was only a matter of
 prioritization; there is nothing fundamentally wrong with non-Clang compilers.
 So if this is a serious issue for you, please let us know on the mailing list.
 
-Skia makes use of C++17 language features (compiles with `-std=c++17` flag) and
-thus requires a C++17 compatible compiler. Clang 5 and later implement all of
-the features of the c++17 standard. Older compilers that lack C++17 support may
+Skia makes use of C++20 language features (compiles with `-std=c++20` flag) and
+thus requires a C++20 compatible compiler. Clang 21 implements most
+the features of the c++20 standard. Older compilers that lack C++20 support may
 produce non-obvious compilation errors. You can configure your build to use
 specific executables for `cc` and `cxx` invocations using e.g.
 `--args='cc="clang" cxx="clang++"'` GN build arguments, as illustrated in
@@ -97,10 +110,24 @@ bin/gn gen out/Cached   --args='cc_wrapper="ccache"'
 bin/gn gen out/RTTI     --args='extra_cflags_cc=["-frtti"]'
 ```
 
-Once you have generated your build files, run Ninja to compile and link Skia:
+Once you have generated your build files, run Ninja to compile and link all of Skia:
 
 ```
 ninja -C out/Static
+```
+
+To avoid building everything, include the target or targets after the ninja command. For example:
+
+```
+ninja -C out/Debug skia
+ninja -C out/Debug viewer dm
+```
+
+Not all targets are available for all sets of build arguments. For a list of all available targets
+for a given build directory, run:
+
+```
+gn ls out/Debug
 ```
 
 If some header files are missing, install the corresponding dependencies:
@@ -119,7 +146,8 @@ ninja -C out/Static
 
 ## Android
 
-To build Skia for Android you need an
+To build Skia for Android you need a recent version of
+[Java](https://www.oracle.com/java/technologies/downloads/) and a recent
 [Android NDK](https://developer.android.com/ndk/index.html).
 
 If you do not have an NDK and have access to CIPD, you can use one of these
@@ -127,8 +155,8 @@ commands to fetch the NDK our bots use:
 
 ```
 ./bin/fetch-sk
-./bin/sk asset download android_ndk_linux /tmp/ndk     # on Linux
-./bin/sk asset download android_ndk_darwin /tmp/ndk    # on Mac
+./bin/sk asset download android_ndk_linux ~/ndk        # on Linux
+./bin/sk asset download android_ndk_darwin ~/ndk       # on Mac
 ./bin/sk.exe asset download android_ndk_windows C:/ndk # on Windows
 ```
 
@@ -136,10 +164,10 @@ When generating your GN build files, pass the path to your `ndk` and your
 desired `target_cpu`:
 
 ```
-bin/gn gen out/arm   --args='ndk="/tmp/ndk" target_cpu="arm"'
-bin/gn gen out/arm64 --args='ndk="/tmp/ndk" target_cpu="arm64"'
-bin/gn gen out/x64   --args='ndk="/tmp/ndk" target_cpu="x64"'
-bin/gn gen out/x86   --args='ndk="/tmp/ndk" target_cpu="x86"'
+bin/gn gen out/arm   --args='ndk="~/ndk" target_cpu="arm"'
+bin/gn gen out/arm64 --args='ndk="~/ndk" target_cpu="arm64"'
+bin/gn gen out/x64   --args='ndk="~/ndk" target_cpu="x64"'
+bin/gn gen out/x86   --args='ndk="~/ndk" target_cpu="x86"'
 ```
 
 Other arguments like `is_debug` and `is_component_build` continue to work.
@@ -315,7 +343,7 @@ given at the top of that file or on the Developer site, or the absolute path
 to the file.
 
 If you find yourself missing a Google signing identity or provisioning profile,
-you'll want to have a read through go/appledev.
+you'll want to have a read through go/appledev and go/ios-signing.
 
 For signed packages `ios-deploy` makes installing and running them on a device
 easy:

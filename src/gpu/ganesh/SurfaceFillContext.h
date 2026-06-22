@@ -12,8 +12,8 @@
 #include "include/core/SkMatrix.h"
 #include "include/core/SkRect.h"
 #include "include/core/SkRefCnt.h"
-#include "include/private/SkColorData.h"
-#include "include/private/base/SkDebug.h"
+#include "include/private/SkDebug.h"
+#include "src/core/SkColorData.h"
 #include "src/gpu/ganesh/GrColorInfo.h"
 #include "src/gpu/ganesh/GrFragmentProcessor.h"
 #include "src/gpu/ganesh/GrRenderTargetProxy.h"
@@ -50,7 +50,7 @@ public:
 
     OpsTask* getOpsTask();
 
-#if defined(GR_TEST_UTILS)
+#if defined(GPU_TEST_UTILS)
     OpsTask* testingOnly_PeekLastOpsTask() { return fOpsTask.get(); }
 #endif
 
@@ -103,7 +103,7 @@ public:
     void fillRectToRectWithFP(const SkRect& srcRect,
                               const SkIRect& dstRect,
                               std::unique_ptr<GrFragmentProcessor> fp) {
-        SkMatrix lm = SkMatrix::RectToRect(SkRect::Make(dstRect), srcRect);
+        SkMatrix lm = SkMatrix::RectToRectOrIdentity(SkRect::Make(dstRect), srcRect);
         this->fillRectWithFP(dstRect, lm, std::move(fp));
     }
 

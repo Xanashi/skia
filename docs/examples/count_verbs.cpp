@@ -1,4 +1,4 @@
-// Copyright 2020 Google LLC.
+// Copyright 2020 Google LLC
 // Use of this source code is governed by a BSD-style license that can be found in the LICENSE file.
 #include "tools/fiddle/examples.h"
 REG_FIDDLE(count_verbs, 256, 256, false, 0) {
@@ -16,15 +16,8 @@ static void count_verbs(const SkPath& path, int counts[6]) {
     for (int i = 0; i < 6; ++i) {
         counts[i] = 0;
     }
-    while (true) {
-        SkPoint pts[4];
-        SkPath::Verb verb = it.next(pts);
-        if (verb == SkPath::kDone_Verb) {
-            break;
-        }
-        if ((unsigned)verb < 6) {
-            counts[(unsigned)verb]++;
-        }
+    while (auto rec = it.next()) {
+        counts[(unsigned)rec->fVerb]++;
     }
 }
 

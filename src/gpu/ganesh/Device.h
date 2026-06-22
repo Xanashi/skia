@@ -17,26 +17,26 @@
 #include "include/core/SkRefCnt.h"
 #include "include/core/SkSamplingOptions.h"
 #include "include/core/SkShader.h"
+#include "include/core/SkSpan.h"
 #include "include/core/SkSurface.h"
-#include "include/gpu/GrTypes.h"
-#include "include/private/base/SkAssert.h"
+#include "include/gpu/ganesh/GrRecordingContext.h"
+#include "include/gpu/ganesh/GrTypes.h"
+#include "include/private/SkAssert.h"
+#include "include/private/SkMacros.h"
 #include "src/core/SkDevice.h"
 #include "src/core/SkMatrixPriv.h"
 #include "src/gpu/ganesh/ClipStack.h"
 #include "src/gpu/ganesh/GrColorInfo.h"
 #include "src/gpu/ganesh/GrSurfaceProxyView.h"
-#include "src/text/gpu/SDFTControl.h"
+#include "src/text/gpu/SubRunControl.h"
 
-#include <cstddef>
 #include <memory>
 #include <utility>
 
 class GrBackendSemaphore;
 class GrClip;
-class GrRecordingContext;
 class GrRenderTargetProxy;
 class GrSurfaceProxy;
-class SkBitmap;
 class SkBlender;
 class SkColorSpace;
 class SkDrawable;
@@ -47,6 +47,7 @@ class SkPaint;
 class SkPath;
 class SkPixmap;
 class SkRRect;
+class SkRecorder;
 class SkRegion;
 class SkSpecialImage;
 class SkSurfaceProps;
@@ -99,6 +100,10 @@ public:
     GrRenderTargetProxy* targetProxy();
 
     GrRecordingContext* recordingContext() const override { return fContext.get(); }
+    SkRecorder* baseRecorder() const override {
+        SkASSERT(fContext);
+        return fContext->asRecorder();
+    }
 
     bool wait(int numSemaphores,
               const GrBackendSemaphore* waitSemaphores,
@@ -178,23 +183,22 @@ public:
     void clearAll();
 
     void drawPaint(const SkPaint& paint) override;
-    void drawPoints(SkCanvas::PointMode mode, size_t count, const SkPoint[],
-                    const SkPaint& paint) override;
+    void drawPoints(SkCanvas::PointMode, SkSpan<const SkPoint>, const SkPaint&) override;
     void drawRect(const SkRect& r, const SkPaint& paint) override;
     void drawRRect(const SkRRect& r, const SkPaint& paint) override;
     void drawDRRect(const SkRRect& outer, const SkRRect& inner, const SkPaint& paint) override;
     void drawRegion(const SkRegion& r, const SkPaint& paint) override;
     void drawOval(const SkRect& oval, const SkPaint& paint) override;
     void drawArc(const SkArc& arc, const SkPaint& paint) override;
-    void drawPath(const SkPath& path, const SkPaint& paint, bool pathIsMutable) override;
+    void drawPath(const SkPath& path, const SkPaint& paint) override;
 
     void drawVertices(const SkVertices*, sk_sp<SkBlender>, const SkPaint&, bool) override;
     void drawMesh(const SkMesh&, sk_sp<SkBlender>, const SkPaint&) override;
 #if !defined(SK_ENABLE_OPTIMIZE_SIZE)
-    void drawShadow(const SkPath&, const SkDrawShadowRec&) override;
+    void drawShadow(SkCanvas*, const SkPath&, const SkDrawShadowRec&) override;
 #endif
-    void drawAtlas(const SkRSXform[], const SkRect[], const SkColor[], int count, sk_sp<SkBlender>,
-                   const SkPaint&) override;
+    void drawAtlas(SkSpan<const SkRSXform>, SkSpan<const SkRect>, SkSpan<const SkColor>,
+                   sk_sp<SkBlender>, const SkPaint&) override;
 
     void drawImageRect(const SkImage*, const SkRect* src, const SkRect& dst,
                        const SkSamplingOptions&, const SkPaint&,
@@ -215,6 +219,10 @@ public:
     void drawDevice(SkDevice*, const SkSamplingOptions&, const SkPaint&) override;
     void drawSpecial(SkSpecialImage*, const SkMatrix& localToDevice, const SkSamplingOptions&,
                      const SkPaint&, SkCanvas::SrcRectConstraint) override;
+
+    void drawCoverageMask(const SkSpecialImage* mask, const SkMatrix& maskToDevice,
+                          const SkSamplingOptions& localToDevice, const SkPaint& paint) override;
+    bool drawBlurredRRect(const SkRRect&, const SkPaint&, float deviceSigma) override;
 
     void drawEdgeAAQuad(const SkRect& rect, const SkPoint clip[4], SkCanvas::QuadAAFlags aaFlags,
                         const SkColor4f& color, SkBlendMode mode) override;
@@ -246,8 +254,6 @@ public:
 
     void drawSlug(SkCanvas*, const sktext::gpu::Slug* slug, const SkPaint& paint) override;
 
-    sk_sp<SkSpecialImage> makeSpecial(const SkBitmap&) override;
-    sk_sp<SkSpecialImage> makeSpecial(const SkImage*) override;
     sk_sp<SkSpecialImage> snapSpecial(const SkIRect& subset, bool forceCopy = false) override;
     sk_sp<SkSpecialImage> snapSpecialScaled(const SkIRect& subset, const SkISize& dstDims) override;
 
@@ -304,14 +310,14 @@ private:
         kIsOpaque  = 1 << 1,  //!< Hint from client that rendering to this device will be
         //   opaque even if the config supports alpha.
     };
-    GR_DECL_BITFIELD_CLASS_OPS_FRIENDS(DeviceFlags);
+    SK_DECL_BITFIELD_CLASS_OPS_FRIENDS(DeviceFlags);
 
     static SkImageInfo MakeInfo(SurfaceContext*,  DeviceFlags);
     static bool CheckAlphaTypeAndGetFlags(SkAlphaType, InitContents, DeviceFlags*);
 
     sk_sp<GrRecordingContext> fContext;
 
-    const sktext::gpu::SDFTControl fSDFTControl;
+    const sktext::gpu::SubRunControl fSubRunControl;
 
     std::unique_ptr<SurfaceDrawContext> fSurfaceDrawContext;
 
@@ -363,7 +369,7 @@ private:
     friend class skgpu::TiledTextureUtils;   // for access to clip()
 };
 
-GR_MAKE_BITFIELD_CLASS_OPS(Device::DeviceFlags)
+SK_MAKE_BITFIELD_CLASS_OPS(Device::DeviceFlags)
 
 }  // namespace skgpu::ganesh
 

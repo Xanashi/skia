@@ -10,18 +10,18 @@
 #include "include/core/SkBlendMode.h"
 #include "include/core/SkBlender.h"
 #include "include/core/SkRefCnt.h"
-#include "include/private/base/SkAssert.h"
-#include "src/base/SkNoDestructor.h"
+#include "include/private/SkAssert.h"
 #include "src/core/SkBlendModePriv.h"
 #include "src/core/SkEffectPriv.h"
+#include "src/core/SkNoDestructor.h"
 #include "src/core/SkReadBuffer.h"
 #include "src/core/SkWriteBuffer.h"
 
-sk_sp<SkBlender> SkBlender::Mode(SkBlendMode mode) {
+const SkBlender* GetBlendModeSingleton(SkBlendMode mode) {
 #define RETURN_SINGLETON_BLENDER(m)                            \
     case m: {                                                  \
         static SkNoDestructor<SkBlendModeBlender> sBlender(m); \
-        return sk_ref_sp(sBlender.get());                      \
+        return sBlender.get();                                 \
     }
 
     switch (mode) {
@@ -60,6 +60,10 @@ sk_sp<SkBlender> SkBlender::Mode(SkBlendMode mode) {
     return nullptr;
 
 #undef RETURN_SINGLETON_BLENDER
+}
+
+sk_sp<SkBlender> SkBlender::Mode(SkBlendMode mode) {
+    return sk_ref_sp(GetBlendModeSingleton(mode));
 }
 
 sk_sp<SkFlattenable> SkBlendModeBlender::CreateProc(SkReadBuffer& buffer) {

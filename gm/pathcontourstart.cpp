@@ -17,8 +17,8 @@
 #include "include/core/SkSize.h"
 #include "include/core/SkString.h"
 #include "include/effects/SkDashPathEffect.h"
-#include "include/private/base/SkTArray.h"
-#include "include/private/base/SkTemplates.h"
+#include "include/private/SkTArray.h"
+#include "include/private/SkTemplates.h"
 
 using namespace skia_private;
 
@@ -40,7 +40,7 @@ protected:
         fDashPaint.setStyle(SkPaint::kStroke_Style);
         fDashPaint.setStrokeWidth(6);
         fDashPaint.setColor(0xff008000);
-        fDashPaint.setPathEffect(SkDashPathEffect::Make(intervals.begin(), intervals.size(), 0));
+        fDashPaint.setPathEffect(SkDashPathEffect::Make(intervals, 0));
 
         fPointsPaint.setColor(0xff800000);
         fPointsPaint.setStrokeWidth(3);
@@ -105,11 +105,7 @@ private:
         for (unsigned i = 0; i < 8; ++i) {
             const SkPath path = makePath(fRect, dir, i);
             canvas->drawPath(path, fDashPaint);
-
-            const int n = path.countPoints();
-            AutoTArray<SkPoint> points(n);
-            path.getPoints(points.get(), n);
-            canvas->drawPoints(SkCanvas::kPoints_PointMode, n, points.get(), fPointsPaint);
+            canvas->drawPoints(SkCanvas::kPoints_PointMode, path.points(), fPointsPaint);
 
             canvas->translate(0, kImageHeight / 8);
         }

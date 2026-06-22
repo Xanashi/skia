@@ -1,5 +1,5 @@
 /*
-* Copyright 2021 Google Inc.
+* Copyright 2021 Google LLC
 *
 * Use of this source code is governed by a BSD-style license that can be
 * found in the LICENSE file.
@@ -9,7 +9,7 @@
 #define GrMtlFramebuffer_DEFINED
 
 #include "include/core/SkRefCnt.h"
-#include "include/gpu/GrTypes.h"
+#include "include/gpu/ganesh/GrTypes.h"
 #include "include/gpu/ganesh/mtl/GrMtlTypes.h"
 #include "include/private/gpu/ganesh/GrTypesPriv.h"
 

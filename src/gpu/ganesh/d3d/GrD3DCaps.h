@@ -10,8 +10,8 @@
 
 #include "src/gpu/ganesh/GrCaps.h"
 
-#include "include/gpu/d3d/GrD3DTypes.h"
-#include "include/private/base/SkTDArray.h"
+#include "include/gpu/ganesh/d3d/GrD3DTypes.h"
+#include "include/private/SkTDArray.h"
 #include "src/gpu/ganesh/d3d/GrD3DAttachment.h"
 
 enum class SkTextureCompressionType;
@@ -107,7 +107,7 @@ public:
     bool resolveSubresourceRegionSupport() const { return fResolveSubresourceRegionSupport; }
     bool standardSwizzleLayoutSupport() const { return fStandardSwizzleLayoutSupport; }
 
-#if defined(GR_TEST_UTILS)
+#if defined(GPU_TEST_UTILS)
     std::vector<GrTest::TestFormatColorTypeCombination> getTestingCombinations() const override;
 #endif
 

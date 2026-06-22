@@ -8,8 +8,8 @@
 #ifndef SKSL_MODIFIERFLAGS
 #define SKSL_MODIFIERFLAGS
 
-#include "include/private/base/SkTo.h"
-#include "src/base/SkEnumBitMask.h"
+#include "include/private/SkTo.h"
+#include "src/core/SkEnumBitMask.h"
 
 #include <string>
 
@@ -46,7 +46,7 @@ enum class ModifierFlag : int {
 
 }  // namespace SkSL
 
-SK_MAKE_BITMASK_OPS(SkSL::ModifierFlag);
+SK_MAKE_BITMASK_OPS(SkSL::ModifierFlag)
 
 namespace SkSL {
 

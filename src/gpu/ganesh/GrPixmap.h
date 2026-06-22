@@ -14,8 +14,8 @@
 #include "include/core/SkRect.h"
 #include "include/core/SkRefCnt.h"
 #include "include/core/SkSize.h"
-#include "include/private/base/SkTLogic.h"
-#include "include/private/base/SkTo.h"
+#include "include/private/SkTLogic.h"
+#include "include/private/SkTo.h"
 #include "src/gpu/ganesh/GrImageInfo.h"
 
 #include <cstddef>
@@ -82,7 +82,7 @@ protected:
     }
 
     GrPixmapBase(GrImageInfo info, sk_sp<SkData> storage, size_t rowBytes)
-            : GrPixmapBase(std::move(info), const_cast<void*>(storage->data()), rowBytes) {
+            : GrPixmapBase(std::move(info), storage->writable_data(), rowBytes) {
         fPixelStorage = std::move(storage);
     }
 

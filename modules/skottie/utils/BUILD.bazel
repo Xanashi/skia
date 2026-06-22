@@ -43,14 +43,15 @@ skia_cc_library(
     features = ["layering_check"],
     visibility = [
         "//:__pkg__",
+        "//dm:__pkg__",
         "//modules/canvaskit:__pkg__",
         "//modules/skottie:__subpackages__",
+        "//tools/viewer:__pkg__",
     ],
     deps = [
         "//:core",
         "//modules/skottie",
         "//modules/skresources",
-        "//src/base",
     ],
 )
 
@@ -67,11 +68,12 @@ skia_cc_library(
         "//:__pkg__",
         "//modules/canvaskit:__pkg__",
         "//modules/skottie:__subpackages__",
+        "//tools/viewer:__pkg__",
     ],
     deps = [
         "//:core",
         "//modules/skottie",
-        "//src/base",
+        "//src/core:core_priv",
         "//tools/skui",
     ],
 )
@@ -95,7 +97,6 @@ skia_cc_library(
         "//modules/skottie:skottie_priv",
         "//modules/skresources",
         "//modules/skshaper:skshaper_core",
-        "//src/base",
         "//src/core:core_priv",
     ],
 )

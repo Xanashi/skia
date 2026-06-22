@@ -1,4 +1,4 @@
-// Copyright 2019 Google LLC.
+// Copyright 2019 Google LLC
 // Use of this source code is governed by a BSD-style license that can be found in the LICENSE file.
 #include "tools/fiddle/examples.h"
 REG_FIDDLE(Canvas_drawPoints, 256, 200, false, 0) {
@@ -13,15 +13,14 @@ void draw(SkCanvas* canvas) {
                                    SkPaint::kMiter_Join,
                                    SkPaint::kBevel_Join };
     int joinIndex = 0;
-    SkPath path;
-    path.addPoly(points, 3, false);
+    SkPath path = SkPath::Polygon(points, false);
     for (const auto cap : { SkPaint::kRound_Cap, SkPaint::kSquare_Cap, SkPaint::kButt_Cap } ) {
         paint.setStrokeCap(cap);
         paint.setStrokeJoin(join[joinIndex++]);
         for (const auto mode : { SkCanvas::kPoints_PointMode,
                                  SkCanvas::kLines_PointMode,
                                  SkCanvas::kPolygon_PointMode } ) {
-            canvas->drawPoints(mode, 3, points, paint);
+            canvas->drawPoints(mode, points, paint);
             canvas->translate(64, 0);
         }
         canvas->drawPath(path, paint);

@@ -11,8 +11,8 @@
 #include "include/core/SkRect.h"
 #include "include/core/SkRefCnt.h"
 #include "include/gpu/GpuTypes.h"
-#include "include/private/base/SkAssert.h"
-#include "include/private/base/SkDebug.h"
+#include "include/private/SkAssert.h"
+#include "include/private/SkDebug.h"
 #include "include/private/gpu/ganesh/GrTypesPriv.h"
 #include "src/gpu/ganesh/GrGpuBuffer.h"
 #include "src/gpu/ganesh/GrRenderTask.h"
@@ -41,6 +41,8 @@ public:
             , fDstBuffer(std::move(dstBuffer))
             , fDstOffset(dstOffset) {}
 
+    bool wasExecuted() const { return fExecuted; }
+
 private:
     bool onIsUsed(GrSurfaceProxy* proxy) const override {
         SkASSERT(0 == this->numTargets());
@@ -54,7 +56,7 @@ private:
 
     bool onExecute(GrOpFlushState*) override;
 
-#if defined(GR_TEST_UTILS)
+#if defined(GPU_TEST_UTILS)
     const char* name() const final { return "TransferFrom"; }
 #endif
 #ifdef SK_DEBUG
@@ -70,7 +72,7 @@ private:
     sk_sp<GrGpuBuffer> fDstBuffer;
     size_t fDstOffset;
 
+    bool fExecuted = false;
 };
 
 #endif
-

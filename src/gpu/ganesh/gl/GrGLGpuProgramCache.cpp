@@ -6,8 +6,8 @@
  */
 #include "include/core/SkData.h"
 #include "include/core/SkRefCnt.h"
-#include "include/gpu/GrDirectContext.h"
-#include "include/private/base/SkAssert.h"
+#include "include/gpu/ganesh/GrDirectContext.h"
+#include "include/private/SkAssert.h"
 #include "include/private/gpu/ganesh/GrTypesPriv.h"
 #include "src/core/SkLRUCache.h"
 #include "src/gpu/ganesh/GrCaps.h"
@@ -40,7 +40,7 @@ GrGLGpu::ProgramCache::ProgramCache(int runtimeProgramCacheSize)
 GrGLGpu::ProgramCache::~ProgramCache() {}
 
 void GrGLGpu::ProgramCache::abandon() {
-    fMap.foreach([](GrProgramDesc*, std::unique_ptr<Entry>* e) {
+    fMap.foreach([](const GrProgramDesc*, std::unique_ptr<Entry>* e) {
         if ((*e)->fProgram) {
             (*e)->fProgram->abandon();
         }

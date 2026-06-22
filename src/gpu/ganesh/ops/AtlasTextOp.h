@@ -10,14 +10,14 @@
 
 #include "include/core/SkColor.h"
 #include "include/core/SkMatrix.h"
+#include "include/core/SkPoint.h"
 #include "include/core/SkRect.h"
 #include "include/core/SkRefCnt.h"
 #include "include/core/SkString.h"
-#include "include/private/SkColorData.h"
-#include "include/private/base/SkAssert.h"
-#include "include/private/base/SkPoint_impl.h"
+#include "include/private/SkAssert.h"
 #include "include/private/gpu/ganesh/GrTypesPriv.h"
-#include "src/gpu/AtlasTypes.h"
+#include "src/core/SkColorData.h"
+#include "src/gpu/MaskFormat.h"
 #include "src/gpu/ganesh/GrAppliedClip.h"
 #include "src/gpu/ganesh/GrBuffer.h"
 #include "src/gpu/ganesh/GrCaps.h"
@@ -30,8 +30,10 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <tuple>
 #include <utility>
 
+class GrClip;
 class GrDstProxyView;
 class GrGeometryProcessor;
 class GrMeshDrawTarget;
@@ -42,9 +44,11 @@ class GrRecordingContext;
 class GrSurfaceProxy;
 class GrSurfaceProxyView;
 class SkArenaAlloc;
+class SkPaint;
 enum class GrXferBarrierFlags;
 struct GrShaderCaps;
 
+namespace skgpu { namespace ganesh { class SurfaceDrawContext; } }
 namespace sktext { namespace gpu { class AtlasSubRun; } }
 
 namespace skgpu::ganesh {
@@ -52,6 +56,14 @@ namespace skgpu::ganesh {
 class AtlasTextOp final : public GrMeshDrawOp {
 public:
     DEFINE_OP_CLASS_ID
+
+    static std::tuple<const GrClip*, GrOp::Owner> Make(SurfaceDrawContext*,
+                                                       const sktext::gpu::AtlasSubRun*,
+                                                       const GrClip*,
+                                                       const SkMatrix& viewMatrix,
+                                                       SkPoint drawOrigin,
+                                                       const SkPaint&,
+                                                       sk_sp<SkRefCnt>&& subRunStorage);
 
     ~AtlasTextOp() override {
         for (const Geometry* g = fHead; g != nullptr;) {
@@ -147,6 +159,7 @@ private:
         int fNumDraws = 0;
     };
 
+    // DirectMask and TransformedMask constructor
     AtlasTextOp(MaskType maskType,
                 bool needsTransform,
                 int glyphCount,
@@ -155,6 +168,7 @@ private:
                 const GrColorInfo& dstColorInfo,
                 GrPaint&& paint);
 
+    // SDF constructor
     AtlasTextOp(MaskType maskType,
                 bool needsTransform,
                 int glyphCount,
@@ -203,7 +217,7 @@ private:
     void onPrepareDraws(GrMeshDrawTarget*) override;
     void onExecute(GrOpFlushState*, const SkRect& chainBounds) override;
 
-#if defined(GR_TEST_UTILS)
+#if defined(GPU_TEST_UTILS)
     SkString onDumpInfo() const override;
 #endif
 

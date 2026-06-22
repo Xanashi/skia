@@ -1,26 +1,41 @@
 /*
- * Copyright 2019 Google LLC.
+ * Copyright 2019 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
-
 #include "src/gpu/ganesh/ops/TessellationPathRenderer.h"
 
-#include "src/core/SkPathPriv.h"
+#include "include/core/SkMatrix.h"
+#include "include/core/SkPath.h"
+#include "include/core/SkRect.h"
+#include "include/core/SkStrokeRec.h"
+#include "include/private/SkAssert.h"
+#include "include/private/gpu/ganesh/GrTypesPriv.h"
+#include "src/core/SkMathPriv.h"
 #include "src/gpu/ganesh/GrCaps.h"
 #include "src/gpu/ganesh/GrClip.h"
-#include "src/gpu/ganesh/GrMemoryPool.h"
-#include "src/gpu/ganesh/GrRecordingContextPriv.h"
+#include "src/gpu/ganesh/GrPaint.h"
+#include "src/gpu/ganesh/GrRenderTargetProxy.h"
+#include "src/gpu/ganesh/GrStyle.h"
+#include "src/gpu/ganesh/GrSurfaceProxy.h"
+#include "src/gpu/ganesh/GrUserStencilSettings.h"
 #include "src/gpu/ganesh/SurfaceDrawContext.h"
 #include "src/gpu/ganesh/effects/GrDisableColorXP.h"
 #include "src/gpu/ganesh/geometry/GrStyledShape.h"
+#include "src/gpu/ganesh/ops/FillPathFlags.h"
+#include "src/gpu/ganesh/ops/GrOp.h"
 #include "src/gpu/ganesh/ops/PathInnerTriangulateOp.h"
 #include "src/gpu/ganesh/ops/PathStencilCoverOp.h"
 #include "src/gpu/ganesh/ops/PathTessellateOp.h"
 #include "src/gpu/ganesh/ops/StrokeTessellateOp.h"
 #include "src/gpu/tessellate/Tessellation.h"
 #include "src/gpu/tessellate/WangsFormula.h"
+
+#include <utility>
+
+class GrRecordingContext;
+class SkArenaAlloc;
 
 namespace {
 
@@ -179,8 +194,7 @@ PathRenderer::CanDrawPath TessellationPathRenderer::onCanDrawPath(
 bool TessellationPathRenderer::onDrawPath(const DrawPathArgs& args) {
     auto sdc = args.fSurfaceDrawContext;
 
-    SkPath path;
-    args.fShape->asPath(&path);
+    SkPath path = args.fShape->asPath();
 
     // onDrawPath() should only be called if ChopPathIfNecessary() succeeded.
     SkAssertResult(ChopPathIfNecessary(*args.fViewMatrix, *args.fShape,
@@ -251,8 +265,7 @@ void TessellationPathRenderer::onStencilPath(const StencilPathArgs& args) {
     SkRect pathDevBounds;
     args.fViewMatrix->mapRect(&pathDevBounds, args.fShape->bounds());
 
-    SkPath path;
-    args.fShape->asPath(&path);
+    SkPath path = args.fShape->asPath();
 
     float n4 = wangs_formula::worst_case_cubic_p4(tess::kPrecision,
                                                   pathDevBounds.width(),

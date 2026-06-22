@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Google Inc.
+ * Copyright 2019 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -12,6 +12,7 @@
 #if defined(SK_VULKAN)
 
 #include "include/core/SkAlphaType.h"
+#include "include/core/SkBitmap.h"
 #include "include/core/SkBlendMode.h"
 #include "include/core/SkBlurTypes.h"
 #include "include/core/SkCanvas.h"
@@ -26,20 +27,23 @@
 #include "include/core/SkRefCnt.h"
 #include "include/core/SkSurface.h"
 #include "include/gpu/GpuTypes.h"
-#include "include/gpu/GrTypes.h"
+#include "include/gpu/ganesh/GrTypes.h"
 #include "tests/CtsEnforcement.h"
 #include "tests/Test.h"
 #include "tools/gpu/vk/VkTestHelper.h"
 
 #if defined(SK_GANESH)
-#include "include/gpu/GrBackendSurface.h"
-#include "include/gpu/GrDirectContext.h"
+#include "include/gpu/ganesh/GrBackendSurface.h"
+#include "include/gpu/ganesh/GrDirectContext.h"
+#include "include/gpu/ganesh/SkSurfaceGanesh.h"
 #endif
 
 #if defined(SK_GRAPHITE)
 #include "include/gpu/graphite/BackendTexture.h"
+#include "include/gpu/graphite/Context.h"
 #include "include/gpu/graphite/Recorder.h"
 #include "include/gpu/graphite/TextureInfo.h"
+#include "include/gpu/graphite/vk/VulkanGraphiteTypes.h"
 #endif
 
 #include <memory>
@@ -49,51 +53,52 @@ struct GrContextOptions;
 
 static const int kSize = 8;
 
+#if defined(SK_GANESH)
+#define GANESH_TEST(NAME) DEF_GANESH_TEST(VkProtectedContext_##NAME,  \
+                                          reporter,                   \
+                                          options,                    \
+                                          CtsEnforcement::kNever) {   \
+    run_test_##NAME(reporter, skiatest::TestType::kGanesh);           \
+}
+
+#else
+#define GANESH_TEST(NAME)
+#endif
+
+#if defined(SK_GRAPHITE)
+#define GRAPHITE_TEST(NAME) DEF_GRAPHITE_TEST(VkProtectedContext_##NAME##_Graphite,  \
+                                              reporter,                              \
+                                              CtsEnforcement::kApiLevel_202504) {    \
+    run_test_##NAME(reporter, skiatest::TestType::kGraphite);                        \
+}
+#else
+#define GRAPHITE_TEST(NAME)
+#endif
+
+#define DEF_GANESH_AND_GRAPHITE_TEST(NAME, REPORTER, TEST_TYPE)                        \
+    void run_test_##NAME(skiatest::Reporter*, skiatest::TestType);                     \
+    GANESH_TEST(NAME)                                                                  \
+    GRAPHITE_TEST(NAME)                                                                \
+    void run_test_##NAME(skiatest::Reporter* REPORTER, skiatest::TestType TEST_TYPE)   \
+
 namespace {
 
-void create_nonprotected_context(skiatest::Reporter* reporter, skiatest::TestType testType) {
-    std::unique_ptr<VkTestHelper> helper = VkTestHelper::Make(testType, /* isProtected= */ false);
-    REPORTER_ASSERT(reporter, helper);
+std::unique_ptr<VkTestHelper> create_context(skiatest::TestType testType, bool isProtected = true) {
+    return VkTestHelper::Make(testType, isProtected);
 }
 
 } // anonymous namespace
 
-DEF_GANESH_TEST(VkProtectedContext_CreateNonprotectedContext,
-                reporter,
-                options,
-                CtsEnforcement::kNever) {
-    create_nonprotected_context(reporter, skiatest::TestType::kGanesh);
+DEF_GANESH_AND_GRAPHITE_TEST(CreateNonprotectedContext, reporter, testType) {
+    REPORTER_ASSERT(reporter, create_context(testType, false));
 }
 
-#if defined(SK_GRAPHITE)
-
-DEF_GRAPHITE_TEST(VkProtectedContext_CreateNonprotectedContext_Graphite,
-                  reporter,
-                  CtsEnforcement::kNextRelease) {
-    create_nonprotected_context(reporter, skiatest::TestType::kGraphite);
+DEF_GANESH_AND_GRAPHITE_TEST(CreateProtectedContext, reporter, testType) {
+    create_context(testType);
 }
 
-#endif
 
-DEF_GANESH_TEST(VkProtectedContext_CreateProtectedContext,
-                reporter,
-                options,
-                CtsEnforcement::kNever) {
-    std::unique_ptr<VkTestHelper> helper = VkTestHelper::Make(skiatest::TestType::kGanesh,
-                                                              /* isProtected= */ true);
-}
-
-DEF_GRAPHITE_TEST(VkProtectedContext_CreateProtectedContext_Graphite,
-                  reporter,
-                  CtsEnforcement::kNextRelease) {
-    std::unique_ptr<VkTestHelper> helper = VkTestHelper::Make(skiatest::TestType::kGraphite,
-                                                              /* isProtected= */ true);
-}
-
-namespace {
-
-void create_protected_surface(skiatest::Reporter* reporter, skiatest::TestType testType) {
-
+DEF_GANESH_AND_GRAPHITE_TEST(CreateProtectedSkSurface, reporter, testType) {
     std::unique_ptr<VkTestHelper> helper = VkTestHelper::Make(testType, /* isProtected= */ true);
     if (!helper) {
         return;
@@ -112,21 +117,7 @@ void create_protected_surface(skiatest::Reporter* reporter, skiatest::TestType t
     REPORTER_ASSERT(reporter, untextureable);
 }
 
-} // anonymous namespace
-
-DEF_GANESH_TEST(VkProtectedContext_CreateProtectedSkSurface,
-                reporter,
-                options,
-                CtsEnforcement::kNever) {
-    create_protected_surface(reporter, skiatest::TestType::kGanesh);
-}
-
-DEF_GRAPHITE_TEST(VkProtectedContext_CreateProtectedSkSurface_Graphite,
-                  reporter,
-                  CtsEnforcement::kNextRelease) {
-    create_protected_surface(reporter, skiatest::TestType::kGraphite);
-}
-
+#if defined(SK_GANESH)
 namespace {
 
 void create_backend_texture_ganesh(skiatest::Reporter* reporter,
@@ -169,6 +160,7 @@ DEF_GANESH_TEST(VkProtectedContext_CreateBackendTextures,
         }
     }
 }
+#endif
 
 #if defined(SK_GRAPHITE)
 
@@ -193,7 +185,7 @@ void create_backend_texture_graphite(skiatest::Reporter* reporter,
     vkTextureInfo.fImageUsageFlags = VK_IMAGE_USAGE_SAMPLED_BIT |
                                      VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
                                      VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-    TextureInfo textureInfo(vkTextureInfo);
+    TextureInfo textureInfo = TextureInfos::MakeVulkan(vkTextureInfo);
 
     BackendTexture backendTex = helper->recorder()->createBackendTexture({ kSize, kSize },
                                                                          textureInfo);
@@ -210,7 +202,7 @@ void create_backend_texture_graphite(skiatest::Reporter* reporter,
 
 DEF_GRAPHITE_TEST(VkProtectedContext_CreateBackendTextures_Graphite,
                   reporter,
-                  CtsEnforcement::kNextRelease) {
+                  CtsEnforcement::kApiLevel_202504) {
     for (bool contextIsProtected : { true, false }) {
         for (bool beTexIsProtected : { true, false }) {
             create_backend_texture_graphite(reporter, contextIsProtected, beTexIsProtected);
@@ -220,6 +212,7 @@ DEF_GRAPHITE_TEST(VkProtectedContext_CreateBackendTextures_Graphite,
 
 #endif // SK_GRAPHITE
 
+#if defined(SK_GANESH)
 DEF_GANESH_TEST(VkProtectedContext_ReadFromProtectedSurface,
                 reporter,
                 options,
@@ -239,6 +232,61 @@ DEF_GANESH_TEST(VkProtectedContext_ReadFromProtectedSurface,
     REPORTER_ASSERT(reporter, !surface->readPixels(SkImageInfo(), nullptr, 8, 0, 0));
 }
 
+// Graphite does not perform Copy-on-Write which is why there is no DEF_GRAPHITE_TEST correlate
+DEF_GANESH_TEST(VkProtectedContext_CopyOnWrite,
+                reporter,
+                options,
+                CtsEnforcement::kNever) {
+    std::unique_ptr<VkTestHelper> helper = VkTestHelper::Make(skiatest::TestType::kGanesh,
+                                                              /* isProtected= */ true);
+    if (!helper) {
+        return;
+    }
+
+    REPORTER_ASSERT(reporter, helper->isValid());
+
+    GrDirectContext* dContext = helper->directContext();
+
+    SkImageInfo ii = SkImageInfo::Make({ kSize, kSize },
+                                       kRGBA_8888_SkColorType,
+                                       kPremul_SkAlphaType);
+
+    // We can't use VkTestHelper::createSurface here bc that will wrap a backend
+    // texture which blocks the copy-on-write-behavior
+    sk_sp<SkSurface> surface = SkSurfaces::RenderTarget(dContext,
+                                                        skgpu::Budgeted::kNo,
+                                                        ii,
+                                                        /* sampleCount= */ 1,
+                                                        kBottomLeft_GrSurfaceOrigin,
+                                                        /* surfaceProps= */ nullptr,
+                                                        /* shouldCreateWithMips= */ false,
+                                                        /* isProtected= */ true);
+
+
+    REPORTER_ASSERT(reporter, surface);
+    SkCanvas* canvas = surface->getCanvas();
+    REPORTER_ASSERT(reporter, canvas);
+
+    sk_sp<SkImage> imageBefore = surface->makeImageSnapshot();
+    REPORTER_ASSERT(reporter, imageBefore);
+    REPORTER_ASSERT(reporter, imageBefore->isProtected());
+
+    SkPaint paint;
+    paint.setColor(SK_ColorBLACK);
+    canvas->drawRect(SkRect::MakeWH(4, 4), paint);
+
+    sk_sp<SkImage> imageAfter = surface->makeImageSnapshot();
+    REPORTER_ASSERT(reporter, imageAfter);
+    REPORTER_ASSERT(reporter, imageAfter->isProtected());
+
+    REPORTER_ASSERT(reporter, imageBefore != imageAfter);
+
+    SkBitmap readback;
+    readback.allocPixels(imageAfter->imageInfo());
+    REPORTER_ASSERT(reporter, !imageAfter->readPixels(dContext, readback.pixmap(), 0, 0));
+}
+#endif
+
 namespace {
 
 struct AsyncContext {
@@ -252,8 +300,9 @@ void async_callback(void* c, std::unique_ptr<const SkSurface::AsyncReadResult> r
     context->fCalled = true;
 }
 
-void async_read_from_protected_surface(skiatest::Reporter* reporter,
-                                              skiatest::TestType testType) {
+}  // anonymous namespace
+
+DEF_GANESH_AND_GRAPHITE_TEST(AsyncReadFromProtectedSurface, reporter, testType) {
     std::unique_ptr<VkTestHelper> helper = VkTestHelper::Make(testType, /* isProtected= */ true);
     if (!helper) {
         return;
@@ -266,36 +315,42 @@ void async_read_from_protected_surface(skiatest::Reporter* reporter,
                                                      /* isProtected= */ true);
     REPORTER_ASSERT(reporter, surface);
     AsyncContext cbContext;
-    const SkImageInfo imageInfo = SkImageInfo::Make(10, 10, kRGBA_8888_SkColorType,
+    const SkImageInfo imageInfo = SkImageInfo::Make(6, 6, kRGBA_8888_SkColorType,
                                                     kPremul_SkAlphaType, SkColorSpace::MakeSRGB());
-    surface->asyncRescaleAndReadPixelsYUV420(kIdentity_SkYUVColorSpace, SkColorSpace::MakeSRGB(),
-                                             imageInfo.bounds(), imageInfo.dimensions(),
-                                             SkSurface::RescaleGamma::kSrc,
-                                             SkSurface::RescaleMode::kNearest,
-                                             &async_callback, &cbContext);
+
+    if (testType == skiatest::TestType::kGanesh) {
+        surface->asyncRescaleAndReadPixelsYUV420(kIdentity_SkYUVColorSpace,
+                                                 SkColorSpace::MakeSRGB(),
+                                                 imageInfo.bounds(),
+                                                 imageInfo.dimensions(),
+                                                 SkSurface::RescaleGamma::kSrc,
+                                                 SkSurface::RescaleMode::kNearest,
+                                                 &async_callback,
+                                                 &cbContext);
+    }
+#if defined(SK_GRAPHITE)
+    else {
+        // Graphite deprecates SkSurface::asyncRescaleAndReadPixelsYUVA420 in favor of
+        // Context::asyncRescaleAndReadPixelsYUV420.
+        skgpu::graphite::Context* context = helper->context();
+
+        context->asyncRescaleAndReadPixelsYUV420(surface.get(),
+                                                 kIdentity_SkYUVColorSpace,
+                                                 SkColorSpace::MakeSRGB(),
+                                                 imageInfo.bounds(),
+                                                 imageInfo.dimensions(),
+                                                 SkSurface::RescaleGamma::kSrc,
+                                                 SkSurface::RescaleMode::kNearest,
+                                                 &async_callback,
+                                                 &cbContext);
+    }
+#endif
 
     helper->submitAndWaitForCompletion(&cbContext.fCalled);
     REPORTER_ASSERT(reporter, !cbContext.fResult);
 }
 
-}  // anonymous namespace
-
-DEF_GANESH_TEST(VkProtectedContext_AsyncReadFromProtectedSurface,
-                reporter,
-                options,
-                CtsEnforcement::kNever) {
-    async_read_from_protected_surface(reporter, skiatest::TestType::kGanesh);
-}
-
-DEF_GRAPHITE_TEST(VkProtectedContext_AsyncReadFromProtectedSurface_Graphite,
-                  reporter,
-                  CtsEnforcement::kNextRelease) {
-    async_read_from_protected_surface(reporter, skiatest::TestType::kGraphite);
-}
-
-namespace {
-
-void draw_rectangle(skiatest::Reporter* reporter, skiatest::TestType testType) {
+DEF_GANESH_AND_GRAPHITE_TEST(DrawRectangle, reporter, testType) {
     std::unique_ptr<VkTestHelper> helper = VkTestHelper::Make(testType, /* isProtected= */ true);
     if (!helper) {
         return;
@@ -314,24 +369,7 @@ void draw_rectangle(skiatest::Reporter* reporter, skiatest::TestType testType) {
     canvas->drawRect(SkRect::MakeWH(4, 4), paint);
 }
 
-}  // anonymous namespace
-
-DEF_GANESH_TEST(VkProtectedContext_DrawRectangle,
-                reporter,
-                options,
-                CtsEnforcement::kNever) {
-    draw_rectangle(reporter, skiatest::TestType::kGanesh);
-}
-
-DEF_GRAPHITE_TEST(VkProtectedContext_DrawRectangle_Graphite,
-                  reporter,
-                  CtsEnforcement::kNextRelease) {
-    draw_rectangle(reporter, skiatest::TestType::kGraphite);
-}
-
-namespace {
-
-void draw_rectangle_with_aa(skiatest::Reporter* reporter, skiatest::TestType testType) {
+DEF_GANESH_AND_GRAPHITE_TEST(DrawRectangleWithAntiAlias, reporter, testType) {
     std::unique_ptr<VkTestHelper> helper = VkTestHelper::Make(testType, /* isProtected= */ true);
     if (!helper) {
         return;
@@ -351,24 +389,8 @@ void draw_rectangle_with_aa(skiatest::Reporter* reporter, skiatest::TestType tes
     canvas->drawRect(SkRect::MakeWH(4, 4), paint);
 }
 
-}  // anonymous namespace
 
-DEF_GANESH_TEST(VkProtectedContext_DrawRectangleWithAntiAlias,
-                reporter,
-                options,
-                CtsEnforcement::kNever) {
-    draw_rectangle_with_aa(reporter, skiatest::TestType::kGanesh);
-}
-
-DEF_GRAPHITE_TEST(VkProtectedContext_DrawRectangleWithAntiAlias_Graphite,
-                  reporter,
-                  CtsEnforcement::kNextRelease) {
-    draw_rectangle_with_aa(reporter, skiatest::TestType::kGraphite);
-}
-
-namespace {
-
-void draw_rectangle_with_blendmode(skiatest::Reporter* reporter, skiatest::TestType testType) {
+DEF_GANESH_AND_GRAPHITE_TEST(DrawRectangleWithBlendMode, reporter, testType) {
     std::unique_ptr<VkTestHelper> helper = VkTestHelper::Make(testType, /* isProtected= */ true);
     if (!helper) {
         return;
@@ -388,24 +410,7 @@ void draw_rectangle_with_blendmode(skiatest::Reporter* reporter, skiatest::TestT
     canvas->drawRect(SkRect::MakeWH(4, 4), paint);
 }
 
-}  // anonymous namespace
-
-DEF_GANESH_TEST(VkProtectedContext_DrawRectangleWithBlendMode,
-                reporter,
-                options,
-                CtsEnforcement::kNever) {
-    draw_rectangle_with_blendmode(reporter, skiatest::TestType::kGanesh);
-}
-
-DEF_GRAPHITE_TEST(VkProtectedContext_DrawRectangleWithBlendMode_Graphite,
-                  reporter,
-                  CtsEnforcement::kNextRelease) {
-    draw_rectangle_with_blendmode(reporter, skiatest::TestType::kGraphite);
-}
-
-namespace {
-
-void draw_rectangle_with_filter(skiatest::Reporter* reporter, skiatest::TestType testType) {
+DEF_GANESH_AND_GRAPHITE_TEST(DrawRectangleWithFilter, reporter, testType) {
     std::unique_ptr<VkTestHelper> helper = VkTestHelper::Make(testType, /* isProtected= */ true);
     if (!helper) {
         return;
@@ -426,24 +431,7 @@ void draw_rectangle_with_filter(skiatest::Reporter* reporter, skiatest::TestType
     canvas->drawRect(SkRect::MakeWH(4, 4), paint);
 }
 
-}  // anonymous namespace
-
-DEF_GANESH_TEST(VkProtectedContext_DrawRectangleWithFilter,
-                reporter,
-                options,
-                CtsEnforcement::kNever) {
-    draw_rectangle_with_filter(reporter, skiatest::TestType::kGanesh);
-}
-
-DEF_GRAPHITE_TEST(VkProtectedContext_DrawRectangleWithFilter_Graphite,
-                  reporter,
-                  CtsEnforcement::kNextRelease) {
-    draw_rectangle_with_filter(reporter, skiatest::TestType::kGraphite);
-}
-
-namespace {
-
-void draw_thin_path(skiatest::Reporter* reporter, skiatest::TestType testType) {
+DEF_GANESH_AND_GRAPHITE_TEST(DrawThinPath, reporter, testType) {
     constexpr bool kIsProtected = true;
 
     std::unique_ptr<VkTestHelper> helper = VkTestHelper::Make(testType, kIsProtected);
@@ -464,27 +452,10 @@ void draw_thin_path(skiatest::Reporter* reporter, skiatest::TestType testType) {
     paint.setStyle(SkPaint::kStroke_Style);
     paint.setAntiAlias(true);
     paint.setStrokeWidth(.4f);
-    canvas->drawPath(SkPath().moveTo(4, 4).lineTo(6, 6), paint);
+    canvas->drawPath(SkPath::Line({4, 4}, {6, 6}), paint);
 }
 
-}  // anonymous namespace
-
-DEF_GANESH_TEST(VkProtectedContext_DrawThinPath,
-                reporter,
-                options,
-                CtsEnforcement::kNever) {
-    draw_thin_path(reporter, skiatest::TestType::kGanesh);
-}
-
-DEF_GRAPHITE_TEST(VkProtectedContext_DrawThinPath_Graphite,
-                  reporter,
-                  CtsEnforcement::kNextRelease) {
-    draw_thin_path(reporter, skiatest::TestType::kGraphite);
-}
-
-namespace {
-
-void save_layer(skiatest::Reporter* reporter, skiatest::TestType testType) {
+DEF_GANESH_AND_GRAPHITE_TEST(SaveLayer, reporter, testType) {
     std::unique_ptr<VkTestHelper> helper = VkTestHelper::Make(testType, /* isProtected= */ true);
     if (!helper) {
         return;
@@ -505,25 +476,8 @@ void save_layer(skiatest::Reporter* reporter, skiatest::TestType testType) {
     canvas->restore();
 }
 
-}  // anonymous namespace
 
-DEF_GANESH_TEST(VkProtectedContext_SaveLayer,
-                reporter,
-                options,
-                CtsEnforcement::kNever) {
-    save_layer(reporter, skiatest::TestType::kGanesh);
-}
-
-DEF_GRAPHITE_TEST(VkProtectedContext_SaveLayer_Graphite,
-                  reporter,
-                  CtsEnforcement::kNextRelease) {
-    save_layer(reporter, skiatest::TestType::kGraphite);
-}
-
-namespace {
-
-void draw_protected_image_on_protected_surface(skiatest::Reporter* reporter,
-                                               skiatest::TestType testType) {
+DEF_GANESH_AND_GRAPHITE_TEST(DrawProtectedImageOnProtectedSurface, reporter, testType) {
     constexpr bool kIsProtected = true;
 
     std::unique_ptr<VkTestHelper> helper = VkTestHelper::Make(testType, kIsProtected);
@@ -551,21 +505,6 @@ void draw_protected_image_on_protected_surface(skiatest::Reporter* reporter,
     REPORTER_ASSERT(reporter, canvas);
 
     canvas->drawImage(image, 0, 0);
-}
-
-}  // anonymous namespace
-
-DEF_GANESH_TEST(VkProtectedContext_DrawProtectedImageOnProtectedSurface,
-                reporter,
-                options,
-                CtsEnforcement::kNever) {
-    draw_protected_image_on_protected_surface(reporter, skiatest::TestType::kGanesh);
-}
-
-DEF_GRAPHITE_TEST(VkProtectedContext_DrawProtectedImageOnProtectedSurface_Graphite,
-                  reporter,
-                  CtsEnforcement::kNextRelease) {
-    draw_protected_image_on_protected_surface(reporter, skiatest::TestType::kGraphite);
 }
 
 #endif  // SK_VULKAN

@@ -10,9 +10,9 @@
 #define GrGLRenderTarget_DEFINED
 
 #include "include/core/SkRefCnt.h"
-#include "include/gpu/GrBackendSurface.h"
-#include "include/gpu/gl/GrGLTypes.h"
-#include "include/private/base/SkTo.h"
+#include "include/gpu/ganesh/GrBackendSurface.h"
+#include "include/gpu/ganesh/gl/GrGLTypes.h"
+#include "include/private/SkTo.h"
 #include "src/gpu/ganesh/GrRenderTarget.h"
 #include "src/gpu/ganesh/GrSurface.h"
 #include "src/gpu/ganesh/gl/GrGLAttachment.h"

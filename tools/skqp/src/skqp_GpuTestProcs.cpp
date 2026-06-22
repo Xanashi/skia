@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Google Inc.
+ * Copyright 2022 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -9,16 +9,17 @@
 #include "tools/skqp/src/skqp.h"
 
 #include "include/core/SkStream.h"
-#include "include/gpu/GrDirectContext.h"
+#include "include/gpu/ganesh/GrDirectContext.h"
 
 #ifdef SK_VULKAN
-#include "tools/gpu/vk/VkTestContext.h"
-#include <mutex>
+#include "tools/ganesh/vk/VkTestContext.h"
 #endif
 #if defined(SK_GRAPHITE)
 #include "include/gpu/graphite/Context.h"
 #include "tools/graphite/ContextFactory.h"
 #endif
+
+#include <mutex>
 
 using sk_gpu_test::ContextInfo;
 using sk_gpu_test::GrContextFactory;
@@ -144,7 +145,7 @@ void RunWithGraphiteTestContexts(GraphiteTestFn* test,
         }
 
         ReporterContext ctx(reporter, SkString(skgpu::ContextTypeName(contextType)));
-        (*test)(reporter, ctxInfo.fContext, ctxInfo.fTestContext);
+        (*test)(reporter, ctxInfo.fContext, ctxInfo.fTestContext, options);
     }
 }
 

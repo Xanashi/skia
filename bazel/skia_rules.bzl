@@ -7,6 +7,10 @@ without needing to download a bunch of unnecessary dependencies
 in their WORKSPACE.bazel file.
 """
 
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+load("@rules_cc//cc:cc_test.bzl", "cc_test")
+load("@rules_cc//cc:objc_library.bzl", "objc_library")
 load("@skia_user_config//:copts.bzl", "DEFAULT_COPTS", "DEFAULT_OBJC_COPTS")
 load("@skia_user_config//:linkopts.bzl", "DEFAULT_LINKOPTS")
 load(
@@ -110,7 +114,7 @@ def skia_cc_binary(name, copts = DEFAULT_COPTS, linkopts = DEFAULT_LINKOPTS, **k
             passed in via deps (see deps_and_linkopts below).
         **kwargs: All the normal arguments that cc_binary takes.
     """
-    native.cc_binary(name = name, copts = copts, linkopts = linkopts, **kwargs)
+    cc_binary(name = name, copts = copts, linkopts = linkopts, **kwargs)
 
 def skia_cc_test(name, copts = DEFAULT_COPTS, linkopts = DEFAULT_LINKOPTS, **kwargs):
     """A wrapper around cc_test for Skia C++ executables (e.g. tests).
@@ -127,13 +131,14 @@ def skia_cc_test(name, copts = DEFAULT_COPTS, linkopts = DEFAULT_LINKOPTS, **kwa
             passed in via deps (see deps_and_linkopts below).
         **kwargs: All the normal arguments that cc_binary takes.
     """
-    native.cc_test(name = name, copts = copts, linkopts = linkopts, **kwargs)
+    cc_test(name = name, copts = copts, linkopts = linkopts, **kwargs)
 
 def skia_cc_library(name, copts = DEFAULT_COPTS, local_defines = [], **kwargs):
     """A wrapper around cc_library for Skia C++ libraries.
 
-    This lets us provide compiler flags (copts) consistently to the Skia build (e.g. //:skia_public)
-    and builds which depend on those targets (e.g. things in //tools or //modules).
+    This lets us provide compiler flags (copts) consistently to the Skia build. By default,
+    copts do not flow up the dependency stack. Additionally, in G3, this allows us to set
+    some options universally.
 
     It also lets us easily tweak these settings when being built in G3.
 
@@ -157,49 +162,31 @@ def skia_cc_library(name, copts = DEFAULT_COPTS, local_defines = [], **kwargs):
     ld = []
     ld.extend(local_defines)
     ld.append("SKIA_IMPLEMENTATION=1")
-    native.cc_library(name = name, copts = copts, local_defines = ld, **kwargs)
-
-def skia_cc_deps(name, visibility, deps = [], linkopts = [], textual_hdrs = [], testonly = False):
-    """A self-documenting wrapper around cc_library for things to pass to the top skia_cc_library.
-
-    It lets us have third_party deps, linkopts, etc be set close to where they impact,
-    and trickle up the file hierarchy to //:skia_public and //:skia_internal
-
-    Args:
-        name: the name of the underlying target. By convention, this is usually called "deps".
-        visibility: To prevent this rule from being used where it should not, we have the
-            convention of setting the visibility to just the parent package.
-        deps: A list of labels or select statements to collect third_party dependencies.
-        linkopts: A list of strings or select statements to collect linker flags.
-        textual_hdrs: A list of labels or select statements to collect files which are included, but
-            do not have a suffix of .h, like a typical C++ header does.
-        testonly: A boolean that, if true, will enforce all targets who depend on this are also
-            marked as testonly.
-    """
-    native.cc_library(
-        name = name,
-        visibility = visibility,
-        deps = deps,
-        linkopts = linkopts,
-        textual_hdrs = textual_hdrs,
-        testonly = testonly,
-    )
+    cc_library(name = name, copts = copts, local_defines = ld, **kwargs)
 
 def skia_filegroup(**kwargs):
     """A wrapper around filegroup allowing us to customize visibility in G3."""
     native.filegroup(**kwargs)
 
+_COMPILE_HEADERS = (".h", ".hh", ".hpp", "hxx")
+
+def _headers(files):
+    return [f for f in files if f.endswith(_COMPILE_HEADERS)]
+
 def skia_objc_library(
         name,
         copts = DEFAULT_OBJC_COPTS,
+        hdrs = [],
         deps = [],
+        srcs = [],
+        non_arc_srcs = [],
         ios_frameworks = [],
         mac_frameworks = [],
         sdk_frameworks = [],
         **kwargs):
     """A wrapper around objc_library for Skia Objective C libraries.
 
-    This lets us provide compiler flags (copts) consistently to the Skia build (e.g. //:skia_public)
+    This lets us provide compiler flags (copts) consistently to the Skia build (e.g. //:core)
     and builds which depend on those targets (e.g. things in //tools or //modules).
 
     It also lets us easily tweak these settings when being built in G3.
@@ -213,6 +200,9 @@ def skia_objc_library(
         sdk_frameworks: https://bazel.build/reference/be/objective-c#objc_library.sdk_frameworks
                         except this should only be a list, not a select.
         **kwargs: Normal arguments to objc_library
+
+    We re-implement the non_arc_srcs attribute because at least on a Mac with Bazel 8.2.1 it
+    crashes if we pass non_arc_srcs straight through to the objc_library (explicitly or in kwargs).
     """
     if len(ios_frameworks) > 0 or len(mac_frameworks) > 0:
         sdk_frameworks += select({
@@ -220,28 +210,30 @@ def skia_objc_library(
             "@platforms//os:macos": mac_frameworks,
             "//conditions:default": [],
         })
-
-    native.objc_library(
+    if len(non_arc_srcs) > 0:
+        objc_library(
+            name = name + "_non_arc",
+            copts = copts + ["-fno-objc-arc"],
+            deps = deps,
+            # Make sure header files in hdrs and srcs that are required by non_arc_srcs are visible.
+            srcs = non_arc_srcs + _headers(srcs) + hdrs,
+            sdk_frameworks = sdk_frameworks,
+            **kwargs
+        )
+        deps = deps + [name + "_non_arc"]
+    objc_library(
         name = name,
         copts = copts,
         deps = deps,
+        hdrs = hdrs,
+        # Make sure any headers in non_arc_srcs are visible here
+        srcs = srcs + _headers(non_arc_srcs),
         sdk_frameworks = sdk_frameworks,
         **kwargs
     )
 
-def split_srcs_and_hdrs(name, files):
+def split_srcs_and_hdrs(name, files, visibility = None):
     """Take a list of files and creates filegroups for C++ sources and headers.
-
-    The reason we make filegroups is that they are more friendly towards a file being
-    listed twice than just returning a sorted list of files.
-
-    For example, in //src/codecs, "SkEncodedInfo.cpp" is needed for some, but not all
-    the codecs. It is easier for devs to list the file for the codecs that need it
-    rather than making a complicated select statement to make sure it is only in the
-    list of files once.
-
-    Bazel is smart enough to not compile the same file twice, even if it shows up in
-    multiple filegroups.
 
     The "_srcs" and "_hdrs" filegroups will only be created if there are a non-zero amount
     of files of both types. Otherwise, it will fail because we do not need the macro.
@@ -250,6 +242,7 @@ def split_srcs_and_hdrs(name, files):
         name: The prefix of the generated filegroups. One will have the suffix "_srcs" and
             the other "_hdrs".
         files: List of file names, e.g. ["SkAAClip.cpp", "SkAAClip.h"]
+        visibility: Optional list of visibility rules
     """
     srcs = []
     hdrs = []
@@ -269,8 +262,185 @@ def split_srcs_and_hdrs(name, files):
     skia_filegroup(
         name = name + "_srcs",
         srcs = srcs,
+        visibility = visibility,
     )
     skia_filegroup(
         name = name + "_hdrs",
         srcs = hdrs,
+        visibility = visibility,
+    )
+
+_ALLOWED_TEST_UTIL_NAMES = set([
+    "ganesh",
+    "ganesh_gl",
+    "ganesh_vulkan",
+    "glx_factory",
+    "graphite",
+    "graphite_native_dawn",
+    "graphite_native_metal",
+    "graphite_native_vulkan",
+    "precompile",
+])
+
+_REWRITE_TEST_UTIL_DEPS = {
+    "//:ganesh_gl": "//src/gpu/ganesh/gl:ganesh_gl_TEST_UTIL",
+    "//:ganesh_vulkan": "//src/gpu/ganesh/vk:ganesh_vulkan_TEST_UTIL",
+    "//:glx_factory": "//src/gpu/ganesh/gl/glx:glx_factory_TEST_UTIL",
+    "//:graphite_native_metal": "//src/gpu/graphite/mtl:graphite_native_metal_TEST_UTIL",
+    "//:graphite_native_vulkan": "//src/gpu/graphite/vk:graphite_native_vulkan_TEST_UTIL",
+    "//src/gpu/ganesh": "//src/gpu/ganesh:ganesh_TEST_UTIL",
+    "//src/gpu/ganesh/gl/glx:glx_factory": "//src/gpu/ganesh/gl/glx:glx_factory_TEST_UTIL",
+    "//src/gpu/ganesh/gl:ganesh_gl": "//src/gpu/ganesh/gl:ganesh_gl_TEST_UTIL",
+    "//src/gpu/ganesh/vk:ganesh_vulkan": "//src/gpu/ganesh/vk:ganesh_vulkan_TEST_UTIL",
+    "//src/gpu/graphite": "//src/gpu/graphite:graphite_TEST_UTIL",
+    "//src/gpu/graphite/mtl:graphite_native_metal": "//src/gpu/graphite/mtl:graphite_native_metal_TEST_UTIL",
+    "//src/gpu/graphite/dawn:graphite_native_dawn": "//src/gpu/graphite/dawn:graphite_native_dawn_TEST_UTIL",
+    "//src/gpu/graphite/precompile": "//src/gpu/graphite/precompile:precompile_TEST_UTIL",
+    "//src/gpu/graphite/vk:graphite_native_vulkan": "//src/gpu/graphite/vk:graphite_native_vulkan_TEST_UTIL",
+}
+
+def _rewrite_deps(deps):
+    rewritten_deps = []
+    for dep in deps:
+        if dep in _REWRITE_TEST_UTIL_DEPS:
+            rewritten_deps.append(_REWRITE_TEST_UTIL_DEPS[dep])
+        else:
+            rewritten_deps.append(dep)
+    return rewritten_deps
+
+def skia_cc_library_with_testutil(
+        name,
+        srcs,
+        hdrs,
+        deps,
+        visibility,
+        priv_visibility,
+        linkopts = None,
+        defines = None,
+        features = None,
+        implementation_deps = None,
+        local_defines = None):
+    """Create a pair of skia_cc_library rules, a normal one and a test-only one with GPU_TEST_UTILS
+
+    This will re-write any deps in the test version to refer to the other TEST_UTIL libraries.
+
+    Args:
+        name: see https://bazel.build/reference/be/c-cpp#cc_library
+        srcs: see https://bazel.build/reference/be/c-cpp#cc_library
+        hdrs: see https://bazel.build/reference/be/c-cpp#cc_library
+        deps: see https://bazel.build/reference/be/c-cpp#cc_library
+        visibility: see https://bazel.build/reference/be/c-cpp#cc_library
+        priv_visibility: the visibility rules that will be used for the test version
+        linkopts: see https://bazel.build/reference/be/c-cpp#cc_library, optional. Only passed
+                  to the test version.
+                  TODO(kjlubick): can we always have these be forwarded? I'm worried about G3.
+        defines: see https://bazel.build/reference/be/c-cpp#cc_library, optional
+        features: see https://bazel.build/reference/be/c-cpp#cc_library, optional
+        implementation_deps: see https://bazel.build/reference/be/c-cpp#cc_library, optional
+        local_defines: see https://bazel.build/reference/be/c-cpp#cc_library, optional
+    """
+    if not linkopts:
+        linkopts = []
+    if not defines:
+        defines = []
+    if not features:
+        features = []
+    if not implementation_deps:
+        implementation_deps = []
+    if not local_defines:
+        local_defines = []
+
+    if name not in _ALLOWED_TEST_UTIL_NAMES:
+        fail("Was not registered to re-write " + name)
+
+    if "GPU_TEST_UTILS" in defines:
+        fail("You shouldn't put GPU_TEST_UTILS in the defines")
+
+    skia_cc_library(
+        name = name,
+        srcs = srcs,
+        hdrs = hdrs,
+        defines = defines,
+        deps = deps,
+        features = features,
+        visibility = visibility,
+        implementation_deps = implementation_deps,
+        local_defines = local_defines,
+    )
+
+    rewritten_deps = _rewrite_deps(deps)
+
+    for dep in implementation_deps:
+        if dep in _REWRITE_TEST_UTIL_DEPS:
+            fail("not supported " + dep)
+
+    skia_cc_library(
+        name = name + "_TEST_UTIL",
+        testonly = True,
+        srcs = srcs,
+        hdrs = hdrs,
+        features = features,
+        defines = defines + ["GPU_TEST_UTILS"],
+        visibility = priv_visibility,
+        deps = rewritten_deps,
+        implementation_deps = implementation_deps,
+        local_defines = local_defines,
+        linkopts = linkopts,
+    )
+
+def skia_objc_library_with_testutil(
+        name,
+        srcs,
+        hdrs,
+        copts,
+        defines,
+        sdk_frameworks,
+        deps,
+        visibility,
+        priv_visibility):
+    """Create a pair of skia_objc_library, a normal one and a test-only one with GPU_TEST_UTILS
+
+    This will re-write any deps in the test version to refer to the other TEST_UTIL libraries.
+
+    Args:
+        name: see https://bazel.build/reference/be/objective-c#objc_library
+        srcs: see https://bazel.build/reference/be/objective-c#objc_library
+        hdrs: see https://bazel.build/reference/be/objective-c#objc_library
+        copts: see https://bazel.build/reference/be/objective-c#objc_library
+        defines: see https://bazel.build/reference/be/objective-c#objc_library
+        deps: see https://bazel.build/reference/be/objective-c#objc_library
+        visibility: see https://bazel.build/reference/be/objective-c#objc_library
+        priv_visibility: the visibility rules that will be used for the test version
+        sdk_frameworks: https://bazel.build/reference/be/objective-c#objc_library
+    """
+
+    if name not in _ALLOWED_TEST_UTIL_NAMES:
+        fail("Was not registered to re-write " + name)
+
+    if "GPU_TEST_UTILS" in defines:
+        fail("You shouldn't put GPU_TEST_UTILS in the defines")
+
+    skia_objc_library(
+        name = name,
+        srcs = srcs,
+        hdrs = hdrs,
+        defines = defines,
+        sdk_frameworks = sdk_frameworks,
+        copts = copts,
+        deps = deps,
+        visibility = visibility,
+    )
+
+    rewritten_deps = _rewrite_deps(deps)
+
+    skia_objc_library(
+        name = name + "_TEST_UTIL",
+        testonly = True,
+        srcs = srcs,
+        hdrs = hdrs,
+        sdk_frameworks = sdk_frameworks,
+        defines = defines + ["GPU_TEST_UTILS"],
+        copts = copts,
+        deps = rewritten_deps,
+        visibility = priv_visibility,
     )

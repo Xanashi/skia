@@ -8,6 +8,7 @@
 #include "src/gpu/graphite/TextureProxy.h"
 
 #include "include/gpu/graphite/Recorder.h"
+#include "include/private/SkPixelStorage.h"
 #include "src/core/SkMipmap.h"
 #include "src/gpu/graphite/Caps.h"
 #include "src/gpu/graphite/RecorderPriv.h"
@@ -22,7 +23,8 @@ TextureProxy::TextureProxy(SkISize dimensions,
                            const TextureInfo& info,
                            std::string_view label,
                            skgpu::Budgeted budgeted)
-        : fDimensions(dimensions)
+        : SkPixelStorage(SkPixelStorage::Type::kTextureProxy)
+        , fDimensions(dimensions)
         , fInfo(info)
         , fLabel(label)
         , fBudgeted(budgeted)
@@ -31,7 +33,8 @@ TextureProxy::TextureProxy(SkISize dimensions,
 }
 
 TextureProxy::TextureProxy(sk_sp<Texture> texture)
-        : fDimensions(texture->dimensions())
+        : SkPixelStorage(SkPixelStorage::Type::kTextureProxy)
+        , fDimensions(texture->dimensions())
         , fInfo(texture->textureInfo())
         , fLabel(texture->getLabel())
         , fBudgeted(texture->budgeted())
@@ -45,7 +48,8 @@ TextureProxy::TextureProxy(SkISize dimensions,
                            skgpu::Budgeted budgeted,
                            Volatile isVolatile,
                            LazyInstantiateCallback&& callback)
-        : fDimensions(dimensions)
+        : SkPixelStorage(SkPixelStorage::Type::kTextureProxy)
+        , fDimensions(dimensions)
         , fInfo(textureInfo)
         , fBudgeted(budgeted)
         , fVolatile(isVolatile)
@@ -78,10 +82,6 @@ bool TextureProxy::isVolatile() const {
     return fVolatile == Volatile::kYes;
 }
 
-bool TextureProxy::isProtected() const {
-    return fInfo.isProtected() == Protected::kYes;
-}
-
 size_t TextureProxy::uninstantiatedGpuMemorySize() const {
     return ComputeSize(fDimensions, fInfo);
 }
@@ -93,7 +93,10 @@ bool TextureProxy::instantiate(ResourceProvider* resourceProvider) {
         return true;
     }
 
-    fTexture = resourceProvider->findOrCreateScratchTexture(fDimensions, fInfo, fLabel, fBudgeted);
+    // TODO(389908374): Once all tasks use the ScratchResourceManager, this can be updated to just
+    // finding and creating a non-shareable AND non-budgeted texture.
+    fTexture = resourceProvider->findOrCreateNonShareableTexture(
+            fDimensions, fInfo, fLabel, fBudgeted);
     if (!fTexture) {
         return false;
     }
@@ -169,10 +172,7 @@ sk_sp<TextureProxy> TextureProxy::Make(const Caps* caps,
         return nullptr;
     }
 
-    sk_sp<TextureProxy> proxy{new TextureProxy(dimensions,
-                                               textureInfo,
-                                               std::move(label),
-                                               budgeted)};
+    sk_sp<TextureProxy> proxy {new TextureProxy(dimensions, textureInfo, label, budgeted)};
     if (budgeted == Budgeted::kNo) {
         // Instantiate immediately to avoid races later on if the client starts to use the wrapping
         // object on multiple threads.
@@ -223,7 +223,7 @@ sk_sp<TextureProxy> TextureProxy::Wrap(sk_sp<Texture> texture) {
 #ifdef SK_DEBUG
 void TextureProxy::validateTexture(const Texture* texture) {
     SkASSERT(this->isFullyLazy() || fDimensions == texture->dimensions());
-    SkASSERTF(fInfo.isCompatible(texture->textureInfo()),
+    SkASSERTF(fInfo.canBeFulfilledBy(texture->textureInfo()),
               "proxy->fInfo[%s] incompatible with texture->fInfo[%s]",
               fInfo.toString().c_str(),
               texture->textureInfo().toString().c_str());

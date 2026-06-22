@@ -1,12 +1,12 @@
 /*
- * Copyright 2022 Google Inc.
+ * Copyright 2022 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
 
-#include "src/base/SkStringView.h"
 #include "src/core/SkOpts.h"
+#include "src/core/SkStringView.h"
 #include "src/sksl/SkSLCompiler.h"
 #include "src/sksl/SkSLFileOutputStream.h"
 #include "src/sksl/SkSLLexer.h"
@@ -34,6 +34,13 @@ static bool gStringify = false;
 static SkSL::ProgramKind gProgramKind = SkSL::ProgramKind::kFragment;
 
 void SkDebugf(const char format[], ...) {
+    va_list args;
+    va_start(args, format);
+    vfprintf(stderr, format, args);
+    va_end(args);
+}
+
+void SkLog(SkLogPriority, const char format[], ...) {
     va_list args;
     va_start(args, format);
     vfprintf(stderr, format, args);
@@ -72,6 +79,16 @@ static bool maybe_identifier(char c) {
 
 static bool is_plus_or_minus(char c) {
     return c == '+' || c == '-';
+}
+
+static SkSL::ModuleType module_type_for_path(const char* path) {
+    SkString filename = SkOSPath::Basename(path);
+
+#define M(type) if (filename.equals(#type ".sksl")) { return SkSL::ModuleType::type; }
+    SKSL_MODULE_LIST(M)
+#undef M
+
+    return SkSL::ModuleType::unknown;
 }
 
 static std::forward_list<std::unique_ptr<const SkSL::Module>> compile_module_list(
@@ -115,11 +132,12 @@ static std::forward_list<std::unique_ptr<const SkSL::Module>> compile_module_lis
 
         const SkSL::Module* parent = modules.empty() ? SkSL::ModuleLoader::Get().rootModule()
                                                      : modules.front().get();
-        std::unique_ptr<SkSL::Module> m = compiler.compileModule(kind,
-                                                                 modulePath->c_str(),
-                                                                 std::move(moduleSource),
-                                                                 parent,
-                                                                 /*shouldInline=*/false);
+        std::unique_ptr<SkSL::Module> m =
+                compiler.compileModule(kind,
+                                       module_type_for_path(modulePath->c_str()),
+                                       std::move(moduleSource),
+                                       parent,
+                                       /*shouldInline=*/false);
         if (!m) {
             return {};
         }

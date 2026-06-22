@@ -8,9 +8,9 @@
 #ifndef SkBlitRow_opts_DEFINED
 #define SkBlitRow_opts_DEFINED
 
-#include "include/private/SkColorData.h"
-#include "src/base/SkMSAN.h"
-#include "src/base/SkVx.h"
+#include "src/core/SkColorData.h"
+#include "src/core/SkMSAN.h"
+#include "src/core/SkVx.h"
 
 // Helpers for blit_row_s32a_opaque(),
 // then blit_row_s32a_opaque() itself,
@@ -19,7 +19,7 @@
 // To keep Skia resistant to timing attacks, it's important not to branch on pixel data.
 // In particular, don't be tempted to [v]ptest, pmovmskb, etc. to branch on the source alpha.
 
-#if SK_CPU_SSE_LEVEL >= SK_CPU_SSE_LEVEL_AVX2
+#if SK_CPU_X64_LEVEL >= SK_CPU_X64_LEVEL_AVX2
     #include <immintrin.h>
 
     static inline __m256i SkPMSrcOver_AVX2(const __m256i& src, const __m256i& dst) {
@@ -68,7 +68,7 @@
     }
 #endif
 
-#if SK_CPU_SSE_LEVEL >= SK_CPU_SSE_LEVEL_SSE2
+#if SK_CPU_X64_LEVEL >= SK_CPU_X64_LEVEL_SSE2
     #include <immintrin.h>
 
     static inline __m128i SkPMSrcOver_SSE2(const __m128i& src, const __m128i& dst) {
@@ -165,7 +165,7 @@ inline void blit_row_s32a_opaque(SkPMColor* dst, const SkPMColor* src, int len, 
     SkASSERT(alpha == 0xFF);
     sk_msan_assert_initialized(src, src+len);
 
-#if SK_CPU_SSE_LEVEL >= SK_CPU_SSE_LEVEL_AVX2
+#if SK_CPU_X64_LEVEL >= SK_CPU_X64_LEVEL_AVX2
     while (len >= 8) {
         _mm256_storeu_si256((__m256i*)dst,
                             SkPMSrcOver_AVX2(_mm256_loadu_si256((const __m256i*)src),
@@ -176,7 +176,7 @@ inline void blit_row_s32a_opaque(SkPMColor* dst, const SkPMColor* src, int len, 
     }
 #endif
 
-#if SK_CPU_SSE_LEVEL >= SK_CPU_SSE_LEVEL_SSE2
+#if SK_CPU_X64_LEVEL >= SK_CPU_X64_LEVEL_SSE2
     while (len >= 4) {
         _mm_storeu_si128((__m128i*)dst, SkPMSrcOver_SSE2(_mm_loadu_si128((const __m128i*)src),
                                                          _mm_loadu_si128((const __m128i*)dst)));
@@ -246,18 +246,21 @@ inline void blit_row_color32(SkPMColor* dst, int count, SkPMColor color) {
     using U16 = skvx::Vec<4*N, uint16_t>;
     using U8  = skvx::Vec<4*N, uint8_t>;
 
+    // Note when the kernel is used below, the "src" is the existing pixel color.
     auto kernel = [color](U32 src) {
-        unsigned invA = 255 - SkGetPackedA32(color);
-        invA += invA >> 7;
+        unsigned invA = SkAlpha255To256(255 - SkGetPackedA32(color));
         SkASSERT(0 < invA && invA < 256);  // We handle alpha == 0 or alpha == 255 specially.
 
-        // (src * invA + (color << 8) + 128) >> 8
-        // Should all fit in 16 bits.
+        // color is premul, so the channels have already been
+        // scaled by alpha. We just need to scale src by (255 - a)
+        // using the trick of adding 1 and dividing by 256 which is
+        // much faster than dividing by 255. Then we can add that
+        // to color to get the result.
         U8 s = sk_bit_cast<U8>(src),
            a = U8(invA);
         U16 c = skvx::cast<uint16_t>(sk_bit_cast<U8>(U32(color))),
-            d = (mull(s,a) + (c << 8) + 128)>>8;
-        return sk_bit_cast<U32>(skvx::cast<uint8_t>(d));
+            r = (mull(s,a) >> 8) + c;
+        return sk_bit_cast<U32>(skvx::cast<uint8_t>(r));
     };
 
     while (count >= N) {

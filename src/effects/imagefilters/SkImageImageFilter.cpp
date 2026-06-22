@@ -14,7 +14,7 @@
 #include "include/core/SkRect.h"
 #include "include/core/SkRefCnt.h"
 #include "include/core/SkSamplingOptions.h"
-#include "include/private/base/SkAssert.h"
+#include "include/private/SkAssert.h"
 #include "src/core/SkImageFilterTypes.h"
 #include "src/core/SkImageFilter_Base.h"
 #include "src/core/SkPicturePriv.h"
@@ -88,7 +88,7 @@ sk_sp<SkImageFilter> SkImageFilters::Image(sk_sp<SkImage> image,
             return sk_sp<SkImageFilter>(new SkImageImageFilter(
                     std::move(image), srcRect, dstRect, sampling));
         } else {
-            SkMatrix srcToDst = SkMatrix::RectToRect(srcRect, dstRect);
+            SkMatrix srcToDst = SkMatrix::RectToRectOrIdentity(srcRect, dstRect);
             if (!imageBounds.intersect(srcRect)) {
                 // No overlap, so draw empty
                 return SkImageFilters::Empty();

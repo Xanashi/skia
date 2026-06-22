@@ -13,7 +13,7 @@
 #include "include/core/SkStream.h"
 #include "include/core/SkString.h"
 #include "include/core/SkTypes.h"
-#include "include/private/base/SkDebug.h"
+#include "include/private/SkDebug.h"
 #include "tests/CodecPriv.h"
 #include "tests/FakeStreams.h"
 #include "tests/Test.h"
@@ -474,14 +474,14 @@ DEF_TEST(Codec_emptyIDAT, r) {
 }
 
 DEF_TEST(Codec_incomplete, r) {
-    for (const char* name : { "images/baby_tux.png",
-                              "images/baby_tux.webp",
-                              "images/CMYK.jpg",
-                              "images/color_wheel.gif",
-                              "images/google_chrome.ico",
-                              "images/rle.bmp",
-                              "images/mandrill.wbmp",
-                              }) {
+    for (const char* name : {
+             "images/baby_tux.png", "images/baby_tux.webp", "images/CMYK.jpg",
+                     "images/color_wheel.gif",
+#if defined(SK_CODEC_DECODES_ICO)
+                     "images/google_chrome.ico",
+#endif
+                     "images/rle.bmp", "images/mandrill.wbmp",
+         }) {
         sk_sp<SkData> file = GetResourceAsData(name);
         if (!file) {
             continue;

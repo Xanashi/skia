@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Google Inc.
+ * Copyright 2018 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -9,15 +9,19 @@
 
 #include "include/core/SkMatrix.h"
 #include "include/core/SkPath.h"
+#include "include/core/SkPathBuilder.h"
 #include "include/core/SkPathTypes.h"
-#include "include/private/base/SkAssert.h"
-#include "include/private/base/SkDebug.h"
-#include "include/private/base/SkFloatingPoint.h"
+#include "include/private/SkDebug.h"
+#include "include/private/SkFloatingPoint.h"
+#include "include/private/SkTo.h"
 #include "src/core/SkGeometry.h"
 #include "src/core/SkPathMeasurePriv.h"
 #include "src/core/SkPathPriv.h"
 
 #include <algorithm>
+#include <array>
+#include <cstddef>
+#include <optional>
 #include <utility>
 
 #define kMaxTValue  0x3FFFFFFF
@@ -37,7 +41,7 @@ SkScalar SkContourMeasure::Segment::getScalarT() const {
 }
 
 void SkContourMeasure_segTo(const SkPoint pts[], unsigned segType,
-                            SkScalar startT, SkScalar stopT, SkPath* dst) {
+                            SkScalar startT, SkScalar stopT, SkPathBuilder* dst) {
     SkASSERT(startT >= 0 && startT <= SK_Scalar1);
     SkASSERT(stopT >= 0 && stopT <= SK_Scalar1);
     SkASSERT(startT <= stopT);
@@ -46,9 +50,9 @@ void SkContourMeasure_segTo(const SkPoint pts[], unsigned segType,
         if (!dst->isEmpty()) {
             /* if the dash as a zero-length on segment, add a corresponding zero-length line.
                The stroke code will add end caps to zero length lines as appropriate */
-            SkPoint lastPt;
-            SkAssertResult(dst->getLastPt(&lastPt));
-            dst->lineTo(lastPt);
+            auto lastPtOptional = dst->getLastPt();
+            SkAssertResult(lastPtOptional.has_value());
+            dst->lineTo(lastPtOptional.value());
         }
         return;
     }
@@ -650,7 +654,7 @@ bool SkContourMeasure::getMatrix(SkScalar distance, SkMatrix* matrix, MatrixFlag
     return false;
 }
 
-bool SkContourMeasure::getSegment(SkScalar startD, SkScalar stopD, SkPath* dst,
+bool SkContourMeasure::getSegment(SkScalar startD, SkScalar stopD, SkPathBuilder* dst,
                                   bool startWithMoveTo) const {
     SkASSERT(dst);
 
@@ -697,4 +701,33 @@ bool SkContourMeasure::getSegment(SkScalar startD, SkScalar stopD, SkPath* dst,
     }
 
     return true;
+}
+
+SkContourMeasure::VerbMeasure SkContourMeasure::ForwardVerbIterator::operator*() const {
+    static constexpr size_t seg_pt_count[] = {
+        2, // kLine  (current_pt, 1 line pt)
+        3, // kQuad  (current_pt, 2 quad pts)
+        4, // kCubic (current_pt, 3 cubic pts)
+        4, // kConic (current_pt, {weight, 0}, 2 conic pts)
+    };
+    static constexpr SkPathVerb seg_verb[] = {
+        SkPathVerb::kLine,
+        SkPathVerb::kQuad,
+        SkPathVerb::kCubic,
+        SkPathVerb::kConic,
+    };
+    static_assert(std::size(seg_pt_count) == std::size(seg_verb));
+    static_assert(static_cast<size_t>(kLine_SegType)  < std::size(seg_pt_count));
+    static_assert(static_cast<size_t>(kQuad_SegType)  < std::size(seg_pt_count));
+    static_assert(static_cast<size_t>(kCubic_SegType) < std::size(seg_pt_count));
+    static_assert(static_cast<size_t>(kConic_SegType) < std::size(seg_pt_count));
+
+    SkASSERT(SkToSizeT(fSegments.front().fType) < std::size(seg_pt_count));
+    SkASSERT(fSegments.front().fPtIndex + seg_pt_count[fSegments.front().fType] <= fPts.size());
+
+    return {
+        fSegments.front().fDistance,
+        seg_verb[fSegments.front().fType],
+        SkSpan(fPts.data() + fSegments.front().fPtIndex, seg_pt_count[fSegments.front().fType]),
+    };
 }

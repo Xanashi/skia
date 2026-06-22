@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Google LLC.
+ * Copyright 2021 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -7,8 +7,8 @@
 
 #include "src/sksl/ir/SkSLVariable.h"
 
-#include "src/base/SkEnumBitMask.h"
-#include "src/base/SkStringView.h"
+#include "src/core/SkEnumBitMask.h"
+#include "src/core/SkStringView.h"
 #include "src/sksl/SkSLCompiler.h"
 #include "src/sksl/SkSLContext.h"
 #include "src/sksl/SkSLErrorReporter.h"
@@ -106,7 +106,8 @@ std::unique_ptr<Variable> Variable::Convert(const Context& context,
         context.fErrors->error(modifiersPos,
                                "out location=0, index=0 is reserved for sk_FragColor");
     }
-    if (type->isUnsizedArray() && storage != Variable::Storage::kInterfaceBlock) {
+    if (type->isUnsizedArray() && storage != Variable::Storage::kInterfaceBlock
+                               && storage != Variable::Storage::kParameter) {
         context.fErrors->error(pos, "unsized arrays are not permitted here");
     }
     if (ProgramConfig::IsCompute(context.fConfig->fKind) && layout.fBuiltin == -1) {
@@ -139,7 +140,7 @@ std::unique_ptr<Variable> Variable::Convert(const Context& context,
     }
 
     return Make(pos, modifiersPos, layout, flags, type, name, std::move(mangledName),
-                context.fConfig->fIsBuiltinCode, storage);
+                context.fConfig->isBuiltinCode(), storage);
 }
 
 std::unique_ptr<Variable> Variable::Make(Position pos,

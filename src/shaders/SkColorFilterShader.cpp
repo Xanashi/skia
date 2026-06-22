@@ -9,8 +9,8 @@
 
 #include "include/core/SkColorFilter.h"
 #include "include/core/SkShader.h"
-#include "include/private/base/SkAssert.h"
-#include "src/base/SkArenaAlloc.h"
+#include "include/private/SkAssert.h"
+#include "src/core/SkArenaAlloc.h"
 #include "src/core/SkEffectPriv.h"
 #include "src/core/SkRasterPipeline.h"
 #include "src/core/SkRasterPipelineOpList.h"
@@ -31,13 +31,22 @@ SkColorFilterShader::SkColorFilterShader(sk_sp<SkShader> shader,
     SkASSERT(fFilter);
 }
 
+sk_sp<SkShader> SkColorFilterShader::Make(sk_sp<SkShader> shader,
+                                          float alpha,
+                                          sk_sp<SkColorFilter> filter) {
+    if (!shader) {
+        return nullptr;
+    } else if (!filter) {
+        return shader;
+    } else {
+        return sk_sp(new SkColorFilterShader(std::move(shader), alpha, std::move(filter)));
+    }
+}
+
 sk_sp<SkFlattenable> SkColorFilterShader::CreateProc(SkReadBuffer& buffer) {
     auto shader = buffer.readShader();
     auto filter = buffer.readColorFilter();
-    if (!shader || !filter) {
-        return nullptr;
-    }
-    return sk_make_sp<SkColorFilterShader>(shader, 1.0f, filter);
+    return Make(std::move(shader), 1.0f, std::move(filter));
 }
 
 bool SkColorFilterShader::isOpaque() const {

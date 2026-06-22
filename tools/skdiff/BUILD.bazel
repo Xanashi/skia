@@ -1,3 +1,5 @@
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
+
 package(
     default_applicable_licenses = ["//:license"],
 )
@@ -21,7 +23,6 @@ cc_binary(
         "//:core",
         "//:png_decode_codec",
         "//:png_encode_codec",
-        "//src/base",
         "//src/core:core_priv",
     ],
 )

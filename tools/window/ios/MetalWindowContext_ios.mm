@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Google Inc.
+ * Copyright 2019 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -28,7 +28,7 @@ namespace {
 
 class MetalWindowContext_ios : public MetalWindowContext {
 public:
-    MetalWindowContext_ios(const IOSWindowInfo&, const DisplayParams&);
+    MetalWindowContext_ios(const IOSWindowInfo&, std::unique_ptr<const DisplayParams>);
 
     ~MetalWindowContext_ios() override;
 
@@ -44,11 +44,10 @@ private:
 };
 
 MetalWindowContext_ios::MetalWindowContext_ios(const IOSWindowInfo& info,
-                                               const DisplayParams& params)
-    : MetalWindowContext(params)
-    , fWindow(info.fWindow)
-    , fViewController(info.fViewController) {
-
+                                               std::unique_ptr<const DisplayParams> params)
+        : MetalWindowContext(std::move(params))
+        , fWindow(info.fWindow)
+        , fViewController(info.fViewController) {
     // iOS test apps currently ignore MSAA settings.
 
     this->initializeContext();
@@ -71,6 +70,7 @@ bool MetalWindowContext_ios::onInitializeContext() {
     fMetalLayer = (CAMetalLayer*)fMetalView.layer;
     fMetalLayer.device = fDevice.get();
     fMetalLayer.pixelFormat = MTLPixelFormatBGRA8Unorm;
+    fMetalLayer.framebufferOnly = false;
     fMetalLayer.drawableSize = frameRect.size;
     fMetalLayer.frame = frameRect;
 
@@ -96,8 +96,8 @@ void MetalWindowContext_ios::resize(int w, int h) {
 namespace skwindow {
 
 std::unique_ptr<WindowContext> MakeMetalForIOS(const IOSWindowInfo& info,
-                                               const DisplayParams& params) {
-    std::unique_ptr<WindowContext> ctx(new MetalWindowContext_ios(info, params));
+                                               std::unique_ptr<const DisplayParams> params) {
+    std::unique_ptr<WindowContext> ctx(new MetalWindowContext_ios(info, std::move(params)));
     if (!ctx->isValid()) {
         return nullptr;
     }

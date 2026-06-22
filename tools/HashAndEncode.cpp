@@ -1,4 +1,4 @@
-// Copyright 2019 Google LLC.
+// Copyright 2019 Google LLC
 // Use of this source code is governed by a BSD-style license that can be found in the LICENSE file.
 
 #include "tools/HashAndEncode.h"
@@ -52,8 +52,12 @@ HashAndEncode::HashAndEncode(const SkBitmap& bitmap) : fSize(bitmap.info().dimen
                                               srcAlpha = skcms_AlphaFormat_Opaque;     break;
         case kBGR_101010x_SkColorType:        srcFmt = skcms_PixelFormat_BGRA_1010102;
                                               srcAlpha = skcms_AlphaFormat_Opaque;     break;
+        case kRGB_F16F16F16x_SkColorType:     srcFmt = skcms_PixelFormat_RGBA_hhhh;
+                                              srcAlpha = skcms_AlphaFormat_Opaque;     break;
 
         case kR8G8_unorm_SkColorType:         return;
+        case kR16_unorm_SkColorType:          return;
+        case kR16_float_SkColorType:          return;
         case kR16G16_unorm_SkColorType:       return;
         case kR16G16_float_SkColorType:       return;
         case kA16_unorm_SkColorType:          return;
@@ -194,4 +198,3 @@ bool HashAndEncode::encodePNG(SkWStream* st,
     png_destroy_write_struct(&png, &info);
     return true;
 }
-

@@ -8,9 +8,9 @@
 #include "include/core/SkCanvas.h"
 #include "include/core/SkFont.h"
 #include "include/core/SkPaint.h"
-#include "include/private/base/SkTArray.h"
-#include "src/base/SkRandom.h"
-#include "src/base/SkUTF.h"
+#include "include/private/SkTArray.h"
+#include "src/core/SkRandom.h"
+#include "src/core/SkUTF.h"
 #include "tools/viewer/Slide.h"
 #if defined(SK_GANESH) || defined(SK_GRAPHITE)
 #include "src/gpu/RectanizerPow2.h"
@@ -43,8 +43,8 @@ public:
             *fRects[0].append() = SkISize::Make(random.nextRangeU(kMinRectSize, kMaxRectSize),
                                                 random.nextRangeU(kMinRectSize, kMaxRectSize));
             *fRects[1].append() = SkISize::Make(
-                        GrNextPow2(random.nextRangeU(kMinRectSize, kMaxRectSize)),
-                        GrNextPow2(random.nextRangeU(kMinRectSize, kMaxRectSize)));
+                        SkNextPow2(random.nextRangeU(kMinRectSize, kMaxRectSize)),
+                        SkNextPow2(random.nextRangeU(kMinRectSize, kMaxRectSize)));
             *fRects[2].append() = SkISize::Make(128, 128);
             *fRectLocations.append() = SkIPoint16::Make(0, 0);
         }

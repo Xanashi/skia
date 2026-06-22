@@ -1,4 +1,4 @@
-load("//bazel:skia_rules.bzl", "generate_cpp_files_for_headers", "skia_filegroup")
+load("//bazel:skia_rules.bzl", "skia_filegroup")
 
 package(
     default_applicable_licenses = ["//:license"],
@@ -44,34 +44,28 @@ skia_filegroup(
 )
 
 skia_filegroup(
-    name = "private_hdrs",
-    srcs = [
-        "SkChromeRemoteGlyphCache.h",
-        ":discardable_memory_hdrs",
-        ":shared_private_hdrs",
-    ] + select({
-        "//src/gpu:has_ganesh_backend": [":ganesh_private_hdrs"],
-        "//conditions:default": [],
-    }) + select({
-        "//src/gpu:vulkan_ganesh": [":vk_ganesh_hdrs"],
-        "//conditions:default": [],
-    }),
-    visibility = ["//include/private:__pkg__"],
-)
-
-skia_filegroup(
     name = "core_hdrs",
     srcs = [
         "SkChromeRemoteGlyphCache.h",
         "SkDiscardableMemory.h",
+        "SkPMColor.h",
         "Slug.h",
     ],
     visibility = ["//src/core:__pkg__"],
 )
 
-generate_cpp_files_for_headers(
-    name = "headers_to_compile",
-    headers = [
-        "SkImageChromium.h",
+skia_filegroup(
+    name = "codec_icc_chromium_hdrs",
+    srcs = [
+        "SkCodecsICCProfileChromium.h",
     ],
+    visibility = ["//src/codec:__pkg__"],
+)
+
+skia_filegroup(
+    name = "codec_exif_chromium_hdrs",
+    srcs = [
+        "SkExifChromium.h",
+    ],
+    visibility = ["//src/codec:__pkg__"],
 )

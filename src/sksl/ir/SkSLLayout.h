@@ -8,7 +8,7 @@
 #ifndef SKSL_LAYOUT
 #define SKSL_LAYOUT
 
-#include "src/base/SkEnumBitMask.h"
+#include "src/core/SkEnumBitMask.h"
 
 #include <string>
 
@@ -61,7 +61,7 @@ enum class LayoutFlag : int {
 
 }  // namespace SkSL
 
-SK_MAKE_BITMASK_OPS(SkSL::LayoutFlag);
+SK_MAKE_BITMASK_OPS(SkSL::LayoutFlag)
 
 namespace SkSL {
 

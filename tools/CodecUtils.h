@@ -12,16 +12,14 @@
 #include "include/codec/SkAvifDecoder.h"
 #endif
 
-#if defined(SK_CODEC_DECODES_BMP)
+#if defined(SK_CODEC_DECODES_BMP_WITH_RUST)
+#include "experimental/rust_bmp/decoder/SkBmpRustDecoder.h"
+#elif defined(SK_CODEC_DECODES_BMP)
 #include "include/codec/SkBmpDecoder.h"
 #endif
 
 #if defined(SK_CODEC_DECODES_GIF)
 #include "include/codec/SkGifDecoder.h"
-#endif
-
-#if defined(SK_HAS_HEIF_LIBRARY)
-#include "include/android/SkHeifDecoder.h"
 #endif
 
 #if defined(SK_CODEC_DECODES_ICO)
@@ -36,8 +34,12 @@
 #include "include/codec/SkJpegxlDecoder.h"
 #endif
 
-#if defined(SK_CODEC_DECODES_PNG)
+#if defined(SK_CODEC_DECODES_PNG_WITH_LIBPNG)
 #include "include/codec/SkPngDecoder.h"
+#endif
+
+#if defined(SK_CODEC_DECODES_PNG_WITH_RUST)
+#include "include/codec/SkPngRustDecoder.h"
 #endif
 
 #if defined(SK_CODEC_DECODES_RAW)
@@ -61,14 +63,13 @@ inline void RegisterAllAvailable() {
 #if defined(SK_CODEC_DECODES_AVIF)
     SkCodecs::Register(SkAvifDecoder::Decoder());
 #endif
-#if defined(SK_CODEC_DECODES_BMP)
+#if defined(SK_CODEC_DECODES_BMP_WITH_RUST)
+    SkCodecs::Register(SkBmpRustDecoder::Decoder());
+#elif defined(SK_CODEC_DECODES_BMP)
     SkCodecs::Register(SkBmpDecoder::Decoder());
 #endif
 #if defined(SK_CODEC_DECODES_GIF)
     SkCodecs::Register(SkGifDecoder::Decoder());
-#endif
-#if defined(SK_HAS_HEIF_LIBRARY)
-    SkCodecs::Register(SkHeifDecoder::Decoder());
 #endif
 #if defined(SK_CODEC_DECODES_ICO)
     SkCodecs::Register(SkIcoDecoder::Decoder());
@@ -79,8 +80,11 @@ inline void RegisterAllAvailable() {
 #if defined(SK_CODEC_DECODES_JPEGXL)
     SkCodecs::Register(SkJpegxlDecoder::Decoder());
 #endif
-#if defined(SK_CODEC_DECODES_PNG)
+#if defined(SK_CODEC_DECODES_PNG_WITH_LIBPNG)
     SkCodecs::Register(SkPngDecoder::Decoder());
+#endif
+#if defined(SK_CODEC_DECODES_PNG_WITH_RUST)
+    SkCodecs::Register(SkPngRustDecoder::Decoder());
 #endif
 #if defined(SK_CODEC_DECODES_RAW)
     SkCodecs::Register(SkRawDecoder::Decoder());

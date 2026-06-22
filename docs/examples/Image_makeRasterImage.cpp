@@ -1,4 +1,4 @@
-// Copyright 2019 Google LLC.
+// Copyright 2019 Google LLC
 // Use of this source code is governed by a BSD-style license that can be found in the LICENSE file.
 #include "tools/fiddle/examples.h"
 REG_FIDDLE(Image_makeRasterImage, 256, 256, false, 5) {
@@ -15,7 +15,7 @@ void draw(SkCanvas* canvas) {
         SkPaint paint;
         paint.setAntiAlias(true);
         SkFont font = SkFont(fontMgr->matchFamilyStyle(nullptr, {}));
-        sk_sp<SkImage> raster(image->makeRasterImage());
+        sk_sp<SkImage> raster(image->makeRasterImage(nullptr));
         canvas->drawImage(raster, 0, 0);
         canvas->drawString(label, 20, raster->height() / 4, font, paint);
     };

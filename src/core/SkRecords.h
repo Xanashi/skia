@@ -30,7 +30,7 @@
 #include "include/core/SkString.h"
 #include "include/core/SkTextBlob.h"
 #include "include/core/SkVertices.h"
-#include "include/private/base/SkTemplates.h"
+#include "include/private/SkTemplates.h"
 #include "include/private/chromium/Slug.h"
 #include "src/core/SkDrawShadowInfo.h"
 
@@ -38,6 +38,7 @@
 
 enum class SkBlendMode;
 enum class SkClipOp;
+enum class SkTileMode;
 struct SkPoint;
 struct SkRSXform;
 
@@ -105,7 +106,8 @@ enum Type { SK_RECORD_TYPES(ENUM) };
 
 #define ACT_AS_PTR(ptr)                 \
     operator T*() const { return ptr; } \
-    T* operator->() const { return ptr; }
+    T* operator->() const { return ptr; } \
+    T* data() const { return ptr; }
 
 // An Optional doesn't own the pointer's memory, but may need to destroy non-POD data.
 template <typename T>
@@ -191,6 +193,7 @@ RECORD(SaveLayer, kHasPaint_Tag,
        sk_sp<const SkImageFilter> backdrop;
        SkCanvas::SaveLayerFlags saveLayerFlags;
        SkScalar backdropScale;
+       SkTileMode backdropTileMode;
        skia_private::AutoTArray<sk_sp<SkImageFilter>> filters)
 
 RECORD(SaveBehind, 0,
@@ -332,7 +335,7 @@ RECORD(DrawAtlas, kDraw_Tag|kHasImage_Tag|kHasPaint_Tag|kMultiDraw_Tag,
         PODArray<SkRSXform> xforms;
         PODArray<SkRect> texs;
         PODArray<SkColor> colors;
-        int count;
+        unsigned count;
         SkBlendMode mode;
         SkSamplingOptions sampling;
         Optional<SkRect> cull)
@@ -347,7 +350,7 @@ RECORD(DrawMesh, kDraw_Tag|kHasPaint_Tag|kMultiDraw_Tag,
 RECORD(DrawShadowRec, kDraw_Tag,
        PreCachedPath path;
        SkDrawShadowRec rec)
-RECORD(DrawAnnotation, 0,  // TODO: kDraw_Tag, skia:5548
+RECORD(DrawAnnotation, 0,  // TODO: kDraw_Tag, skbug.com/40036727
        SkRect rect;
        SkString key;
        sk_sp<SkData> value)

@@ -8,20 +8,22 @@
 #ifndef SkPDFDevice_DEFINED
 #define SkPDFDevice_DEFINED
 
+#include "include/core/SkCPURecorder.h"
 #include "include/core/SkCanvas.h"
 #include "include/core/SkMatrix.h"
 #include "include/core/SkRefCnt.h"
 #include "include/core/SkSamplingOptions.h"
 #include "include/core/SkScalar.h"
+#include "include/core/SkSpan.h"
 #include "include/core/SkStream.h"
 #include "src/core/SkClipStack.h"
 #include "src/core/SkClipStackDevice.h"
 #include "src/core/SkTHash.h"
 #include "src/pdf/SkKeyedImage.h"
 #include "src/pdf/SkPDFGraphicStackState.h"
+#include "src/pdf/SkPDFTag.h"
 #include "src/pdf/SkPDFTypes.h"
 
-#include <cstddef>
 #include <memory>
 
 class SkBitmap;
@@ -30,9 +32,10 @@ class SkData;
 class SkDevice;
 class SkImage;
 class SkMesh;
-class SkPDFDocument;
 class SkPaint;
 class SkPath;
+class SkPDFDocument;
+class SkRecorder;
 class SkRRect;
 class SkSpecialImage;
 class SkSurface;
@@ -71,10 +74,6 @@ public:
     SkPDFDevice(SkISize pageSize, SkPDFDocument* document,
                 const SkMatrix& initialTransform = SkMatrix::I());
 
-    sk_sp<SkPDFDevice> makeCongruentDevice() {
-        return sk_make_sp<SkPDFDevice>(this->size(), fDocument);
-    }
-
     ~SkPDFDevice() override;
 
     /**
@@ -83,13 +82,11 @@ public:
      *  operations, and are handling any looping from the paint.
      */
     void drawPaint(const SkPaint& paint) override;
-    void drawPoints(SkCanvas::PointMode mode,
-                    size_t count, const SkPoint[],
-                    const SkPaint& paint) override;
+    void drawPoints(SkCanvas::PointMode, SkSpan<const SkPoint>, const SkPaint&) override;
     void drawRect(const SkRect& r, const SkPaint& paint) override;
     void drawOval(const SkRect& oval, const SkPaint& paint) override;
     void drawRRect(const SkRRect& rr, const SkPaint& paint) override;
-    void drawPath(const SkPath& origpath, const SkPaint& paint, bool pathIsMutable) override;
+    void drawPath(const SkPath& origpath, const SkPaint& paint) override;
 
     void drawImageRect(const SkImage*,
                        const SkRect* src,
@@ -123,9 +120,12 @@ public:
 
     const SkMatrix& initialTransform() const { return fInitialTransform; }
 
-protected:
-    sk_sp<SkSpecialImage> makeSpecial(const SkBitmap&) override;
-    sk_sp<SkSpecialImage> makeSpecial(const SkImage*) override;
+    SkPDFParentTreeKey structParentsKey() const { return fMarkManager.structParentsKey(); }
+
+    SkRecorder* baseRecorder() const override {
+        // TODO(kjlubick) the creation of this should likely involve a CPU context.
+        return skcpu::Recorder::TODO();
+    }
 
 private:
     // TODO(vandebo): push most of SkPDFDevice's state into a core object in
@@ -138,7 +138,53 @@ private:
     skia_private::THashSet<SkPDFIndirectReference> fXObjectResources;
     skia_private::THashSet<SkPDFIndirectReference> fShaderResources;
     skia_private::THashSet<SkPDFIndirectReference> fFontResources;
-    int fNodeId;
+
+    class MarkedContentManager {
+    public:
+        MarkedContentManager(SkPDFDocument* document, SkDynamicMemoryWStream* out);
+        ~MarkedContentManager();
+
+        // Sets the current element identifier. Associate future draws with the structure element
+        // with the given element identifier. Element identifier 0 is reserved to mean no structure
+        // element.
+        void setNextMarksElemId(int nextMarksElemId);
+
+        // The current element identifier.
+        int elemId() const;
+
+        // Starts a marked-content sequence for a content item for the structure element with the
+        // current element identifier. If there is an active marked-content sequence associated with
+        // a different element identifier the active marked-content sequence will first be closed.
+        // If there is no structure element with the current element identifier then the
+        // marked-content sequence will not be started.
+        void beginMark();
+
+        // Tests if there is an active marked-content sequence.
+        bool hasActiveMark() const;
+
+        // Accumulates an upper left location for the active mark. The point is in PDF page space
+        // and so is y-up. Only use if this.hasActiveMark()
+        void accumulate(const SkPoint& p);
+
+        // Returns the key (index) into the ParentsTree. Will be true if marks were made.
+        SkPDFParentTreeKey structParentsKey() const { return fStructParentsKey; }
+
+        void reset() {
+            // fDoc remains the same
+            // fOut remains the same (device's fContent may be reset but remains valid)
+            SkASSERT(!this->hasActiveMark()); // fCurrentlyActiveMark and fCurrentMarksElemId unset
+            // fNextMarksElemId unchanged, it is still this device's active structure element id.
+            fStructParentsKey = SkPDFParentTreeKey();
+        }
+
+    private:
+        SkPDFDocument* fDoc;
+        SkDynamicMemoryWStream* fOut;
+        SkPDFStructTree::Mark fCurrentlyActiveMark;
+        int fCurrentMarksElemId;
+        int fNextMarksElemId;
+        SkPDFParentTreeKey fStructParentsKey;
+    } fMarkManager;
 
     SkDynamicMemoryWStream fContent;
     SkDynamicMemoryWStream fContentBuffer;
@@ -186,21 +232,22 @@ private:
     void internalDrawPath(const SkClipStack&,
                           const SkMatrix&,
                           const SkPath&,
-                          const SkPaint&,
-                          bool pathIsMutable);
+                          const SkPaint&);
 
     void internalDrawPathWithFilter(const SkClipStack& clipStack,
                                     const SkMatrix& ctm,
                                     const SkPath& origPath,
                                     const SkPaint& paint);
 
-    bool handleInversePath(const SkPath& origPath, const SkPaint& paint, bool pathIsMutable);
+    bool handleInversePath(const SkPath& origPath, const SkPaint& paint);
 
     void clearMaskOnGraphicState(SkDynamicMemoryWStream*);
     void setGraphicState(SkPDFIndirectReference gs, SkDynamicMemoryWStream*);
     void drawFormXObject(SkPDFIndirectReference xObject, SkDynamicMemoryWStream*, SkPath* shape);
 
     bool hasEmptyClip() const { return this->cs().isEmpty(this->bounds()); }
+
+    sk_sp<SkPDFDevice> makeCongruentDevice();
 
     void reset();
 };

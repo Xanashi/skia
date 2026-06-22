@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Google LLC.
+ * Copyright 2020 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -8,10 +8,10 @@
 
 #include "include/core/SkMatrix.h"
 #include "include/core/SkPaint.h"
+#include "include/core/SkPoint.h"
 #include "include/core/SkString.h"
-#include "include/gpu/GrTypes.h"
-#include "include/private/base/SkAssert.h"
-#include "include/private/base/SkPoint_impl.h"
+#include "include/private/SkAssert.h"
+#include "include/private/SkMacros.h"
 #include "include/private/gpu/ganesh/GrTypesPriv.h"
 #include "src/core/SkSLTypeShared.h"
 #include "src/gpu/KeyBuilder.h"
@@ -511,7 +511,7 @@ void GrStrokeTessellationShader::Impl::emitTessellationCode(
             "B = E - C;"
             "A = fma(float2(-3), E, D);"
         "}"
-        // FIXME(crbug.com/800804,skbug.com/11268): Consider normalizing the exponents in A,B,C at
+        // FIXME(crbug.com/800804,skbug.com/40042642): Consider normalizing the exponents in A,B,C at
         // this point in order to prevent fp32 overflow.
 
         // Now find the coefficients that give a tangent direction from a parametric edge ID:

@@ -12,9 +12,9 @@
 #include "include/core/SkData.h"
 #include "include/core/SkFontMgr.h"
 #include "include/core/SkImage.h"
-#include "include/private/base/SkTPin.h"
+#include "include/private/SkTPin.h"
 #include "modules/skresources/src/SkAnimCodecPlayer.h"
-#include "src/base/SkBase64.h"
+#include "src/core/SkBase64.h"
 #include "src/core/SkOSFile.h"
 #include "src/utils/SkOSPath.h"
 
@@ -128,9 +128,9 @@ MultiFrameImageAsset::MultiFrameImageAsset(std::unique_ptr<SkAnimCodecPlayer> pl
     SkASSERT(fPlayer);
 }
 
-bool MultiFrameImageAsset::isMultiFrame() {
-    return fPlayer->duration() > 0;
-}
+bool MultiFrameImageAsset::isMultiFrame() { return fPlayer->duration() > 0; }
+
+float MultiFrameImageAsset::duration() const { return fPlayer->duration(); }
 
 sk_sp<SkImage> MultiFrameImageAsset::generateFrame(float t) {
     auto decode = [](sk_sp<SkImage> image) {
@@ -154,7 +154,7 @@ sk_sp<SkImage> MultiFrameImageAsset::generateFrame(float t) {
             }
         } else {
             // When the image size is OK, just force-decode.
-            image = image->makeRasterImage();
+            image = image->makeRasterImage(nullptr);
         }
 
         return image;
@@ -330,7 +330,7 @@ sk_sp<SkTypeface> DataURIResourceProviderProxy::loadTypeface(const char name[],
         if ((data = decode_datauri("data:font/", url)) || 
             (data = decode_datauri("data:application/font", url)) ||
             (data = decode_datauri("data:aplication/font", url))) {
-            return SkTypeface::MakeFromData(std::move(data));
+            return fFontMgr->makeFromData(std::move(data));
         }
     }
 

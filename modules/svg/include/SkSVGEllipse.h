@@ -8,9 +8,18 @@
 #ifndef SkSVGEllipse_DEFINED
 #define SkSVGEllipse_DEFINED
 
+#include "include/core/SkPath.h"
+#include "include/core/SkPathTypes.h"
+#include "include/core/SkRefCnt.h"
+#include "include/private/SkAPI.h"
+#include "modules/svg/include/SkSVGNode.h"
 #include "modules/svg/include/SkSVGShape.h"
 #include "modules/svg/include/SkSVGTypes.h"
 
+class SkCanvas;
+class SkPaint;
+class SkSVGLengthContext;
+class SkSVGRenderContext;
 struct SkRect;
 
 class SK_API SkSVGEllipse final : public SkSVGShape {

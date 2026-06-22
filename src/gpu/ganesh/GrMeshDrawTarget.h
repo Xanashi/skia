@@ -9,8 +9,8 @@
 #define GrMeshDrawTarget_DEFINED
 
 #include "include/core/SkRefCnt.h"  // IWYU pragma: keep
-#include "include/private/base/SkTArray.h"
-#include "src/base/SkArenaAlloc.h"
+#include "include/private/SkTArray.h"
+#include "src/core/SkArenaAlloc.h"
 #include "src/gpu/ganesh/GrAppliedClip.h"
 #include "src/gpu/ganesh/GrDrawIndirectCommand.h"
 #include "src/gpu/ganesh/GrSimpleMesh.h"
@@ -126,13 +126,9 @@ public:
     /** Helpers for ops that only need to use the VertexWriter to fill the data directly. */
     skgpu::VertexWriter makeVertexWriter(size_t vertexSize, int vertexCount,
                                          sk_sp<const GrBuffer>*, int* startVertex);
-    skgpu::IndexWriter makeIndexWriter(int indexCount, sk_sp<const GrBuffer>*, int* startIndex);
     skgpu::VertexWriter makeVertexWriterAtLeast(size_t vertexSize, int minVertexCount,
                                                 int fallbackVertexCount, sk_sp<const GrBuffer>*,
                                                 int* startVertex, int* actualVertexCount);
-    skgpu::IndexWriter makeIndexWriterAtLeast(int minIndexCount, int fallbackIndexCount,
-                                              sk_sp<const GrBuffer>*, int* startIndex,
-                                              int* actualIndexCount);
 
     /** Helpers for ops which over-allocate and then return excess data to the pool. */
     virtual void putBackIndices(int indices) = 0;

@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Google Inc.
+ * Copyright 2018 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -14,15 +14,14 @@
 #include "include/core/SkImage.h"
 #include "include/core/SkImageInfo.h"
 #include "include/core/SkPixmap.h"
-#include "include/core/SkRect.h"
 #include "include/core/SkSize.h"
 #include "include/core/SkSurface.h"
 #include "include/core/SkTypes.h"
 #include "include/gpu/GpuTypes.h"
-#include "include/gpu/GrBackendSurface.h"
-#include "include/gpu/GrDirectContext.h"
-#include "include/gpu/GrRecordingContext.h"
-#include "include/gpu/GrTypes.h"
+#include "include/gpu/ganesh/GrBackendSurface.h"
+#include "include/gpu/ganesh/GrDirectContext.h"
+#include "include/gpu/ganesh/GrRecordingContext.h"
+#include "include/gpu/ganesh/GrTypes.h"
 #include "include/gpu/ganesh/SkImageGanesh.h"
 #include "include/gpu/ganesh/SkSurfaceGanesh.h"
 #include "include/private/chromium/GrPromiseImageTexture.h"
@@ -47,11 +46,13 @@
 #include "src/gpu/ganesh/GrSurfaceProxyView.h"
 #include "src/gpu/ganesh/GrTexture.h"
 #include "src/gpu/ganesh/GrTextureProxy.h"
+#include "src/gpu/ganesh/SkGaneshRecorder.h"
 #include "src/gpu/ganesh/SurfaceContext.h"
 #include "src/gpu/ganesh/image/GrImageUtils.h"
 #include "src/gpu/ganesh/image/SkImage_Ganesh.h"
 #include "src/image/SkImage_Base.h"
 
+#include <cstddef>
 #include <functional>
 #include <memory>
 #include <utility>
@@ -63,7 +64,8 @@ struct SkIPoint;
 SkImage_GaneshBase::SkImage_GaneshBase(sk_sp<GrImageContext> context,
                                        SkImageInfo info,
                                        uint32_t uniqueID)
-        : SkImage_Base(std::move(info), uniqueID), fContext(std::move(context)) {}
+        : SkImage_Base(std::move(info), uniqueID, /*backingStorage=*/nullptr),
+                       fContext(std::move(context)) {}
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -144,7 +146,8 @@ bool SkImage_GaneshBase::getROPixels(GrDirectContext* dContext,
         }
     }
 
-    auto [view, ct] = skgpu::ganesh::AsView(dContext, this, skgpu::Mipmapped::kNo);
+    auto [view, ct] = skgpu::ganesh::AsView(dContext, this, skgpu::Mipmapped::kNo,
+                                            /*targetSurface=*/nullptr);
     if (!view) {
         return false;
     }
@@ -166,35 +169,26 @@ bool SkImage_GaneshBase::getROPixels(GrDirectContext* dContext,
     return true;
 }
 
-sk_sp<SkImage> SkImage_GaneshBase::makeSubset(GrDirectContext* direct,
-                                              const SkIRect& subset) const {
+sk_sp<SkImage> SkImage_GaneshBase::onMakeSubset(SkRecorder* recorder,
+                                                const SkIRect& subset,
+                                                RequiredProperties) const {
+    auto gRecorder = AsGaneshRecorder(recorder);
+    if (!gRecorder) {
+        if (recorder) {
+            SkDEBUGFAIL("Wrong recorder type; need Ganesh Recorder made from direct context");
+        }
+        return nullptr;
+    }
+    auto direct = gRecorder->directContext();
+    if (!direct) {
+        SkDEBUGFAIL("Cannot take subset of Ganesh image w/o a directContext");
+        return nullptr;
+    }
     if (!fContext->priv().matches(direct)) {
         return nullptr;
     }
-
-    if (subset.isEmpty()) {
-        return nullptr;
-    }
-
-    const SkIRect bounds = SkIRect::MakeWH(this->width(), this->height());
-    if (!bounds.contains(subset)) {
-        return nullptr;
-    }
-
-    // optimization : return self if the subset == our bounds
-    if (bounds == subset) {
-        return sk_ref_sp(const_cast<SkImage_GaneshBase*>(this));
-    }
-
-    return this->onMakeSubset(direct, subset);
-}
-
-sk_sp<SkImage> SkImage_GaneshBase::onMakeSubset(GrDirectContext* direct,
-                                                const SkIRect& subset) const {
-    if (!fContext->priv().matches(direct)) {
-        return nullptr;
-    }
-    auto [view, ct] = skgpu::ganesh::AsView(direct, this, skgpu::Mipmapped::kNo);
+    auto [view, ct] = skgpu::ganesh::AsView(direct, this, skgpu::Mipmapped::kNo,
+                                            /*targetSurface=*/nullptr);
     SkASSERT(view);
     SkASSERT(ct == SkColorTypeToGrColorType(this->colorType()));
 
@@ -217,72 +211,19 @@ sk_sp<SkImage> SkImage_GaneshBase::onMakeSubset(GrDirectContext* direct,
                                       this->imageInfo().colorInfo());
 }
 
-sk_sp<SkImage> SkImage_GaneshBase::onMakeSubset(skgpu::graphite::Recorder*,
-                                                const SkIRect&,
-                                                RequiredProperties) const {
-    SkDEBUGFAIL("Cannot convert Ganesh-backed image to Graphite");
-    return nullptr;
-}
-
-sk_sp<SkImage> SkImage_GaneshBase::makeColorTypeAndColorSpace(skgpu::graphite::Recorder*,
-                                                              SkColorType,
-                                                              sk_sp<SkColorSpace>,
-                                                              RequiredProperties) const {
-    SkDEBUGFAIL("Cannot convert Ganesh-backed image to Graphite");
-    return nullptr;
-}
-
-sk_sp<SkSurface> SkImage_GaneshBase::onMakeSurface(skgpu::graphite::Recorder*,
-                                                   const SkImageInfo& info) const {
-    if (auto ictx = this->context()) {
-        if (auto rctx = ictx->priv().asRecordingContext()) {
-            auto isBudgeted = skgpu::Budgeted::kNo;  // Assuming we're a one-shot surface
-            return SkSurfaces::RenderTarget(rctx, isBudgeted, info);
-        }
-    }
-    return nullptr;
-}
-
-bool SkImage_GaneshBase::onReadPixels(GrDirectContext* dContext,
-                                      const SkImageInfo& dstInfo,
-                                      void* dstPixels,
-                                      size_t dstRB,
-                                      int srcX,
-                                      int srcY,
-                                      CachingHint) const {
-    if (!fContext->priv().matches(dContext) ||
-        !SkImageInfoValidConversion(dstInfo, this->imageInfo())) {
-        return false;
-    }
-
-    auto [view, ct] = skgpu::ganesh::AsView(dContext, this, skgpu::Mipmapped::kNo);
-    SkASSERT(view);
-
-    GrColorInfo colorInfo(ct, this->alphaType(), this->refColorSpace());
-    auto sContext = dContext->priv().makeSC(std::move(view), colorInfo);
-    if (!sContext) {
-        return false;
-    }
-
-    return sContext->readPixels(dContext, {dstInfo, dstPixels, dstRB}, {srcX, srcY});
-}
-
-bool SkImage_GaneshBase::isValid(GrRecordingContext* context) const {
-    if (context && context->abandoned()) {
-        return false;
-    }
-    if (fContext->priv().abandoned()) {
-        return false;
-    }
-    if (context && !fContext->priv().matches(context)) {
-        return false;
-    }
-    return true;
-}
-
-sk_sp<SkImage> SkImage_GaneshBase::makeColorTypeAndColorSpace(GrDirectContext* dContext,
+sk_sp<SkImage> SkImage_GaneshBase::makeColorTypeAndColorSpace(SkRecorder* recorder,
                                                               SkColorType targetColorType,
-                                                              sk_sp<SkColorSpace> targetCS) const {
+                                                              sk_sp<SkColorSpace> targetCS,
+                                                              RequiredProperties) const {
+    auto gRecorder = AsGaneshRecorder(recorder);
+    if (!gRecorder) {
+        return nullptr;
+    }
+    GrDirectContext* dContext = gRecorder->directContext();
+    if (!dContext) {
+        return nullptr;
+    }
+
     if (kUnknown_SkColorType == targetColorType || !targetCS) {
         return nullptr;
     }
@@ -303,7 +244,70 @@ sk_sp<SkImage> SkImage_GaneshBase::makeColorTypeAndColorSpace(GrDirectContext* d
         return sk_ref_sp(const_cast<SkImage_GaneshBase*>(this));
     }
 
-    return this->onMakeColorTypeAndColorSpace(targetColorType, std::move(targetCS), dContext);
+    return this->onMakeColorTypeAndColorSpace(dContext, targetColorType, std::move(targetCS));
+}
+
+sk_sp<SkSurface> SkImage_GaneshBase::onMakeSurface(SkRecorder* recorder,
+                                                   const SkImageInfo& info) const {
+    if (!recorder) {
+        // TODO(kjlubick) remove this after old SkImage::makeScaled(image info, sampling) API gone
+        if (auto ictx = this->context()) {
+            if (auto rctx = ictx->priv().asRecordingContext()) {
+                auto isBudgeted = skgpu::Budgeted::kNo;  // Assuming we're a one-shot surface
+                return SkSurfaces::RenderTarget(rctx, isBudgeted, info);
+            }
+        }
+        return nullptr;
+    }
+    auto gRecorder = AsGaneshRecorder(recorder);
+    if (!gRecorder) {
+        return nullptr;
+    }
+    constexpr auto isBudgeted = skgpu::Budgeted::kNo;  // Assuming we're a one-shot surface
+    return SkSurfaces::RenderTarget(gRecorder->recordingContext(), isBudgeted, info);
+}
+
+bool SkImage_GaneshBase::onReadPixels(GrDirectContext* dContext,
+                                      const SkImageInfo& dstInfo,
+                                      void* dstPixels,
+                                      size_t dstRB,
+                                      int srcX,
+                                      int srcY,
+                                      CachingHint) const {
+    if (!fContext->priv().matches(dContext) ||
+        !SkImageInfoValidConversion(dstInfo, this->imageInfo())) {
+        return false;
+    }
+
+    auto [view, ct] = skgpu::ganesh::AsView(dContext, this, skgpu::Mipmapped::kNo,
+                                            /*targetSurface=*/nullptr);
+    SkASSERT(view);
+
+    GrColorInfo colorInfo(ct, this->alphaType(), this->refColorSpace());
+    auto sContext = dContext->priv().makeSC(std::move(view), colorInfo);
+    if (!sContext) {
+        return false;
+    }
+
+    return sContext->readPixels(dContext, {dstInfo, dstPixels, dstRB}, {srcX, srcY});
+}
+
+bool SkImage_GaneshBase::isValid(SkRecorder* recorder) const {
+    auto gRecorder = AsGaneshRecorder(recorder);
+    if (!gRecorder) {
+        return false;
+    }
+    auto context = gRecorder->recordingContext();
+    if (!context || context->abandoned()) {
+        return false;
+    }
+    if (fContext->priv().abandoned()) {
+        return false;
+    }
+    if (context && !fContext->priv().matches(context)) {
+        return false;
+    }
+    return true;
 }
 
 sk_sp<GrTextureProxy> SkImage_GaneshBase::MakePromiseImageLazyProxy(
@@ -427,7 +431,7 @@ sk_sp<SkImage> SubsetTextureFrom(GrDirectContext* context,
     if (context == nullptr || img == nullptr) {
         return nullptr;
     }
-    auto subsetImg = img->makeSubset(context, subset);
+    auto subsetImg = img->makeSubset(context->asRecorder(), subset, {});
     return SkImages::TextureFromImage(context, subsetImg.get());
 }
 

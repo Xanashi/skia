@@ -10,8 +10,9 @@
 
 #include "include/core/SkSpan.h"
 #include "include/core/SkTypes.h"
-#include "include/private/base/SkTArray.h"
+#include "include/private/SkTArray.h"
 #include "src/sksl/SkSLIntrinsicList.h"
+#include "src/sksl/SkSLModule.h"
 #include "src/sksl/ir/SkSLIRNode.h"
 #include "src/sksl/ir/SkSLModifierFlags.h"
 #include "src/sksl/ir/SkSLSymbol.h"
@@ -83,8 +84,12 @@ public:
         return *fReturnType;
     }
 
+    ModuleType moduleType() const {
+        return fModuleType;
+    }
+
     bool isBuiltin() const {
-        return fBuiltin;
+        return this->moduleType() != ModuleType::program;
     }
 
     bool isMain() const {
@@ -156,7 +161,7 @@ private:
     const Type* fReturnType = nullptr;
     ModifierFlags fModifierFlags;
     mutable IntrinsicKind fIntrinsicKind = kNotIntrinsic;
-    bool fBuiltin = false;
+    ModuleType fModuleType = ModuleType::unknown;
     bool fIsMain = false;
     bool fHasMainCoordsParameter = false;
     bool fHasMainInputColorParameter = false;

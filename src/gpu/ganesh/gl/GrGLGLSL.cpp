@@ -7,8 +7,8 @@
 
 #include "src/gpu/ganesh/gl/GrGLGLSL.h"
 
-#include "include/gpu/gl/GrGLTypes.h"
-#include "include/private/base/SkAssert.h"
+#include "include/gpu/ganesh/gl/GrGLTypes.h"
+#include "include/private/SkAssert.h"
 #include "src/gpu/ganesh/gl/GrGLUtil.h"
 #include "src/sksl/SkSLGLSL.h"
 

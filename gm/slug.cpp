@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Google Inc.
+ * Copyright 2021 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -21,7 +21,7 @@
 #include "include/core/SkTextBlob.h"
 #include "include/core/SkTypeface.h"
 #include "include/core/SkTypes.h"
-#include "include/private/base/SkTDArray.h"
+#include "include/private/SkTDArray.h"
 #include "include/private/chromium/Slug.h"
 #include "tools/ToolUtils.h"
 #include "tools/fonts/FontToolUtils.h"
@@ -30,17 +30,22 @@
 #include "include/gpu/graphite/ContextOptions.h"
 #endif
 
+#if defined(SK_GANESH)
+#include "include/gpu/ganesh/GrContextOptions.h"
+#endif
+
 #if defined(SK_GANESH) || defined(SK_GRAPHITE)
-#include "include/gpu/GrContextOptions.h"
 
 class SlugGM : public skiagm::GM {
 public:
     SlugGM(const char* txt) : fText(txt) {}
 
 protected:
+#if defined(SK_GANESH)
     void modifyGrContextOptions(GrContextOptions* ctxOptions) override {
         ctxOptions->fSupportBilerpFromGlyphAtlas = true;
     }
+#endif
 
 #if defined(SK_GRAPHITE)
     void modifyGraphiteContextOptions(skgpu::graphite::ContextOptions* options) const override {
@@ -55,7 +60,7 @@ protected:
         int glyphCount = font.countText(fText, txtLen, SkTextEncoding::kUTF8);
 
         fGlyphs.append(glyphCount);
-        font.textToGlyphs(fText, txtLen, SkTextEncoding::kUTF8, fGlyphs.begin(), glyphCount);
+        font.textToGlyphs(fText, txtLen, SkTextEncoding::kUTF8, fGlyphs);
     }
 
     SkString getName() const override { return SkString("slug"); }
@@ -109,7 +114,7 @@ private:
         return builder.make();
     }
 
-    SkTDArray<uint16_t> fGlyphs;
+    SkTDArray<SkGlyphID> fGlyphs;
     sk_sp<SkTypeface>   fTypeface;
     const char*         fText;
     using INHERITED = skiagm::GM;

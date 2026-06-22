@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Google Inc.
+ * Copyright 2019 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -12,19 +12,18 @@
 #include "include/core/SkColorType.h"
 #include "include/core/SkPixmap.h"
 #include "include/core/SkSize.h"
-#include "include/private/base/SkAssert.h"
-#include "include/private/base/SkMath.h"
-#include "include/private/base/SkTemplates.h"
-#include "include/private/base/SkTo.h"
+#include "include/private/SkAssert.h"
+#include "include/private/SkMath.h"
+#include "include/private/SkTemplates.h"
+#include "include/private/SkTo.h"
 #include "include/private/gpu/ganesh/GrTypesPriv.h"
 #include "modules/skcms/skcms.h"
-#include "src/base/SkArenaAlloc.h"
-#include "src/base/SkRectMemcpy.h"
-#include "src/base/SkTLazy.h"
+#include "src/core/SkArenaAlloc.h"
 #include "src/core/SkColorSpaceXformSteps.h"
 #include "src/core/SkRasterPipeline.h"
 #include "src/core/SkRasterPipelineOpContexts.h"
 #include "src/core/SkRasterPipelineOpList.h"
+#include "src/core/SkRectMemcpy.h"
 #include "src/core/SkTraceEvent.h"
 #include "src/gpu/Swizzle.h"
 #include "src/gpu/ganesh/GrImageInfo.h"
@@ -36,90 +35,6 @@
 #include <functional>
 
 using namespace skia_private;
-
-#if defined(GR_TEST_UTILS)
-
-// The following four helpers are copied from src/gpu/DataUtils.cpp to support the test only
-// GrTwoColorBC1Compress function. Ideally we would copy the test function into DataUtils.cpp
-// instead, but we're currently trying to avoid using the GR_TEST_UTILS define in src/gpu.
-
-static int num_4x4_blocks(int size) {
-    return ((size + 3) & ~3) >> 2;
-}
-
-struct BC1Block {
-    uint16_t fColor0;
-    uint16_t fColor1;
-    uint32_t fIndices;
-};
-
-static uint16_t to565(SkColor col) {
-    int r5 = SkMulDiv255Round(31, SkColorGetR(col));
-    int g6 = SkMulDiv255Round(63, SkColorGetG(col));
-    int b5 = SkMulDiv255Round(31, SkColorGetB(col));
-
-    return (r5 << 11) | (g6 << 5) | b5;
-}
-
-// Create a BC1 compressed block that has two colors but is initialized to 'col0'
-static void create_BC1_block(SkColor col0, SkColor col1, BC1Block* block) {
-    block->fColor0 = to565(col0);
-    block->fColor1 = to565(col1);
-    SkASSERT(block->fColor0 <= block->fColor1); // we always assume transparent blocks
-
-    if (col0 == SK_ColorTRANSPARENT) {
-        // This sets all 16 pixels to just use color3 (under the assumption
-        // that this is a kBC1_RGBA8_UNORM texture. Note that in this case
-        // fColor0 will be opaque black.
-        block->fIndices = 0xFFFFFFFF;
-    } else {
-        // This sets all 16 pixels to just use 'fColor0'
-        block->fIndices = 0;
-    }
-}
-
-// Fill in 'dstPixels' with BC1 blocks derived from the 'pixmap'.
-void GrTwoColorBC1Compress(const SkPixmap& pixmap, SkColor otherColor, char* dstPixels) {
-    BC1Block* dstBlocks = reinterpret_cast<BC1Block*>(dstPixels);
-    SkASSERT(pixmap.colorType() == SkColorType::kRGBA_8888_SkColorType);
-
-    BC1Block block;
-
-    // black -> fColor0, otherColor -> fColor1
-    create_BC1_block(SK_ColorBLACK, otherColor, &block);
-
-    int numXBlocks = num_4x4_blocks(pixmap.width());
-    int numYBlocks = num_4x4_blocks(pixmap.height());
-
-    for (int y = 0; y < numYBlocks; ++y) {
-        for (int x = 0; x < numXBlocks; ++x) {
-            int shift = 0;
-            int offsetX = 4 * x, offsetY = 4 * y;
-            block.fIndices = 0;  // init all the pixels to color0 (i.e., opaque black)
-            for (int i = 0; i < 4; ++i) {
-                for (int j = 0; j < 4; ++j, shift += 2) {
-                    if (offsetX + j >= pixmap.width() || offsetY + i >= pixmap.height()) {
-                        // This can happen for the topmost levels of a mipmap and for
-                        // non-multiple of 4 textures
-                        continue;
-                    }
-
-                    SkColor tmp = pixmap.getColor(offsetX + j, offsetY + i);
-                    if (tmp == SK_ColorTRANSPARENT) {
-                        // For RGBA BC1 images color3 is set to transparent black
-                        block.fIndices |= 3 << shift;
-                    } else if (tmp != SK_ColorBLACK) {
-                        block.fIndices |= 1 << shift; // color1
-                    }
-                }
-            }
-
-            dstBlocks[y*numXBlocks + x] = block;
-        }
-    }
-}
-
-#endif
 
 size_t GrComputeTightCombinedBufferSize(size_t bytesPerPixel, SkISize baseDimensions,
                                         TArray<size_t>* individualMipOffsets, int mipLevelCount) {
@@ -178,6 +93,9 @@ static skgpu::Swizzle get_load_and_src_swizzle(GrColorType ct, SkRasterPipelineO
         case GrColorType::kBGRA_1010102:     *load = SkRasterPipelineOp::load_1010102;
                                              swizzle = skgpu::Swizzle("bgra");
                                              break;
+        case GrColorType::kRGB_101010x:      *load = SkRasterPipelineOp::load_1010102;
+                                             swizzle = skgpu::Swizzle("rgb1");
+                                             break;
         case GrColorType::kRGBA_10x6:        *load = SkRasterPipelineOp::load_10x6;     break;
         case GrColorType::kAlpha_F16:        *load = SkRasterPipelineOp::load_af16;     break;
         case GrColorType::kRGBA_F16_Clamped: *load = SkRasterPipelineOp::load_f16;      break;
@@ -187,11 +105,18 @@ static skgpu::Swizzle get_load_and_src_swizzle(GrColorType ct, SkRasterPipelineO
         case GrColorType::kRGBA_8888_SRGB:   *load = SkRasterPipelineOp::load_8888;
                                              *isSRGB = true;
                                              break;
+        case GrColorType::kR_F16:            *load = SkRasterPipelineOp::load_rf16;
+                                             *isNormalized = false;
+                                             break;
         case GrColorType::kRG_F16:           *load = SkRasterPipelineOp::load_rgf16;
                                              *isNormalized = false;
                                              break;
         case GrColorType::kRGBA_F16:         *load = SkRasterPipelineOp::load_f16;
                                              *isNormalized = false;
+                                             break;
+        case GrColorType::kRGB_F16F16F16x:   *load = SkRasterPipelineOp::load_f16;
+                                             *isNormalized = false;
+                                             swizzle = skgpu::Swizzle("rgb1");
                                              break;
         case GrColorType::kRGBA_F32:         *load = SkRasterPipelineOp::load_f32;
                                              *isNormalized = false;
@@ -223,11 +148,11 @@ static skgpu::Swizzle get_load_and_src_swizzle(GrColorType ct, SkRasterPipelineO
         case GrColorType::kRGB_888x:         *load = SkRasterPipelineOp::load_8888;
                                              swizzle = skgpu::Swizzle("rgb1");
                                              break;
-
+        case GrColorType::kR_16:             *load = SkRasterPipelineOp::load_r16;
+                                             swizzle = skgpu::Swizzle("r001");
+                                             break;
         // These are color types we don't expect to ever have to load.
         case GrColorType::kRGB_888:
-        case GrColorType::kR_16:
-        case GrColorType::kR_F16:
         case GrColorType::kGray_F16:
         case GrColorType::kUnknown:
             SK_ABORT("unexpected CT");
@@ -265,6 +190,9 @@ static skgpu::Swizzle get_dst_swizzle_and_store(GrColorType ct, SkRasterPipeline
         case GrColorType::kBGRA_1010102:     swizzle = skgpu::Swizzle("bgra");
                                              *store = SkRasterPipelineOp::store_1010102;
                                              break;
+        case GrColorType::kRGB_101010x:     swizzle = skgpu::Swizzle("rgb1");
+                                             *store = SkRasterPipelineOp::store_1010102;
+                                             break;
         case GrColorType::kRGBA_10x6:        *store = SkRasterPipelineOp::store_10x6;     break;
         case GrColorType::kRGBA_F16_Clamped: *store = SkRasterPipelineOp::store_f16;      break;
         case GrColorType::kRG_1616:          *store = SkRasterPipelineOp::store_rg1616;   break;
@@ -273,6 +201,9 @@ static skgpu::Swizzle get_dst_swizzle_and_store(GrColorType ct, SkRasterPipeline
         case GrColorType::kRGBA_8888_SRGB:   *store = SkRasterPipelineOp::store_8888;
                                              *isSRGB = true;
                                              break;
+        case GrColorType::kR_F16:            *store = SkRasterPipelineOp::store_rf16;
+                                             *isNormalized = false;
+                                             break;
         case GrColorType::kRG_F16:           *store = SkRasterPipelineOp::store_rgf16;
                                              *isNormalized = false;
                                              break;
@@ -280,6 +211,10 @@ static skgpu::Swizzle get_dst_swizzle_and_store(GrColorType ct, SkRasterPipeline
                                              *isNormalized = false;
                                              break;
         case GrColorType::kRGBA_F16:         *store = SkRasterPipelineOp::store_f16;
+                                             *isNormalized = false;
+                                             break;
+        case GrColorType::kRGB_F16F16F16x:   swizzle = skgpu::Swizzle("rgb1");
+                                             *store = SkRasterPipelineOp::store_f16;
                                              *isNormalized = false;
                                              break;
         case GrColorType::kRGBA_F32:         *store = SkRasterPipelineOp::store_f32;
@@ -303,11 +238,8 @@ static skgpu::Swizzle get_dst_swizzle_and_store(GrColorType ct, SkRasterPipeline
         case GrColorType::kR_8:              swizzle = skgpu::Swizzle("agbr");
                                              *store = SkRasterPipelineOp::store_a8;
                                              break;
-        case GrColorType::kR_16:             swizzle = skgpu::Swizzle("agbr");
-                                             *store = SkRasterPipelineOp::store_a16;
-                                             break;
-        case GrColorType::kR_F16:            swizzle = skgpu::Swizzle("agbr");
-                                             *store = SkRasterPipelineOp::store_af16;
+        case GrColorType::kR_16:             swizzle = skgpu::Swizzle("r001");
+                                             *store = SkRasterPipelineOp::store_r16;
                                              break;
         case GrColorType::kGray_F16:         *lumMode = LumMode::kToAlpha;
                                              *store = SkRasterPipelineOp::store_af16;
@@ -429,16 +361,16 @@ bool GrConvertPixels(const GrPixmap& dst, const GrCPixmap& src, bool flipY) {
                                                   &dstIsNormalized,
                                                   &dstIsSRGB);
 
-    SkTLazy<SkColorSpaceXformSteps> steps;
+    std::optional<SkColorSpaceXformSteps> steps;
     skgpu::Swizzle loadStoreSwizzle;
     if (alphaOrCSConversion) {
-        steps.init(src.colorSpace(), src.alphaType(), dst.colorSpace(), dst.alphaType());
+        steps.emplace(src.colorSpace(), src.alphaType(), dst.colorSpace(), dst.alphaType());
     } else {
         loadStoreSwizzle = skgpu::Swizzle::Concat(loadSwizzle, storeSwizzle);
     }
     int cnt = 1;
     int height = src.height();
-    SkRasterPipeline_MemoryCtx
+    SkRasterPipelineContexts::MemoryCtx
             srcCtx{const_cast<void*>(src.addr()), SkToInt(src.rowBytes()/srcBpp)},
             dstCtx{                   dst.addr(), SkToInt(dst.rowBytes()/dstBpp)};
 
@@ -556,7 +488,7 @@ bool GrClearImage(const GrImageInfo& dstInfo, void* dst, size_t dstRB, std::arra
         pipeline.appendTransferFunction(*skcms_sRGB_Inverse_TransferFunction());
     }
     storeSwizzle.apply(&pipeline);
-    SkRasterPipeline_MemoryCtx dstCtx{dst, SkToInt(dstRB/dstInfo.bpp())};
+    SkRasterPipelineContexts::MemoryCtx dstCtx{dst, SkToInt(dstRB / dstInfo.bpp())};
     pipeline.append(store, &dstCtx);
     pipeline.run(0, 0, dstInfo.width(), dstInfo.height());
 

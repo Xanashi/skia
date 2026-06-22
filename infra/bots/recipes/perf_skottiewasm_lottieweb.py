@@ -8,7 +8,6 @@ import calendar
 import json
 import re
 
-PYTHON_VERSION_COMPATIBILITY = "PY3"
 
 # trim
 DEPS = [
@@ -36,6 +35,8 @@ LOTTIE_WEB_EXCLUDE = [
   # Times out.
   'lottiefiles.com - Nudge.json',
   'lottiefiles.com - Retweet.json',
+  'regress-perspective-blur-01.json',
+  'regress-perspective-blur-02.json',
   # Trace file has majority main_frame_aborted terminations in it and < 25
   # occurrences of submitted_frame + missed_frame.
   # Static scenes (nothing animating)
@@ -87,7 +88,7 @@ def RunSteps(api):
   api.flavor.setup(None)
   checkout_root = api.path.start_dir
   buildername = api.properties['buildername']
-  node_path = api.path.start_dir.join('node', 'node', 'bin', 'node')
+  node_path = api.path.start_dir.joinpath('node', 'node', 'bin', 'node')
   lottie_files = api.file.listdir(
       'list lottie files', api.flavor.host_dirs.lotties_dir,
       test_data=['lottie1.json', 'lottie2.json', 'lottie3.json', 'LICENSE'])
@@ -96,10 +97,10 @@ def RunSteps(api):
     source_type = 'skottie'
     renderer = 'skottie-wasm'
 
-    perf_app_dir = checkout_root.join('skia', 'tools', 'skottie-wasm-perf')
-    canvaskit_js_path = api.vars.build_dir.join('canvaskit.js')
-    canvaskit_wasm_path = api.vars.build_dir.join('canvaskit.wasm')
-    skottie_wasm_js_path = perf_app_dir.join('skottie-wasm-perf.js')
+    perf_app_dir = checkout_root.joinpath('skia', 'tools', 'skottie-wasm-perf')
+    canvaskit_js_path = api.vars.build_dir.joinpath('canvaskit.js')
+    canvaskit_wasm_path = api.vars.build_dir.joinpath('canvaskit.wasm')
+    skottie_wasm_js_path = perf_app_dir.joinpath('skottie-wasm-perf.js')
     perf_app_cmd = [
         node_path, skottie_wasm_js_path,
         '--canvaskit_js', canvaskit_js_path,
@@ -120,8 +121,8 @@ def RunSteps(api):
       lottie_files = [x for x in lottie_files
                       if api.path.basename(x) not in LOTTIE_WEB_EXCLUDE]
 
-    perf_app_dir = checkout_root.join('skia', 'tools', 'lottie-web-perf')
-    lottie_web_js_path = perf_app_dir.join('lottie-web-perf.js')
+    perf_app_dir = checkout_root.joinpath('skia', 'tools', 'lottie-web-perf')
+    lottie_web_js_path = perf_app_dir.joinpath('lottie-web-perf.js')
     perf_app_cmd = [
         node_path, lottie_web_js_path,
         '--backend', backend,
@@ -133,7 +134,7 @@ def RunSteps(api):
     perf_app_cmd.append('--use_gpu')
 
   # Install prerequisites.
-  env_prefixes = {'PATH': [api.path.start_dir.join('node', 'node', 'bin')]}
+  env_prefixes = {'PATH': [api.path.start_dir.joinpath('node', 'node', 'bin')]}
   with api.context(cwd=perf_app_dir, env_prefixes=env_prefixes):
     api.step('npm install', cmd=['npm', 'install'])
 
@@ -144,9 +145,9 @@ def RunSteps(api):
     lottie_filename = api.path.basename(lottie_file)
     if not lottie_filename.endswith('.json'):
       continue
-    output_file = output_dir.join(lottie_filename)
+    output_file = output_dir.joinpath(lottie_filename)
     with api.context(cwd=perf_app_dir, env={'DISPLAY': ':0'}):
-      # This is occasionally flaky due to skbug.com/9207, adding retries.
+      # This is occasionally flaky due to skbug.com/40040508, adding retries.
       attempts = 3
       # Add output and input arguments to the cmd.
       api.run.with_retry(api.step, 'Run perf cmd line app', attempts,
@@ -196,7 +197,7 @@ def RunSteps(api):
       api.flavor.host_dirs.perf_data_dir)
   now = api.time.utcnow()
   ts = int(calendar.timegm(now.utctimetuple()))
-  json_path = api.flavor.host_dirs.perf_data_dir.join(
+  json_path = api.flavor.host_dirs.perf_data_dir.joinpath(
       'perf_%s_%d.json' % (api.properties['revision'], ts))
   json_contents = json.dumps(
       perf_json, indent=4, sort_keys=True, separators=(',', ': '))

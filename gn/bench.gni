@@ -19,6 +19,7 @@ bench_sources = [
   "$_bench/BigPath.cpp",
   "$_bench/BigPath.h",
   "$_bench/BigPathBench.cpp",
+  "$_bench/BilerpBench.cpp",
   "$_bench/BitmapRegionDecoderBench.cpp",
   "$_bench/BitmapRegionDecoderBench.h",
   "$_bench/BlendmodeBench.cpp",
@@ -59,6 +60,7 @@ bench_sources = [
   "$_bench/GameBench.cpp",
   "$_bench/GeometryBench.cpp",
   "$_bench/GlyphQuadFillBench.cpp",
+  "$_bench/GlyphRunRSXformBench.cpp",
   "$_bench/GrMemoryPoolBench.cpp",
   "$_bench/GrMipmapBench.cpp",
   "$_bench/GrQuadBench.cpp",
@@ -134,12 +136,15 @@ bench_sources = [
   "$_bench/TableBench.cpp",
   "$_bench/TessellateBench.cpp",
   "$_bench/TextBlobBench.cpp",
+  "$_bench/Tiger.cpp",
+  "$_bench/Tiger.h",
   "$_bench/TileBench.cpp",
   "$_bench/TileImageFilterBench.cpp",
   "$_bench/TopoSortBench.cpp",
   "$_bench/TriangulatorBench.cpp",
   "$_bench/TypefaceBench.cpp",
   "$_bench/VertBench.cpp",
+  "$_bench/WebpBlendBench.cpp",
   "$_bench/WritePixelsBench.cpp",
   "$_bench/WriterBench.cpp",
   "$_bench/gUniqueGlyphIDs.h",
@@ -148,6 +153,11 @@ bench_sources = [
 graphite_bench_sources = [
   "$_bench/graphite/BoundsManagerBench.cpp",
   "$_bench/graphite/IntersectionTreeBench.cpp",
+]
+
+sparse_strips_bench_sources = [
+  "$_bench/graphite/sparse_strips/FlattenBench.cpp",
+  "$_bench/graphite/sparse_strips/TilerBench.cpp",
 ]
 
 ganesh_bench_sources = [

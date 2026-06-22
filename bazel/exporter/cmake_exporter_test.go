@@ -25,7 +25,7 @@ const testCMakeOutFname = "/not/necessarily/in/workspace/CMakeLists.txt"
 // This input test data (in textproto format) started as output of
 // a bazel cquery call - like:
 //
-//	bazel cquery --noimplicit_deps 'kind("rule", deps(//:skia_public))' --output textproto
+//	bazel cquery --noimplicit_deps 'kind("rule", deps(//:core))' --output textproto
 //
 // and then hand edited to create a small valid query result with specific
 // files, copts, and other cc_library/cc_binary rule attributes.
@@ -195,8 +195,8 @@ cmake_minimum_required(VERSION 3.13)
 
 project(projName LANGUAGES C CXX)
 
-set(DEFAULT_COMPILE_FLAGS_MACOS "-std=c++17 -Wno-psabi --target=arm64-apple-macos11")
-set(DEFAULT_COMPILE_FLAGS_LINUX "-std=c++17 -Wno-psabi -Wno-attributes")
+set(DEFAULT_COMPILE_FLAGS_MACOS "-std=c++20 -Wno-psabi --target=arm64-apple-macos11")
+set(DEFAULT_COMPILE_FLAGS_LINUX "-std=c++20 -Wno-psabi -Wno-attributes")
 
 if (APPLE)
   set(DEFAULT_COMPILE_FLAGS "${DEFAULT_COMPILE_FLAGS_MACOS}")

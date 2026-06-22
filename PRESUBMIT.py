@@ -10,12 +10,11 @@ See http://dev.chromium.org/developers/how-tos/depottools/presubmit-scripts
 for more details about the presubmit API built into gcl.
 """
 
-import fnmatch
+import difflib
 import os
 import re
 import subprocess
 import sys
-import traceback
 
 
 RELEASE_NOTES_DIR = 'relnotes'
@@ -31,6 +30,11 @@ SERVICE_ACCOUNT_SUFFIX = [
 
 USE_PYTHON3 = True
 
+def np(path):
+  """normalize path
+     This takes in a os-dependent path and returns it using forward slashes only.
+  """
+  return os.path.normpath(path).replace(os.sep, '/')
 
 def _CheckChangeHasEol(input_api, output_api, source_file_filter=None):
   """Checks that files end with at least one \n (LF)."""
@@ -54,19 +58,19 @@ def _JsonChecks(input_api, output_api):
   for affected_file in input_api.AffectedFiles(None):
     affected_file_path = affected_file.LocalPath()
     is_json = affected_file_path.endswith('.json')
-    is_metadata = (affected_file_path.startswith('site/') and
-                   affected_file_path.endswith('/METADATA'))
+    is_metadata = (np(affected_file_path).startswith('site/') and
+                   np(affected_file_path).endswith('/METADATA'))
     if is_json or is_metadata:
       try:
         input_api.json.load(open(affected_file_path, 'r'))
-      except ValueError:
-        failing_files.append(affected_file_path)
+      except ValueError as ve:
+        failing_files.append(f'{affected_file_path}\t\t{ve}')
 
   results = []
   if failing_files:
     results.append(
         output_api.PresubmitError(
-            'The following files contain invalid json:\n%s\n\n' %
+            'The following files contain invalid json:\n%s\n' %
                 '\n'.join(failing_files)))
   return results
 
@@ -107,7 +111,7 @@ def _IfDefChecks(input_api, output_api):
     results.append(
         output_api.PresubmitError(
             'The following files have #if or #ifdef before includes:\n%s\n\n'
-            'See https://bug.skia.org/3362 for why this should be fixed.' %
+            'See skbug.com/40034487 for why this should be fixed.' %
                 '\n'.join(failing_files)))
   return results
 
@@ -121,16 +125,22 @@ def _CopyrightChecks(input_api, output_api, source_file_filter=None):
       r'Copyright (\([cC]\) )?%s \w+' % years_pattern)
 
   for affected_file in input_api.AffectedSourceFiles(source_file_filter):
-    if ('third_party/' in affected_file.LocalPath() or
-        'tests/sksl/' in affected_file.LocalPath() or
-        'bazel/rbe/' in affected_file.LocalPath() or
-        'bazel/external/' in affected_file.LocalPath() or
-        'bazel/exporter/interfaces/mocks/' in affected_file.LocalPath()):
+    norm_path = np(affected_file.LocalPath())
+    if ('third_party/' in norm_path or
+        'tests/sksl/' in norm_path or
+        'bazel/rbe/' in norm_path or
+        'bazel/external/' in norm_path or
+        'bazel/exporter/interfaces/mocks/' in norm_path or
+        norm_path.endswith('gen.go')):
       continue
     contents = input_api.ReadFile(affected_file, 'rb')
     if not re.search(copyright_pattern, contents):
       results.append(output_api.PresubmitError(
           '%s is missing a correct copyright header.' % affected_file))
+    if affected_file.Action() == 'A':
+      if 'Google Inc' in contents:
+        results.append(output_api.PresubmitError(
+            '%s contains "Google Inc" in copyright header. New files should use "Google LLC".' % affected_file))
   return results
 
 
@@ -223,10 +233,10 @@ class _WarningsAsErrors():
 
 def _RegenerateAllExamplesCPP(input_api, output_api):
   """Regenerates all_examples.cpp if an example was added or deleted."""
-  if not any(f.LocalPath().startswith('docs/examples/')
+  if not any(np(f.LocalPath()).startswith('docs/examples/')
              for f in input_api.AffectedFiles()):
     return []
-  command_str = 'tools/fiddle/make_all_examples_cpp.py'
+  command_str =  os.path.join('tools', 'fiddle', 'make_all_examples_cpp.py')
   cmd = ['python3', command_str, '--print-diff']
   proc = subprocess.run(cmd, capture_output=True)
   if proc.returncode != 0:
@@ -261,7 +271,7 @@ def _CheckIncludeForOutsideDeps(input_api, output_api):
     input_api.re.compile(r'#\s*include\s+("src/.*)'),
     input_api.re.compile(r'#\s*include\s+("tools/.*)'),
   ]
-  file_filter = lambda x: (x.LocalPath().startswith('include/'))
+  file_filter = lambda x: (np(x.LocalPath()).startswith('include/'))
   errors = []
   for affected_file in input_api.AffectedSourceFiles(file_filter):
     affected_filepath = affected_file.LocalPath()
@@ -284,7 +294,7 @@ def _CheckExamplesForPrivateAPIs(input_api, output_api):
     input_api.re.compile(r'#\s*include\s+("src/.*)'),
     input_api.re.compile(r'#\s*include\s+("include/private/.*)'),
   ]
-  file_filter = lambda x: (x.LocalPath().startswith('docs/examples/'))
+  file_filter = lambda x: (np(x.LocalPath()).startswith('docs/examples/'))
   errors = []
   for affected_file in input_api.AffectedSourceFiles(file_filter):
     affected_filepath = affected_file.LocalPath()
@@ -301,20 +311,24 @@ def _CheckExamplesForPrivateAPIs(input_api, output_api):
 
 
 def _CheckGeneratedBazelBUILDFiles(input_api, output_api):
-    if 'win32' in sys.platform:
-      # TODO(crbug.com/skia/12541): Remove when Bazel builds work on Windows.
-      # Note: `make` is not installed on Windows by default.
-      return []
-    if 'darwin' in sys.platform:
-      # This takes too long on Mac with default settings. Probably due to sandboxing.
-      return []
-    for affected_file in input_api.AffectedFiles(include_deletes=True):
-      affected_file_path = affected_file.LocalPath()
-      if (affected_file_path.endswith('.go') or
+  if 'win32' in sys.platform:
+    # TODO(skbug.com/40043154): Remove when Bazel builds work on Windows.
+    # Note: `make` is not installed on Windows by default.
+    return []
+  if 'darwin' in sys.platform:
+    # This takes too long on Mac with default settings. Probably due to sandboxing.
+    return []
+  files = []
+  for affected_file in input_api.AffectedFiles(include_deletes=True):
+    affected_file_path = affected_file.LocalPath()
+    if (affected_file_path.endswith('.go') or
           affected_file_path.endswith('BUILD.bazel')):
-        return _RunCommandAndCheckGitDiff(output_api,
-                                          ['make', '-C', 'bazel', 'generate_go'])
-    return []  # No modified Go source files.
+      files.append(affected_file)
+  if not files:
+    return []
+  return _RunCommandAndCheckDiff(
+      output_api, ['make', '-C', 'bazel', 'generate_go'], files
+  )
 
 
 def _CheckBazelBUILDFiles(input_api, output_api):
@@ -322,14 +336,15 @@ def _CheckBazelBUILDFiles(input_api, output_api):
   results = []
   for affected_file in input_api.AffectedFiles(include_deletes=False):
     affected_file_path = affected_file.LocalPath()
+    norm_path = np(affected_file_path)
     is_bazel = affected_file_path.endswith('BUILD.bazel')
     # This list lines up with the one in autoroller_lib.py (see G3).
     excluded_paths = ["infra/", "bazel/rbe/", "bazel/external/", "bazel/common_config_settings/",
                       "modules/canvaskit/go/", "experimental/", "bazel/platform", "third_party/",
                       "tests/", "resources/", "bazel/deps_parser/", "bazel/exporter_tool/",
-                      "tools/gpu/gl/interface/", "bazel/utils/", "include/config/",
+                      "tools/ganesh/gl/interface/", "bazel/utils/", "include/config/",
                       "bench/", "example/external_client/"]
-    is_excluded = any(affected_file_path.startswith(n) for n in excluded_paths)
+    is_excluded = any(norm_path.startswith(n) for n in excluded_paths)
     if is_bazel and not is_excluded:
       with open(affected_file_path, 'r') as file:
         contents = file.read()
@@ -340,9 +355,9 @@ def _CheckBazelBUILDFiles(input_api, output_api):
           ))
         if 'cc_library(' in contents and '"skia_cc_library"' not in contents:
           results.append(output_api.PresubmitError(
-            ('%s needs to load skia_cc_library from macros.bzl instead of using the ' +
+            ('%s needs to load skia_cc_library from skia_rules.bzl instead of using the ' +
              'native one. This allows us to build differently for G3.\n' +
-             'Add "skia_cc_library" to load("//bazel:macros.bzl", ...)')
+             'Add "skia_cc_library" to load("//bazel:skia_rules.bzl", ...)')
             % affected_file_path
           ))
         if 'default_applicable_licenses' not in contents:
@@ -354,13 +369,18 @@ def _CheckBazelBUILDFiles(input_api, output_api):
   return results
 
 
-def _RunCommandAndCheckGitDiff(output_api, command):
-  """Run an arbitrary command. Fail if it produces any diffs."""
+def _RunCommandAndCheckDiff(output_api, command, files_to_check):
+  """Run an arbitrary command. Fail if it produces any diffs on the given files."""
+  prev_contents = {}
+  for file in files_to_check:
+    # NewContents just reads the file.
+    prev_contents[file] = file.NewContents()
+
   command_str = ' '.join(command)
   results = []
 
   try:
-    output = subprocess.check_output(
+    subprocess.check_output(
         command,
         stderr=subprocess.STDOUT, encoding='utf-8')
   except subprocess.CalledProcessError as e:
@@ -372,14 +392,21 @@ def _RunCommandAndCheckGitDiff(output_api, command):
         )
     )]
 
-  git_diff_output = subprocess.check_output(
-      ['git', 'diff', '--no-ext-diff'], encoding='utf-8')
-  if git_diff_output:
+  # Compare the new content to the previous content.
+  diffs = []
+  for file, prev_content in prev_contents.items():
+    new_content = file.NewContents(flush_cache=True)
+    if new_content != prev_content:
+      path = file.LocalPath()
+      diff = difflib.unified_diff(prev_content, new_content, path, path, lineterm='')
+      diffs.append('\n'.join(diff))
+
+  if diffs:
     results += [output_api.PresubmitError(
-        'Diffs found after running "%s":\n\n%s\n'
+        'Diffs found after running "%s":\n\n%s\n\n'
         'Please commit or discard the above changes.' % (
             command_str,
-            git_diff_output,
+            '\n'.join(diffs),
         )
     )]
 
@@ -394,28 +421,28 @@ def _CheckGNIGenerated(input_api, output_api):
   are still current.
   """
   if 'win32' in sys.platform:
-    # TODO(crbug.com/skia/12541): Remove when Bazel builds work on Windows.
+    # TODO(skbug.com/40043154): Remove when Bazel builds work on Windows.
     # Note: `make` is not installed on Windows by default.
     return [
-        output_api.PresubmitPromptWarning(
+        output_api.PresubmitNotifyResult(
             'Skipping Bazel=>GNI export check on Windows (unsupported platform).'
         )
     ]
   if 'darwin' in sys.platform:
-      # This takes too long on Mac with default settings. Probably due to sandboxing.
-      return []
-  should_run = False
+    # This takes too long on Mac with default settings. Probably due to sandboxing.
+    return []
+  files = []
   for affected_file in input_api.AffectedFiles(include_deletes=True):
     affected_file_path = affected_file.LocalPath()
     if affected_file_path.endswith('BUILD.bazel') or affected_file_path.endswith('.gni'):
-      should_run = True
+      files.append(affected_file)
   # Generate GNI files and verify no changes.
-  if should_run:
-    return _RunCommandAndCheckGitDiff(output_api,
-            ['make', '-C', 'bazel', 'generate_gni'])
-
-  # No Bazel build files changed.
-  return []
+  if not files:
+    # No Bazel build files changed.
+    return []
+  return _RunCommandAndCheckDiff(
+      output_api, ['make', '-C', 'bazel', 'generate_gni'], files
+  )
 
 
 def _CheckBuildifier(input_api, output_api):
@@ -428,13 +455,13 @@ def _CheckBuildifier(input_api, output_api):
   # Please keep the below exclude patterns in sync with those in the //:buildifier rule definition.
   for affected_file in input_api.AffectedFiles(include_deletes=False):
     affected_file_path = affected_file.LocalPath()
-    if affected_file_path.endswith('BUILD.bazel') or affected_file_path.endswith('.bzl'):
-      if not affected_file_path.endswith('public.bzl') and \
-        not affected_file_path.endswith('go_repositories.bzl') and \
-        not "bazel/rbe/gce_linux/" in affected_file_path and \
-        not affected_file_path.startswith("third_party/externals/") and \
-        not "node_modules/" in affected_file_path:  # Skip generated files.
-        files.append(affected_file_path)
+    norm_path = np(affected_file.LocalPath())
+    if norm_path.endswith('BUILD.bazel') or norm_path.endswith('.bzl'):
+      if not norm_path.endswith('public.bzl') and \
+        not "bazel/rbe/gce_linux/" in norm_path and \
+        not norm_path.startswith("third_party/externals/") and \
+        not "node_modules/" in norm_path:  # Skip generated files.
+        files.append(affected_file)
   if not files:
     return []
   try:
@@ -446,27 +473,23 @@ def _CheckBuildifier(input_api, output_api):
       'Skipping buildifier check because it is not on PATH. \n' +
       'You can download it from https://github.com/bazelbuild/buildtools/releases')]
 
-  return _RunCommandAndCheckGitDiff(
-    # One can change --lint=warn to --lint=fix to have things automatically fixed where possible.
-    # However, --lint=fix will not cause a presubmit error if there are things that require
-    # manual intervention, so we leave --lint=warn on by default.
-    #
+  return _RunCommandAndCheckDiff(
     # Please keep the below arguments in sync with those in the //:buildifier rule definition.
     output_api, [
       'buildifier',
       '--mode=fix',
-      '--lint=warn',
+      '--lint=fix',
       '--warnings',
       ','.join([
         '-native-android',
         '-native-cc',
         '-native-py',
       ])
-    ] + files)
+    ] + [f.LocalPath() for f in files], files)
 
 
 def _CheckBannedAPIs(input_api, output_api):
-  """Check source code for functions and packages that should not be used."""
+  """Check source code for functions, packages, and symbols that should not be used."""
 
   # A list of tuples of a regex to match an API and a suggested replacement for
   # that API. There is an optional third parameter for files which *can* use this
@@ -475,12 +498,59 @@ def _CheckBannedAPIs(input_api, output_api):
     (r'std::stof\(', 'std::strtof(), which does not throw'),
     (r'std::stod\(', 'std::strtod(), which does not throw'),
     (r'std::stold\(', 'std::strtold(), which does not throw'),
+    # go/cstyle#Disallowed_Stdlib
+    (r'std::barrier', ''),
+    (r'std::condition_variable', ''),
+    (r'std::counting_semaphore', ''),
+    (r'std::future', ''),
+    (r'std::jthread', ''),
+    (r'std::latch', ''),
+    (r'std::mutex', 'SkMutex'),
+    (r'std::shared_mutex', 'SkSharedMutex'),
+    (r'std::stop_token', ''),
+    (r'std::thread', '', ['^tests/', 'SkExecutor']),
+
+    # We used to have separate symbols for this, but coalesced them to make the
+    # Bazel build easier.
+    (r'GR_TEST_UTILS', 'GPU_TEST_UTILS'),
+    (r'GRAPHITE_TEST_UTILS', 'GPU_TEST_UTILS'),
+
+    # This form of multi line string can unintentionally cause Skia to ship with
+    # extraneous spaces and newlines in its SkSL (or generated) code, which slightly
+    # increases code size and parse time. Instead, use normal quotes and C++'s
+    # auto-concatenation
+    #    "this string"
+    #       "and this"
+    #    "string will be joined without extra spaces"
+    (r'R"\(', 'implied string concatenation',
+       ['^bench/',
+        '^docs/',
+        '^gm/',
+        '^modules/skottie/tests/',
+        '^src/sksl/lex/Main.cpp',
+        '^tests/',
+        '^tools/']
+     ),
+
+    # Our Bazel rules have special copies of our cc_library rules with GPU_TEST_UTILS
+    # set. If GPU_TEST_UTILS is used outside of those files in Skia proper, the build
+    # will break/crash in mysterious ways (because files may get compiled in multiple
+    # conflicting ways as a result of the define being inconsistently set).
+    (r'GPU_TEST_UTILS', 'use only in GPU code and tests',
+      ['^include/core/SkTypes.h',
+       '^include/gpu/',
+       '^include/private/gpu/',
+       '^src/gpu/ganesh',
+       '^src/gpu/graphite',
+       '^tests/',
+       '^tools/']
+     ),
   ]
 
   # These defines are either there or not, and using them with just an #if is a
   # subtle, frustrating bug.
   existence_defines = ['SK_GANESH', 'SK_GRAPHITE', 'SK_GL', 'SK_VULKAN', 'SK_DAWN', 'SK_METAL',
-                       'SK_DIRECT3D', 'SK_DEBUG', 'GR_TEST_UTILS', 'GRAPHITE_TEST_UTILS']
+                       'SK_DIRECT3D', 'SK_DEBUG', 'GPU_TEST_UTILS']
   for d in existence_defines:
     banned_replacements.append(('#if {}'.format(d),
                                 '#if defined({})'.format(d)))
@@ -509,8 +579,9 @@ def _CheckBannedAPIs(input_api, output_api):
       for (re, replacement, exceptions) in compiled_replacements:
         match = re.search(line)
         if match:
+          norm_path = np(affected_filepath)
           for exc in exceptions:
-            if exc.search(affected_filepath):
+            if exc.search(norm_path):
               break
           else:
             errors.append('%s:%s: Instead of %s, please use %s.' % (
@@ -523,14 +594,13 @@ def _CheckBannedAPIs(input_api, output_api):
 
 
 def _CheckDEPS(input_api, output_api):
-  """If DEPS was modified, run the deps_parser to update bazel/deps.bzl"""
-  needs_running = False
+  """If DEPS was modified, run the deps_parser to update bazel/deps.json"""
+  files = []
   for affected_file in input_api.AffectedFiles(include_deletes=False):
     affected_file_path = affected_file.LocalPath()
-    if affected_file_path.endswith('DEPS') or affected_file_path.endswith('deps.bzl'):
-      needs_running = True
-      break
-  if not needs_running:
+    if affected_file_path.endswith('DEPS') or affected_file_path.endswith('deps.json'):
+      files.append(affected_file)
+  if not files:
     return []
   try:
     subprocess.check_output(
@@ -541,8 +611,9 @@ def _CheckDEPS(input_api, output_api):
       'Skipping DEPS check because bazelisk is not on PATH. \n' +
       'You can download it from https://github.com/bazelbuild/bazelisk/releases/tag/v1.14.0')]
 
-  return _RunCommandAndCheckGitDiff(
-    output_api, ['bazelisk', 'run', '//bazel/deps_parser'])
+  return _RunCommandAndCheckDiff(
+      output_api, ['bazelisk', 'run', '//bazel/deps_parser'], files
+  )
 
 
 def _CommonChecks(input_api, output_api):
@@ -566,8 +637,7 @@ def _CommonChecks(input_api, output_api):
         input_api, output_api, source_file_filter=sources))
   results.extend(_JsonChecks(input_api, output_api))
   results.extend(_IfDefChecks(input_api, output_api))
-  results.extend(_CopyrightChecks(input_api, output_api,
-                                  source_file_filter=sources))
+  results.extend(_CopyrightChecks(input_api, output_api, source_file_filter=sources))
   results.extend(_CheckIncludesFormatted(input_api, output_api))
   results.extend(_CheckGNFormatted(input_api, output_api))
   results.extend(_CheckGitConflictMarkers(input_api, output_api))

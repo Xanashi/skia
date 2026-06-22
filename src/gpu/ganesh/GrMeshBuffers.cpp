@@ -9,9 +9,9 @@
 
 #include "include/core/SkData.h"
 #include "include/core/SkMesh.h"
-#include "include/gpu/GrDirectContext.h"
+#include "include/gpu/ganesh/GrDirectContext.h"
 #include "include/gpu/ganesh/SkMeshGanesh.h"
-#include "include/private/base/SkAssert.h"
+#include "include/private/SkAssert.h"
 #include "include/private/gpu/ganesh/GrTypesPriv.h"
 #include "src/core/SkMeshPriv.h"
 #include "src/gpu/ganesh/GrCaps.h"

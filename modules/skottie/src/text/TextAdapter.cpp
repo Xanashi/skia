@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Google Inc.
+ * Copyright 2019 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -20,9 +20,10 @@
 #include "include/core/SkSpan.h"
 #include "include/core/SkString.h"
 #include "include/core/SkTypes.h"
-#include "include/private/base/SkTPin.h"
-#include "include/private/base/SkTo.h"
+#include "include/private/SkTPin.h"
+#include "include/private/SkTo.h"
 #include "include/utils/SkTextUtils.h"
+#include "modules/jsonreader/SkJSONReader.h"
 #include "modules/skottie/include/Skottie.h"
 #include "modules/skottie/include/SkottieProperty.h"
 #include "modules/skottie/src/SkottieJson.h"
@@ -40,7 +41,7 @@
 #include "modules/sksg/include/SkSGTransform.h"
 #include "modules/sksg/src/SkSGTransformPriv.h"
 #include "modules/skshaper/include/SkShaper_factory.h"
-#include "src/utils/SkJSON.h"
+#include "src/core/SkPathPriv.h"
 
 #include <algorithm>
 #include <cmath>
@@ -70,7 +71,7 @@ public:
 
 protected:
     SkRect onRevalidate(sksg::InvalidationController*, const SkMatrix&) override {
-        return fGlyphs.computeBounds(Shaper::ShapedGlyphs::BoundsType::kConservative);
+        return fGlyphs.computeBounds(Shaper::ShapedGlyphs::BoundsType::kTight);
     }
 
     void onDraw(SkCanvas* canvas, const SkPaint& paint) const override {
@@ -211,9 +212,7 @@ struct TextAdapter::PathInfo {
             // reinitialize cached contour data
             auto path = static_cast<SkPath>(fPath);
             if (reverse) {
-                SkPath reversed;
-                reversed.reverseAddPath(path);
-                path = reversed;
+                path = SkPathPriv::ReversePath(path);
             }
 
             SkContourMeasureIter iter(path, /*forceClosed = */false);
@@ -635,6 +634,10 @@ void TextAdapter::buildDomainMaps(const Shaper::Result& shape_result) {
     if (i > line_start) {
         fMaps.fLinesMap.push_back({line_start, i - line_start, line_advance, line_ascent});
     }
+
+    for (auto& animator : fAnimators) {
+        animator->updateDomainMaps(fMaps, shape_result.fFragments.size());
+    }
 }
 
 void TextAdapter::setText(const TextValue& txt) {
@@ -804,7 +807,7 @@ void TextAdapter::onSync() {
 
     // Apply all animators to the modulator buffer.
     for (const auto& animator : fAnimators) {
-        animator->modulateProps(fMaps, buf);
+        animator->modulateProps(buf);
     }
 
     const TextAnimator::DomainMap* grouping_domain = nullptr;

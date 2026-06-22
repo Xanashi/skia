@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 Google Inc.
+ * Copyright 2017 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -45,7 +45,7 @@ DEF_SIMPLE_GM(blurimagevmask, canvas, 700, 1200) {
         canvas->drawRect(r, paint);
 
         char out[100];
-        sprintf(out, "Sigma: %g", sigma);
+        snprintf(out, std::size(out), "Sigma: %g", sigma);
         canvas->drawString(out, r.left(), r.bottom() + 35, font, paint);
 
         r.offset(250, 0);

@@ -7,7 +7,7 @@
 
 #include "src/sksl/codegen/SkSLHLSLCodeGenerator.h"
 
-#include "include/private/base/SkDebug.h"
+#include "include/private/SkDebug.h"
 #include "src/core/SkTraceEvent.h"
 #include "src/sksl/SkSLContext.h"  // IWYU pragma: keep
 #include "src/sksl/SkSLErrorReporter.h"
@@ -41,7 +41,7 @@ bool ToHLSL(Program& program,
             const ShaderCaps* caps,
             std::string* out,
             ValidateSPIRVProc validateSPIRV) {
-    std::string spirv;
+    std::vector<uint32_t> spirv;
     if (!ToSPIRV(program, caps, &spirv, validateSPIRV)) {
         return false;
     }

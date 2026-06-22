@@ -1,13 +1,14 @@
-// Copyright 2019 Google LLC.
+// Copyright 2019 Google LLC
 // Use of this source code is governed by a BSD-style license that can be found in the LICENSE file.
 
 // Proof of principle of a text editor written with Skia & SkShaper.
 // https://bugs.skia.org/9020
 
 #include "include/core/SkCanvas.h"
+#include "include/core/SkData.h"
 #include "include/core/SkFontMgr.h"
 #include "include/core/SkSurface.h"
-#include "src/base/SkTime.h"
+#include "src/core/SkTime.h"
 
 #include "tools/sk_app/Application.h"
 #include "tools/sk_app/Window.h"
@@ -15,8 +16,9 @@
 
 #include "modules/skplaintexteditor/include/editor.h"
 
-#if defined(SK_FONTMGR_FONTCONFIG_AVAILABLE)
+#if defined(SK_FONTMGR_FONTCONFIG_AVAILABLE) && defined(SK_TYPEFACE_FACTORY_FREETYPE)
 #include "include/ports/SkFontMgr_fontconfig.h"
+#include "include/ports/SkFontScanner_FreeType.h"
 #endif
 
 #if defined(SK_FONTMGR_CORETEXT_AVAILABLE)
@@ -103,8 +105,8 @@ sk_sp<SkFontMgr> fontMgr() {
     static bool init = false;
     static sk_sp<SkFontMgr> fontMgr = nullptr;
     if (!init) {
-#if defined(SK_FONTMGR_FONTCONFIG_AVAILABLE)
-        fontMgr = SkFontMgr_New_FontConfig(nullptr);
+#if defined(SK_FONTMGR_FONTCONFIG_AVAILABLE) && defined(SK_TYPEFACE_FACTORY_FREETYPE)
+        fontMgr = SkFontMgr_New_FontConfig(nullptr, SkFontScanner_Make_FreeType());
 #elif defined(SK_FONTMGR_CORETEXT_AVAILABLE)
         fontMgr = SkFontMgr_New_CoreText(nullptr);
 #elif defined(SK_FONTMGR_DIRECTWRITE_AVAILABLE)
@@ -399,14 +401,14 @@ struct EditorLayer : public sk_app::Window::Layer {
     }
 };
 
-#ifdef SK_VULKAN
-static constexpr sk_app::Window::BackendType kBackendType = sk_app::Window::kVulkan_BackendType;
-#elif SK_METAL
-static constexpr sk_app::Window::BackendType kBackendType = sk_app::Window::kMetal_BackendType;
-#elif SK_GL
-static constexpr sk_app::Window::BackendType kBackendType = sk_app::Window::kNativeGL_BackendType;
+#if defined(SK_VULKAN)
+static constexpr sk_app::Window::BackendType kBackendType = sk_app::Window::BackendType::kVulkan;
+#elif defined(SK_METAL)
+static constexpr sk_app::Window::BackendType kBackendType = sk_app::Window::BackendType::kMetal;
+#elif defined(SK_GL)
+static constexpr sk_app::Window::BackendType kBackendType = sk_app::Window::BackendType::kNativeGL;
 #else
-static constexpr sk_app::Window::BackendType kBackendType = sk_app::Window::kRaster_BackendType;
+static constexpr sk_app::Window::BackendType kBackendType = sk_app::Window::BackendType::kRaster;
 #endif
 
 struct EditorApplication : public sk_app::Application {
@@ -445,7 +447,7 @@ struct EditorApplication : public sk_app::Application {
 }  // namespace
 
 sk_app::Application* sk_app::Application::Create(int argc, char** argv, void* dat) {
-    std::unique_ptr<sk_app::Window> win(sk_app::Window::CreateNativeWindow(dat));
+    std::unique_ptr<sk_app::Window> win(sk_app::Windows::CreateNativeWindow(dat));
     if (!win) {
         SK_ABORT("CreateNativeWindow failed.");
     }

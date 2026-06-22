@@ -7,17 +7,33 @@
 
 #include "src/gpu/graphite/render/SDFTextLCDRenderStep.h"
 
+#include "include/core/SkColor.h"
 #include "include/core/SkM44.h"
+#include "include/core/SkRefCnt.h"
+#include "include/core/SkSamplingOptions.h"
+#include "include/core/SkSize.h"
+#include "include/core/SkSurfaceProps.h"
+#include "include/core/SkTileMode.h"
 #include "include/gpu/graphite/Recorder.h"
-#include "include/private/base/SkCPUTypes.h"
-#include "src/core/SkMaskGamma.h"
+#include "include/private/SkAssert.h"
+#include "include/private/SkDebug.h"
+#include "src/core/SkDistanceFieldGen.h"
+#include "src/core/SkEnumBitMask.h"
+#include "src/core/SkSLTypeShared.h"
 #include "src/gpu/graphite/AtlasProvider.h"
+#include "src/gpu/graphite/Attribute.h"
 #include "src/gpu/graphite/ContextUtils.h"
+#include "src/gpu/graphite/DrawOrder.h"
 #include "src/gpu/graphite/DrawParams.h"
-#include "src/gpu/graphite/DrawWriter.h"
+#include "src/gpu/graphite/DrawTypes.h"
 #include "src/gpu/graphite/PipelineData.h"
 #include "src/gpu/graphite/RecorderPriv.h"
+#include "src/gpu/graphite/TextureProxy.h"
+#include "src/gpu/graphite/geom/Geometry.h"
+#include "src/gpu/graphite/geom/SubRunData.h"
+#include "src/gpu/graphite/geom/Transform.h"
 #include "src/gpu/graphite/render/CommonDepthStencilSettings.h"
+#include "src/gpu/graphite/text/GlyphData.h"
 #include "src/gpu/graphite/text/TextAtlasManager.h"
 #include "src/sksl/SkSLString.h"
 #include "src/text/gpu/DistanceFieldAdjustTable.h"
@@ -33,31 +49,31 @@ constexpr int kNumSDFAtlasTextures = 4;
 
 }  // namespace
 
-SDFTextLCDRenderStep::SDFTextLCDRenderStep()
-        : RenderStep("SDFTextLCDRenderStep",
-                     "",
+SDFTextLCDRenderStep::SDFTextLCDRenderStep(Layout layout)
+        : RenderStep(layout,
+                     RenderStepID::kSDFTextLCD,
                      Flags::kPerformsShading | Flags::kHasTextures | Flags::kEmitsCoverage |
-                     Flags::kLCDCoverage,
-                     /*uniforms=*/{{"subRunDeviceMatrix", SkSLType::kFloat4x4},
-                                   {"deviceToLocal", SkSLType::kFloat4x4},
+                     Flags::kLCDCoverage | Flags::kAppendInstances,
+                     /*uniforms=*/{{"maskToDevice", SkSLType::kFloat4x4},
+                                   {"localToDevice", SkSLType::kFloat4x4},
                                    {"atlasSizeInv", SkSLType::kFloat2},
                                    {"pixelGeometryDelta", SkSLType::kHalf2},
                                    {"gammaParams", SkSLType::kHalf4}},
                      PrimitiveType::kTriangleStrip,
-                     kDirectDepthGEqualPass,
-                     /*vertexAttrs=*/ {},
-                     /*instanceAttrs=*/
-                     {{"size", VertexAttribType::kUShort2, SkSLType::kUShort2},
+                     kDirectDepthLEqualPass,
+                     /*staticAttrs=*/ {},
+                     /*appendAttrs=*/
+                     {{{"size", VertexAttribType::kUShort2, SkSLType::kUShort2},
                       {"uvPos", VertexAttribType::kUShort2, SkSLType::kUShort2},
                       {"xyPos", VertexAttribType::kFloat2, SkSLType::kFloat2},
                       {"indexAndFlags", VertexAttribType::kUShort2, SkSLType::kUShort2},
                       {"strikeToSourceScale", VertexAttribType::kFloat, SkSLType::kFloat},
                       {"depth", VertexAttribType::kFloat, SkSLType::kFloat},
-                      {"ssboIndices", VertexAttribType::kUShort2, SkSLType::kUShort2}},
+                      {"ssboIndex", VertexAttribType::kUInt, SkSLType::kUInt}}},
                      /*varyings=*/
-                     {{"unormTexCoords", SkSLType::kFloat2},
+                     {{{"unormTexCoords", SkSLType::kFloat2},
                       {"textureCoords", SkSLType::kFloat2},
-                      {"texIndex", SkSLType::kFloat}}) {}
+                      {"texIndex", SkSLType::kFloat}}}) {}
 
 SDFTextLCDRenderStep::~SDFTextLCDRenderStep() {}
 
@@ -66,8 +82,8 @@ std::string SDFTextLCDRenderStep::vertexSkSL() const {
     // must write to an already-defined float2 stepLocalCoords variable.
     return "texIndex = half(indexAndFlags.x);"
            "float4 devPosition = text_vertex_fn(float2(sk_VertexID >> 1, sk_VertexID & 1), "
-                                               "subRunDeviceMatrix, "
-                                               "deviceToLocal, "
+                                               "maskToDevice, "
+                                               "localToDevice, "
                                                "atlasSizeInv, "
                                                "float2(size), "
                                                "float2(uvPos), "
@@ -114,19 +130,22 @@ const char* SDFTextLCDRenderStep::fragmentCoverageSkSL() const {
 
 void SDFTextLCDRenderStep::writeVertices(DrawWriter* dw,
                                          const DrawParams& params,
-                                         skvx::ushort2 ssboIndices) const {
+                                         uint32_t ssboIndex) const {
     const SubRunData& subRunData = params.geometry().subRunData();
-    subRunData.subRun()->vertexFiller().fillInstanceData(dw,
-                                                         subRunData.startGlyphIndex(),
-                                                         subRunData.glyphCount(),
-                                                         subRunData.subRun()->instanceFlags(),
-                                                         ssboIndices,
-                                                         subRunData.subRun()->glyphs(),
-                                                         params.order().depthAsFloat());
+    auto& glyphData = subRunData.subRun()->glyphVector().accessBackendData<GlyphData>();
+    glyphData.fillInstanceData(subRunData.subRun()->vertexFiller(),
+                               subRunData.subRun()->glyphVector().accessBackendGlyphs<Glyph>(),
+                               dw,
+                               subRunData.startGlyphIndex(),
+                               subRunData.glyphCount(),
+                               subRunData.subRun()->instanceFlags(),
+                               ssboIndex,
+                               params.order().depthAsFloat());
 }
 
 void SDFTextLCDRenderStep::writeUniformsAndTextures(const DrawParams& params,
                                                     PipelineDataGatherer* gatherer) const {
+    SkDEBUGCODE(gatherer->checkRewind());
     SkDEBUGCODE(UniformExpectationsValidator uev(gatherer, this->uniforms());)
 
     const SubRunData& subRunData = params.geometry().subRunData();
@@ -138,22 +157,43 @@ void SDFTextLCDRenderStep::writeUniformsAndTextures(const DrawParams& params,
     SkASSERT(proxies && numProxies > 0);
 
     // write uniforms
-    gatherer->write(params.transform().matrix());  // subRunDeviceMatrix
-    gatherer->write(subRunData.deviceToLocal());
+    // TODO(b/238753996): The maskToDevice should be adjusted similar to CoverageMaskRenderStep so
+    // that the integer translation is pulled into the instance data and this uniform is less likely
+    // to change.
+    // TODO(b/307766179): Similarly, we should discard the local-to-device matrix uniform value (and
+    // just set identity) if the paint doesn't actually require local coords.
+    // TODO(b/351923375): Precompute the 3x3 inverse of the local-to-device since it's shared by all
+    // instances? We can derive it from the Transform's existing 4x4 inverse.
+    gatherer->write(subRunData.maskToDevice());
+    gatherer->write(params.transform().matrix()); // local-to-device
     SkV2 atlasDimensionsInverse = {1.f/proxies[0]->dimensions().width(),
                                    1.f/proxies[0]->dimensions().height()};
     gatherer->write(atlasDimensionsInverse);
 
     // compute and write pixelGeometry vector
     SkV2 pixelGeometryDelta = {0, 0};
-    if (SkPixelGeometryIsH(subRunData.pixelGeometry())) {
-        pixelGeometryDelta = {1.f/(3*proxies[0]->dimensions().width()), 0};
-    } else if (SkPixelGeometryIsV(subRunData.pixelGeometry())) {
-        pixelGeometryDelta = {0, 1.f/(3*proxies[0]->dimensions().height())};
+
+    // There is 2px padding of each glyph (SK_DistanceFieldInset). We can't allow offsetting to go
+    // outside of our padding (e.g. 2*SK_DistanceFieldInset if two SDF glyphs were next to each
+    // other is theoretically ok). This is because SDF and regular A8 masks are shared in the same
+    // atlas, so an adjacent glyph may not actually have its own padding.
+    //
+    // NOTE: kLCDOffsetLimit is multiplied by 3 to account for the scale added to pixelGeometryDelta
+#if !defined(SK_DISABLE_SDF_TEXT)
+    static constexpr float kLCDOffsetLimit = 3.f * (SK_DistanceFieldInset - 0.5f);
+    float maxLCDOffset = Transform(subRunData.maskToDevice()).localAARadius(subRunData.bounds());
+    if (maxLCDOffset < kLCDOffsetLimit) {
+        if (SkPixelGeometryIsH(subRunData.pixelGeometry())) {
+            pixelGeometryDelta = {1.f/(3*proxies[0]->dimensions().width()), 0};
+        } else if (SkPixelGeometryIsV(subRunData.pixelGeometry())) {
+            pixelGeometryDelta = {0, 1.f/(3*proxies[0]->dimensions().height())};
+        }
+        if (SkPixelGeometryIsBGR(subRunData.pixelGeometry())) {
+            pixelGeometryDelta = -pixelGeometryDelta;
+        }
     }
-    if (SkPixelGeometryIsBGR(subRunData.pixelGeometry())) {
-        pixelGeometryDelta = -pixelGeometryDelta;
-    }
+#endif
+
     gatherer->writeHalf(pixelGeometryDelta);
 
     // compute and write gamma adjustment
@@ -169,14 +209,12 @@ void SDFTextLCDRenderStep::writeUniformsAndTextures(const DrawParams& params,
     gatherer->writeHalf(gammaParams);
 
     // write textures and samplers
-    const SkSamplingOptions kSamplingOptions(SkFilterMode::kLinear);
-    constexpr SkTileMode kTileModes[2] = { SkTileMode::kClamp, SkTileMode::kClamp };
     for (unsigned int i = 0; i < numProxies; ++i) {
-        gatherer->add(proxies[i], {kSamplingOptions, kTileModes});
+        gatherer->add(proxies[i], {SkFilterMode::kLinear, SkTileMode::kClamp});
     }
     // If the atlas has less than 4 active proxies we still need to set up samplers for the shader.
     for (unsigned int i = numProxies; i < kNumSDFAtlasTextures; ++i) {
-        gatherer->add(proxies[0], {kSamplingOptions, kTileModes});
+        gatherer->add(proxies[0], {SkFilterMode::kLinear, SkTileMode::kClamp});
     }
 }
 

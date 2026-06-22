@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Google Inc.
+ * Copyright 2021 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -8,7 +8,7 @@
 #ifndef GrMtlTypesPriv_DEFINED
 #define GrMtlTypesPriv_DEFINED
 
-#include "include/gpu/GrTypes.h"
+#include "include/gpu/ganesh/GrTypes.h"
 #include "include/gpu/ganesh/mtl/GrMtlTypes.h"
 
 ///////////////////////////////////////////////////////////////////////////////

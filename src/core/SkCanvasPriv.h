@@ -10,9 +10,11 @@
 
 #include "include/core/SkCanvas.h"
 #include "include/core/SkPaint.h"
+#include "include/core/SkRefCnt.h"
 #include "include/core/SkScalar.h"
-#include "include/private/base/SkDebug.h"
-#include "include/private/base/SkNoncopyable.h"
+#include "include/core/SkTileMode.h"
+#include "include/private/SkDebug.h"
+#include "include/private/SkNoncopyable.h"
 
 #include <cstddef>
 
@@ -23,13 +25,7 @@ class SkReadBuffer;
 struct SkRect;
 class SkWriteBuffer;
 
-#if defined(GRAPHITE_TEST_UTILS)
-namespace skgpu::graphite {
-    class TextureProxy;
-}
-#endif
-
-class SkAutoCanvasMatrixPaint : SkNoncopyable {
+class [[nodiscard]] SkAutoCanvasMatrixPaint : SkNoncopyable {
 public:
     SkAutoCanvasMatrixPaint(SkCanvas*, const SkMatrix*, const SkPaint*, const SkRect& bounds);
     ~SkAutoCanvasMatrixPaint();
@@ -42,7 +38,7 @@ private:
 class SkCanvasPriv {
 public:
     // The lattice has pointers directly into the readbuffer
-    static bool ReadLattice(SkReadBuffer&, SkCanvas::Lattice*);
+    [[nodiscard]] static bool ReadLattice(SkReadBuffer&, SkCanvas::Lattice*);
 
     static void WriteLattice(SkWriteBuffer&, const SkCanvas::Lattice&);
 
@@ -76,10 +72,21 @@ public:
                                                       const SkPaint* paint,
                                                       const SkImageFilter* backdrop,
                                                       SkScalar backdropScale,
+                                                      SkTileMode backdropTileMode,
                                                       SkCanvas::SaveLayerFlags saveLayerFlags,
                                                       SkCanvas::FilterSpan filters = {}) {
-        return SkCanvas::SaveLayerRec(
-                bounds, paint, backdrop, nullptr, backdropScale, saveLayerFlags, filters);
+        return SkCanvas::SaveLayerRec(bounds, paint, backdrop, nullptr, backdropScale,
+                                      backdropTileMode, saveLayerFlags, filters);
+    }
+
+    static SkCanvas::SaveLayerRec ScaledBackdropLayer(const SkRect* bounds,
+                                                      const SkPaint* paint,
+                                                      const SkImageFilter* backdrop,
+                                                      SkScalar backdropScale,
+                                                      SkCanvas::SaveLayerFlags saveLayerFlags,
+                                                      SkCanvas::FilterSpan filters = {}) {
+        return ScaledBackdropLayer(bounds, paint, backdrop, backdropScale, SkTileMode::kClamp,
+                                   saveLayerFlags, filters);
     }
 
     static SkScalar GetBackdropScaleFactor(const SkCanvas::SaveLayerRec& rec) {

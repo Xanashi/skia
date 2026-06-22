@@ -1,18 +1,19 @@
 /*
- * Copyright 2018 Google Inc.
+ * Copyright 2018 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
 
 #include "include/core/SkCanvas.h"
+#include "include/core/SkPoint.h"
 #include "include/core/SkRect.h"
 #include "include/core/SkRefCnt.h"
 #include "include/core/SkScalar.h"
 #include "include/core/SkSize.h"
-#include "include/private/base/SkAssert.h"
-#include "include/private/base/SkFloatingPoint.h"
-#include "include/private/base/SkPoint_impl.h"
+#include "include/private/SkAssert.h"
+#include "include/private/SkFloatingPoint.h"
+#include "modules/jsonreader/SkJSONReader.h"
 #include "modules/skottie/include/ExternalLayer.h"
 #include "modules/skottie/include/SkottieProperty.h"
 #include "modules/skottie/src/Composition.h"
@@ -22,8 +23,6 @@
 #include "modules/skottie/src/animator/Animator.h"
 #include "modules/sksg/include/SkSGNode.h"
 #include "modules/sksg/include/SkSGRenderNode.h"
-#include "src/base/SkTLazy.h"
-#include "src/utils/SkJSON.h"
 
 #include <cmath>
 #include <utility>
@@ -198,9 +197,9 @@ sk_sp<sksg::RenderNode> AnimationBuilder::attachPrecompLayer(const skjson::Objec
     };
     layer_info->fSize = parse_size(jlayer);
 
-    SkTLazy<AutoScope> local_scope;
+    std::optional<AutoScope> local_scope;
     if (requires_time_mapping) {
-        local_scope.init(this);
+        local_scope.emplace(this);
     }
 
     auto precomp_layer = this->attachExternalPrecompLayer(jlayer, *layer_info);

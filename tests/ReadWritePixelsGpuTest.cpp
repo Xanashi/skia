@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Google LLC.
+ * Copyright 2020 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -26,34 +26,35 @@
 #include "include/core/SkSurface.h"
 #include "include/core/SkTileMode.h"
 #include "include/core/SkTypes.h"
-#include "include/effects/SkGradientShader.h"
+#include "include/effects/SkGradient.h"
 #include "include/gpu/GpuTypes.h"
-#include "include/gpu/GrBackendSurface.h"
-#include "include/gpu/GrDirectContext.h"
-#include "include/gpu/GrRecordingContext.h"
-#include "include/gpu/GrTypes.h"
+#include "include/gpu/ganesh/GrBackendSurface.h"
+#include "include/gpu/ganesh/GrDirectContext.h"
+#include "include/gpu/ganesh/GrRecordingContext.h"
+#include "include/gpu/ganesh/GrTypes.h"
 #include "include/gpu/ganesh/SkImageGanesh.h"
 #include "include/gpu/ganesh/SkSurfaceGanesh.h"
-#include "include/private/base/SkTArray.h"
+#include "include/private/SkTArray.h"
 #include "include/private/gpu/ganesh/GrTypesPriv.h"
-#include "src/base/SkRectMemcpy.h"
 #include "src/core/SkAutoPixmapStorage.h"
 #include "src/core/SkImageInfoPriv.h"
+#include "src/core/SkRectMemcpy.h"
 #include "src/gpu/SkBackingFit.h"
 #include "src/gpu/ganesh/GrCaps.h"
 #include "src/gpu/ganesh/GrDataUtils.h"
 #include "src/gpu/ganesh/GrDirectContextPriv.h"
-#include "src/gpu/ganesh/GrFragmentProcessor.h"
 #include "src/gpu/ganesh/GrImageInfo.h"
 #include "src/gpu/ganesh/GrPixmap.h"
 #include "src/gpu/ganesh/GrSamplerState.h"
 #include "src/gpu/ganesh/GrSurfaceProxy.h"
+#include "src/gpu/ganesh/GrUtil.h"
 #include "src/gpu/ganesh/SurfaceContext.h"
 #include "src/gpu/ganesh/SurfaceFillContext.h"
 #include "src/gpu/ganesh/effects/GrTextureEffect.h"
+#include "tests/ComparePixels.h"
 #include "tests/CtsEnforcement.h"
 #include "tests/Test.h"
-#include "tests/TestUtils.h"
+#include "tests/ganesh/GaneshTestUtils.h"
 #include "tools/ToolUtils.h"
 #include "tools/gpu/BackendSurfaceFactory.h"
 #include "tools/gpu/BackendTextureImageFactory.h"
@@ -81,6 +82,7 @@ static constexpr int min_rgb_channel_bits(SkColorType ct) {
         case kRGB_565_SkColorType:            return 5;
         case kARGB_4444_SkColorType:          return 4;
         case kR8G8_unorm_SkColorType:         return 8;
+        case kR16_unorm_SkColorType:          return 16;
         case kR16G16_unorm_SkColorType:       return 16;
         case kR16G16_float_SkColorType:       return 16;
         case kRGBA_8888_SkColorType:          return 8;
@@ -97,6 +99,8 @@ static constexpr int min_rgb_channel_bits(SkColorType ct) {
         case kGray_8_SkColorType:             return 8;   // counting gray as "rgb"
         case kRGBA_F16Norm_SkColorType:       return 10;  // just counting the mantissa
         case kRGBA_F16_SkColorType:           return 10;  // just counting the mantissa
+        case kRGB_F16F16F16x_SkColorType:     return 10;
+        case kR16_float_SkColorType:          return 10;
         case kRGBA_F32_SkColorType:           return 23;  // just counting the mantissa
         case kR16G16B16A16_unorm_SkColorType: return 16;
         case kR8_unorm_SkColorType:           return 8;
@@ -113,6 +117,7 @@ static constexpr int alpha_channel_bits(SkColorType ct) {
         case kRGB_565_SkColorType:            return 0;
         case kARGB_4444_SkColorType:          return 4;
         case kR8G8_unorm_SkColorType:         return 0;
+        case kR16_unorm_SkColorType:          return 0;
         case kR16G16_unorm_SkColorType:       return 0;
         case kR16G16_float_SkColorType:       return 0;
         case kRGBA_8888_SkColorType:          return 8;
@@ -129,6 +134,8 @@ static constexpr int alpha_channel_bits(SkColorType ct) {
         case kGray_8_SkColorType:             return 0;
         case kRGBA_F16Norm_SkColorType:       return 10;  // just counting the mantissa
         case kRGBA_F16_SkColorType:           return 10;  // just counting the mantissa
+        case kRGB_F16F16F16x_SkColorType:     return 0;
+        case kR16_float_SkColorType:          return 0;
         case kRGBA_F32_SkColorType:           return 23;  // just counting the mantissa
         case kR16G16B16A16_unorm_SkColorType: return 16;
         case kR8_unorm_SkColorType:           return 0;
@@ -258,28 +265,28 @@ static SkAutoPixmapStorage make_ref_data(const SkImageInfo& info, bool forceOpaq
     }
 
     SkPoint pts1[] = {{0, 0}, {float(info.width()), float(info.height())}};
-    static constexpr SkColor kColors1[] = {SK_ColorGREEN, SK_ColorRED};
+    static constexpr SkColor4f kColors1[] = {SkColors::kGreen, SkColors::kRed};
     SkPaint paint;
-    paint.setShader(SkGradientShader::MakeLinear(pts1, kColors1, nullptr, 2, SkTileMode::kClamp));
+    paint.setShader(SkShaders::LinearGradient(pts1, {{kColors1, {}, SkTileMode::kClamp}, {}}));
     surface->getCanvas()->drawPaint(paint);
 
     SkPoint pts2[] = {{float(info.width()), 0}, {0, float(info.height())}};
-    static constexpr SkColor kColors2[] = {SK_ColorBLUE, SK_ColorBLACK};
-    paint.setShader(SkGradientShader::MakeLinear(pts2, kColors2, nullptr, 2, SkTileMode::kClamp));
+    static constexpr SkColor4f kColors2[] = {SkColors::kBlue, SkColors::kBlack};
+    paint.setShader(SkShaders::LinearGradient(pts2, {{kColors2, {}, SkTileMode::kClamp}, {}}));
     paint.setBlendMode(SkBlendMode::kPlus);
     surface->getCanvas()->drawPaint(paint);
 
     // If not opaque add some fractional alpha.
     if (info.alphaType() != kOpaque_SkAlphaType && !forceOpaque) {
-        static constexpr SkColor kColors3[] = {SK_ColorWHITE,
-                                               SK_ColorWHITE,
-                                               0x60FFFFFF,
-                                               SK_ColorWHITE,
-                                               SK_ColorWHITE};
+        static const SkColor4f kColors3[] = {SkColors::kWhite,
+                                             SkColors::kWhite,
+                                             SkColor4f::FromColor(0x60FFFFFF),
+                                             SkColors::kWhite,
+                                             SkColors::kWhite};
         static constexpr SkScalar kPos3[] = {0.f, 0.15f, 0.5f, 0.85f, 1.f};
-        paint.setShader(SkGradientShader::MakeRadial({info.width()/2.f, info.height()/2.f},
-                                                     (info.width() + info.height())/10.f,
-                                                     kColors3, kPos3, 5, SkTileMode::kMirror));
+        paint.setShader(SkShaders::RadialGradient({info.width()/2.f, info.height()/2.f},
+                                                  (info.width() + info.height())/10.f,
+                                                  {{kColors3, kPos3, SkTileMode::kMirror}, {}}));
         paint.setBlendMode(SkBlendMode::kDstIn);
         surface->getCanvas()->drawPaint(paint);
     }
@@ -337,7 +344,7 @@ static void gpu_read_pixels_test_driver(skiatest::Reporter* reporter,
         } else if (!rules.fUncontainedRectSucceeds && !surfBounds.contains(rect)) {
             REPORTER_ASSERT(reporter, result != Result::kSuccess);
         } else if (result == Result::kFail) {
-            // TODO: Support RGB/BGR 101010x, BGRA 1010102 on the GPU.
+            // TODO: Support BGR 101010x, BGRA 1010102, on the GPU.
             if (SkColorTypeToGrColorType(readCT) != GrColorType::kUnknown) {
                 ERRORF(reporter,
                        "Read failed. %sSrc CT: %s, Src AT: %s Read CT: %s, Read AT: %s, "
@@ -420,7 +427,7 @@ static void gpu_read_pixels_test_driver(skiatest::Reporter* reporter,
             // This is the part of dstPixels that should have been updated.
             SkPixmap actual;
             SkAssertResult(dstPixels.extractSubset(&actual, dstWriteRect));
-            ComparePixels(ref, actual, tols, error);
+            CompareGaneshPixels(ref, actual, tols, error);
 
             const auto* v = dstData.get();
             const auto* end = dstData.get() + dstSize;
@@ -476,7 +483,8 @@ static void gpu_read_pixels_test_driver(skiatest::Reporter* reporter,
                 continue;
             }
             if (rules.fSkip16BitCT &&
-                (srcCT == kR16G16_unorm_SkColorType ||
+                (srcCT == kR16_unorm_SkColorType ||
+                 srcCT == kR16G16_unorm_SkColorType ||
                  srcCT == kR16G16B16A16_unorm_SkColorType)) {
                 continue;
             }
@@ -668,7 +676,7 @@ static void async_callback(void* c, std::unique_ptr<const SkImage::AsyncReadResu
 DEF_GANESH_TEST_FOR_RENDERING_CONTEXTS(SurfaceAsyncReadPixels,
                                        reporter,
                                        ctxInfo,
-                                       CtsEnforcement::kApiLevel_V) {
+                                       CtsEnforcement::kApiLevel_202404) {
     using Surface = sk_sp<SkSurface>;
     auto reader = std::function<GpuReadSrcFn<Surface>>(
             [](const Surface& surface, const SkIPoint& offset, const SkPixmap& pixels) {
@@ -797,7 +805,7 @@ static void image_async_read_pixels(GrRenderable renderable,
 DEF_GANESH_TEST_FOR_RENDERING_CONTEXTS(ImageAsyncReadPixels_NonRenderable_TopLeft,
                                        reporter,
                                        ctxInfo,
-                                       CtsEnforcement::kApiLevel_V) {
+                                       CtsEnforcement::kApiLevel_202404) {
     image_async_read_pixels(GrRenderable::kNo, GrSurfaceOrigin::kTopLeft_GrSurfaceOrigin,
                             reporter, ctxInfo);
 }
@@ -805,7 +813,7 @@ DEF_GANESH_TEST_FOR_RENDERING_CONTEXTS(ImageAsyncReadPixels_NonRenderable_TopLef
 DEF_GANESH_TEST_FOR_RENDERING_CONTEXTS(ImageAsyncReadPixels_NonRenderable_BottomLeft,
                                        reporter,
                                        ctxInfo,
-                                       CtsEnforcement::kApiLevel_V) {
+                                       CtsEnforcement::kApiLevel_202404) {
     image_async_read_pixels(GrRenderable::kNo, GrSurfaceOrigin::kBottomLeft_GrSurfaceOrigin,
                             reporter, ctxInfo);
 }
@@ -813,7 +821,7 @@ DEF_GANESH_TEST_FOR_RENDERING_CONTEXTS(ImageAsyncReadPixels_NonRenderable_Bottom
 DEF_GANESH_TEST_FOR_RENDERING_CONTEXTS(ImageAsyncReadPixels_Renderable_TopLeft,
                                        reporter,
                                        ctxInfo,
-                                       CtsEnforcement::kApiLevel_V) {
+                                       CtsEnforcement::kApiLevel_202404) {
     image_async_read_pixels(GrRenderable::kYes, GrSurfaceOrigin::kTopLeft_GrSurfaceOrigin,
                             reporter, ctxInfo);
 }
@@ -821,7 +829,7 @@ DEF_GANESH_TEST_FOR_RENDERING_CONTEXTS(ImageAsyncReadPixels_Renderable_TopLeft,
 DEF_GANESH_TEST_FOR_RENDERING_CONTEXTS(ImageAsyncReadPixels_Renderable_BottomLeft,
                                        reporter,
                                        ctxInfo,
-                                       CtsEnforcement::kApiLevel_V) {
+                                       CtsEnforcement::kApiLevel_202404) {
     image_async_read_pixels(GrRenderable::kYes, GrSurfaceOrigin::kBottomLeft_GrSurfaceOrigin,
                             reporter, ctxInfo);
 }
@@ -906,17 +914,26 @@ DEF_GANESH_TEST(AsyncReadPixelsContextShutdown, reporter, options, CtsEnforcemen
                 while (!cbContext.fCalled) {
                     direct->checkAsyncWorkCompletion();
                 }
-                if (!cbContext.fResult) {
-                    const char* readTypeStr;
-                    switch (readType) {
-                        case ReadType::kRGBA: readTypeStr = "rgba"; break;
-                        case ReadType::kYUV:  readTypeStr = "yuv";  break;
-                        case ReadType::kYUVA: readTypeStr = "yuva"; break;
-                    }
+
+                // If in protected mode, there shouldn't be an fResult; if unprotected there should
+                const bool expectsResult = !direct->priv().caps()->supportsProtectedContent();
+                const char* readTypeStr;
+                switch (readType) {
+                    case ReadType::kRGBA: readTypeStr = "rgba"; break;
+                    case ReadType::kYUV:  readTypeStr = "yuv";  break;
+                    case ReadType::kYUVA: readTypeStr = "yuva"; break;
+                }
+                if (expectsResult && !cbContext.fResult) {
                     ERRORF(reporter, "Callback failed on %s. read type is: %s",
                            skgpu::ContextTypeName(type), readTypeStr);
                     continue;
+                } else if (!expectsResult && cbContext.fResult) {
+                    ERRORF(reporter,
+                           "Callback unexpected succeeded  on protected %s. read type is: %s",
+                           skgpu::ContextTypeName(type), readTypeStr);
+                    continue;
                 }
+
                 // For vulkan we need to release all refs to the GrDirectContext before trying to
                 // destroy the test context. The surface here is holding a ref.
                 surf.reset();
@@ -1007,7 +1024,7 @@ static void gpu_write_pixels_test_driver(skiatest::Reporter* reporter,
         } else if (result == Result::kExcusedFailure) {
             return result;
         } else if (result == Result::kFail) {
-            // TODO: Support RGB/BGR 101010x, BGRA 1010102 on the GPU.
+            // TODO: Support BGR 101010x, BGRA 1010102 on the GPU.
             if (SkColorTypeToGrColorType(writeCT) != GrColorType::kUnknown) {
                 ERRORF(reporter,
                        "Write failed. Write CT: %s, Write AT: %s Dst CT: %s, Dst AT: %s, "
@@ -1430,7 +1447,7 @@ DEF_GANESH_TEST_FOR_RENDERING_CONTEXTS(SurfaceContextWritePixelsMipped,
                                            GrColorTypeToStr(info.colorType()), i, unowned, x, y,
                                            diffs[0], diffs[1], diffs[2], diffs[3]);
                                 });
-                        ComparePixels(a, b, tol, error);
+                        CompareGaneshPixels(a, b, tol, error);
                     }
                 }
             }

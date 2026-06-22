@@ -8,9 +8,12 @@
 #ifndef skgpu_graphite_Attribute_DEFINED
 #define skgpu_graphite_Attribute_DEFINED
 
-#include "include/private/base/SkAlign.h"
+#include "include/private/SkAlign.h"
+#include "include/private/SkAssert.h"
 #include "src/core/SkSLTypeShared.h"
 #include "src/gpu/graphite/DrawTypes.h"
+
+#include <cstddef>
 
 namespace skgpu::graphite {
 

@@ -44,12 +44,15 @@ var (
 	// dir.
 	explicitPaths = []string{
 		".bazelrc",
+		".bazeliskrc",
 		".bazelversion",
 		".clang-format",
 		".clang-tidy",
 		".vpython3",
 		"BUILD.bazel",
 		"DEPS", // Needed by bin/fetch-ninja
+		"MODULE.bazel",
+		"MODULE.bazel.lock",
 		"WORKSPACE.bazel",
 		"bazel",
 		"bin/activate-emsdk",
@@ -58,7 +61,6 @@ var (
 		"bin/fetch-ninja",
 		"buildtools",
 		"example",
-		"go_repositories.bzl",
 		"infra/bots/assets/android_ndk_darwin/VERSION",
 		"infra/bots/assets/android_ndk_linux/VERSION",
 		"infra/bots/assets/android_ndk_windows/VERSION",
@@ -68,11 +70,11 @@ var (
 		"infra/bots/run_recipe.py",
 		"infra/bots/task_drivers",
 		"infra/canvaskit",
-		"infra/pathkit",
 		"package.json",
 		"package-lock.json",
 		"requirements.txt",
 		"resources",
+		"rust",
 		"third_party/externals",
 		"toolchain",
 	}

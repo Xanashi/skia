@@ -5,42 +5,60 @@
  * found in the LICENSE file.
  */
 
-#include <cstdio>
-#include <cstdlib>
-#include <sstream>
-#include <string>
-
+#include "include/codec/SkCodec.h"
+#include "include/codec/SkJpegDecoder.h"
+#include "include/core/SkBitmap.h"
+#include "include/core/SkPicture.h"
+#include "include/encode/SkPngEncoder.h"
+#include "include/gpu/ganesh/GrBackendSurface.h"
+#include "include/gpu/ganesh/SkSurfaceGanesh.h"
+#include "include/private/SkLog.h"
 #include "src/core/SkAutoPixmapStorage.h"
 #include "src/core/SkMemset.h"
 #include "src/core/SkMipmap.h"
-#include "tools/flags/CommandLineFlags.h"
-
-#include "tools/fiddle/fiddle_main.h"
-
-static DEFINE_double(duration, 1.0,
-                     "The total duration, in seconds, of the animation we are drawing.");
-static DEFINE_double(frame, 1.0,
-                     "A double value in [0, 1] that specifies the point in animation to draw.");
-
-#include "include/codec/SkCodec.h"
-#include "include/codec/SkJpegDecoder.h"
-#include "include/codec/SkPngDecoder.h"
-#include "include/encode/SkPngEncoder.h"
-#include "include/gpu/GrBackendSurface.h"
-#include "include/gpu/ganesh/SkSurfaceGanesh.h"
 #include "src/gpu/ganesh/GrDirectContextPriv.h"
 #include "src/gpu/ganesh/GrGpu.h"
 #include "src/gpu/ganesh/GrRenderTarget.h"
 #include "src/gpu/ganesh/GrResourceProvider.h"
 #include "src/gpu/ganesh/GrTexture.h"
+
+#include "tools/flags/CommandLineFlags.h"
+#include "tools/ganesh/gl/GLTestContext.h"
 #include "tools/gpu/ManagedBackendTexture.h"
-#include "tools/gpu/gl/GLTestContext.h"
+
+#if defined(SK_CODEC_DECODES_PNG_WITH_LIBPNG)
+#include "include/codec/SkPngDecoder.h"
+#endif
+
+#if defined(SK_SUPPORT_PDF)
+#if !defined(SK_CODEC_DECODES_JPEG) || !defined(SK_CODEC_ENCODES_JPEG)
+#error "Need jpeg for PDF backend"
+#endif
+#include "include/docs/SkPDFDocument.h"
+#include "include/docs/SkPDFJpegHelpers.h"
+#endif
 
 #if defined(SK_FONTMGR_FONTCONFIG_AVAILABLE)
 #include "include/ports/SkFontMgr_fontconfig.h"
+#include "include/ports/SkFontScanner_FreeType.h"
 #endif
 
+#include <cstdio>
+#include <cstdlib>
+#include <sstream>
+#include <string>
+
+// fiddle_main.h (purposefully) pollutes the global namespace with very generic identifiers like
+// "image", "duration", "frame", and "fontMgr". As such it is something of an
+// "implementation header" and should be included last to avoid name shadowing warnings.
+#include "tools/fiddle/fiddle_main.h"
+
 using namespace skia_private;
+
+static DEFINE_double(duration, 1.0,
+                     "The total duration, in seconds, of the animation we are drawing.");
+static DEFINE_double(frame, 1.0,
+                     "A double value in [0, 1] that specifies the point in animation to draw.");
 
 // Globals externed in fiddle_main.h
 GrBackendTexture backEndTexture;
@@ -52,7 +70,7 @@ double duration; // The total duration of the animation in seconds.
 double frame;    // A value in [0, 1] of where we are in the animation.
 sk_sp<SkFontMgr> fontMgr;
 
-// Global used by the local impl of SkDebugf.
+// Global used by the local impl of SkLogVAList.
 std::ostringstream gTextOutput;
 
 // Global to record the GL driver info via create_direct_context().
@@ -62,12 +80,9 @@ sk_sp<sk_gpu_test::ManagedBackendTexture> managedBackendTextureRenderTarget;
 sk_sp<sk_gpu_test::ManagedBackendTexture> managedBackendTexture;
 sk_sp<GrRenderTarget> backingRenderTarget;
 
-void SkDebugf(const char * fmt, ...) {
-    va_list args;
-    va_start(args, fmt);
+void SkLogVAList(SkLogPriority priority, const char format[], va_list args) {
     char formatbuffer[1024];
-    int n = vsnprintf(formatbuffer, sizeof(formatbuffer), fmt, args);
-    va_end(args);
+    int n = vsnprintf(formatbuffer, sizeof(formatbuffer), format, args);
     if (n>=0 && n<=int(sizeof(formatbuffer))) {
         gTextOutput.write(formatbuffer, n);
     }
@@ -253,7 +268,7 @@ int main(int argc, char** argv) {
         options.skp = false;
     }
 #if defined(SK_FONTMGR_FONTCONFIG_AVAILABLE)
-    fontMgr = SkFontMgr_New_FontConfig(nullptr);
+    fontMgr = SkFontMgr_New_FontConfig(nullptr, SkFontScanner_Make_FreeType());
 #else
     fontMgr = SkFontMgr::RefEmpty();
 #endif
@@ -264,9 +279,12 @@ int main(int argc, char** argv) {
             return 1;
         }
         std::unique_ptr<SkCodec> codec = nullptr;
+#if defined(SK_CODEC_DECODES_PNG_WITH_LIBPNG)
         if (SkPngDecoder::IsPng(data->data(), data->size())) {
             codec = SkPngDecoder::Decode(data, nullptr);
-        } else if (SkJpegDecoder::IsJpeg(data->data(), data->size())) {
+        } else
+#endif
+        if (SkJpegDecoder::IsJpeg(data->data(), data->size())) {
             codec = SkJpegDecoder::Decode(data, nullptr);
         } else {
             perror("Unsupported file format\n");
@@ -325,10 +343,10 @@ int main(int argc, char** argv) {
     }
 #endif
 
-#ifdef SK_SUPPORT_PDF
+#if defined(SK_SUPPORT_PDF)
     if (options.pdf) {
         SkDynamicMemoryWStream pdfStream;
-        auto document = SkPDF::MakeDocument(&pdfStream);
+        auto document = SkPDF::MakeDocument(&pdfStream, SkPDF::JPEG::MetadataWithCallbacks());
         if (document) {
             srand(0);
             draw(prepare_canvas(document->beginPage(options.size.width(), options.size.height())));

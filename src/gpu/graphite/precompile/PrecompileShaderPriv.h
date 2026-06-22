@@ -20,6 +20,9 @@ public:
     bool isConstant(int desiredCombination) const {
         return fPrecompileShader->isConstant(desiredCombination);
     }
+    bool isOpaque(int desiredCombination) const {
+        return fPrecompileShader->isOpaque(desiredCombination);
+    }
 
     bool isALocalMatrixShader() const {
         return fPrecompileShader->isALocalMatrixShader();
@@ -30,11 +33,8 @@ public:
 
     int numCombinations() const { return fPrecompileShader->numCombinations(); }
 
-    void addToKey(const KeyContext& keyContext,
-                  PaintParamsKeyBuilder* builder,
-                  PipelineDataGatherer* gatherer,
-                  int desiredCombination) const {
-        fPrecompileShader->addToKey(keyContext, builder, gatherer, desiredCombination);
+    void addToKey(const KeyContext& keyContext, int desiredCombination) const {
+        fPrecompileShader->addToKey(keyContext, desiredCombination);
     }
 
 private:

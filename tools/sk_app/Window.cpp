@@ -9,16 +9,24 @@
 
 #include "include/core/SkCanvas.h"
 #include "include/core/SkSurface.h"
+#include "tools/window/DisplayParams.h"
 #include "tools/window/WindowContext.h"
 
 #if defined(SK_GANESH)
-#include "include/gpu/GrDirectContext.h"
-#include "include/gpu/GrRecordingContext.h"
+#include "include/gpu/ganesh/GrDirectContext.h"
+#include "include/gpu/ganesh/GrRecordingContext.h"
 #endif
+
+#if defined(SK_GRAPHITE)
+#include "include/gpu/graphite/Recorder.h"
+#endif
+
+using skwindow::DisplayParams;
 
 namespace sk_app {
 
-Window::Window() {}
+// Use the default DisplayParams
+Window::Window() : fRequestedDisplayParams(std::make_unique<DisplayParams>()) {}
 
 Window::~Window() {}
 
@@ -98,9 +106,11 @@ void Window::onPaint() {
     this->visitLayers([](Layer* layer) { layer->onPrePaint(); });
     this->visitLayers([=](Layer* layer) { layer->onPaint(backbuffer.get()); });
 
+#if defined(SK_GANESH)
     if (auto dContext = this->directContext()) {
         dContext->flushAndSubmit(backbuffer.get(), GrSyncCpu::kNo);
     }
+#endif
 
     fWindowContext->swapBuffers();
 }
@@ -134,10 +144,11 @@ int Window::height() const {
     return fWindowContext->height();
 }
 
-void Window::setRequestedDisplayParams(const DisplayParams& params, bool /* allowReattach */) {
-    fRequestedDisplayParams = params;
+void Window::setRequestedDisplayParams(std::unique_ptr<const DisplayParams> params,
+                                       bool /* allowReattach */) {
+    fRequestedDisplayParams = std::move(params);
     if (fWindowContext) {
-        fWindowContext->setDisplayParams(fRequestedDisplayParams);
+        fWindowContext->setDisplayParams(fRequestedDisplayParams->clone());
     }
 }
 
@@ -156,10 +167,14 @@ int Window::stencilBits() const {
 }
 
 GrDirectContext* Window::directContext() const {
+#if defined(SK_GANESH)
     if (!fWindowContext) {
         return nullptr;
     }
     return fWindowContext->directContext();
+#else
+    return nullptr;
+#endif
 }
 
 skgpu::graphite::Context* Window::graphiteContext() const {
@@ -184,13 +199,33 @@ skgpu::graphite::Recorder* Window::graphiteRecorder() const {
 #endif
 }
 
+SkRecorder* Window::baseRecorder() const {
 #if defined(SK_GRAPHITE)
-void Window::snapRecordingAndSubmit() {
+    if (auto r = this->graphiteRecorder()) {
+        return r;
+    }
+#endif
+#if defined(SK_GANESH)
+    if (auto direct = this->directContext()) {
+        return direct->asRecorder();
+    }
+#endif
+    return nullptr;
+}
+
+bool Window::supportsGpuTimer() const {
+    return fWindowContext ? fWindowContext->supportsGpuTimer() : false;
+}
+
+void Window::submitToGpu(GpuTimerCallback callback) {
     if (fWindowContext) {
-        fWindowContext->snapRecordingAndSubmit();
+        fWindowContext->submitToGpu(std::move(callback));
+        return;
+    }
+    if (callback) {
+        callback(0);
     }
 }
-#endif
 
 void Window::inval() {
     if (!fWindowContext) {

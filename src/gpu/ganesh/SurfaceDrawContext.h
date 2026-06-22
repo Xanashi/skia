@@ -12,17 +12,18 @@
 #include "include/core/SkDrawable.h"
 #include "include/core/SkMatrix.h"
 #include "include/core/SkPaint.h"
+#include "include/core/SkPoint.h"
 #include "include/core/SkRect.h"
 #include "include/core/SkRefCnt.h"
 #include "include/core/SkRegion.h"
+#include "include/core/SkSpan.h"
 #include "include/core/SkStrokeRec.h"
 #include "include/core/SkSurfaceProps.h"
 #include "include/gpu/GpuTypes.h"
-#include "include/gpu/GrTypes.h"
-#include "include/private/SkColorData.h"
-#include "include/private/base/SkPoint_impl.h"
-#include "include/private/base/SkTArray.h"
+#include "include/gpu/ganesh/GrTypes.h"
+#include "include/private/SkTArray.h"
 #include "include/private/gpu/ganesh/GrTypesPriv.h"
+#include "src/core/SkColorData.h"
 #include "src/gpu/ganesh/GrColorSpaceXform.h"
 #include "src/gpu/ganesh/GrPaint.h"
 #include "src/gpu/ganesh/GrRenderTargetProxy.h"
@@ -322,7 +323,8 @@ public:
                         SkBlendMode mode,
                         SkCanvas::SrcRectConstraint,
                         const SkMatrix& viewMatrix,
-                        sk_sp<GrColorSpaceXform> texXform);
+                        sk_sp<GrColorSpaceXform> texXform,
+                        bool setMayHavePersp);
 
     /**
      * Draw a roundrect using a paint.
@@ -428,10 +430,9 @@ public:
     void drawAtlas(const GrClip*,
                    GrPaint&& paint,
                    const SkMatrix& viewMatrix,
-                   int spriteCount,
-                   const SkRSXform xform[],
-                   const SkRect texRect[],
-                   const SkColor colors[]);
+                   SkSpan<const SkRSXform> xform,
+                   SkSpan<const SkRect> texRect,
+                   SkSpan<const SkColor> colors);
 
     /**
      * Draws a region.
@@ -633,7 +634,7 @@ public:
     // instantiated.
     GrRenderTarget* accessRenderTarget() { return this->asSurfaceProxy()->peekRenderTarget(); }
 
-#if defined(GR_TEST_UTILS)
+#if defined(GPU_TEST_UTILS)
     void testingOnly_SetPreserveOpsOnFullClear() { fPreserveOpsOnFullClear_TestingOnly = true; }
 #endif
 
@@ -711,7 +712,7 @@ private:
 
     bool fNeedsStencil = false;
 
-#if defined(GR_TEST_UTILS)
+#if defined(GPU_TEST_UTILS)
     bool fPreserveOpsOnFullClear_TestingOnly = false;
 #endif
 };

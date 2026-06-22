@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Google Inc.
+ * Copyright 2020 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -11,10 +11,10 @@
 #include "include/core/SkPath.h"
 #include "include/core/SkPathTypes.h"
 #include "include/core/SkPoint.h"
-#include "include/private/base/SkAssert.h"
-#include "include/private/base/SkDebug.h"
-#include "include/private/base/SkTemplates.h"
-#include "src/base/SkMathPriv.h"
+#include "include/private/SkAssert.h"
+#include "include/private/SkDebug.h"
+#include "include/private/SkTemplates.h"
+#include "src/core/SkMathPriv.h"
 #include "src/core/SkPathPriv.h"
 
 #include <algorithm>
@@ -89,8 +89,12 @@ public:
             , fNewTopValue(newTopValue) {
         }
 
-        PoppedTriangleStack(PoppedTriangleStack&& that) {
-            memcpy(this, &that, sizeof(*this));
+        PoppedTriangleStack(PoppedTriangleStack&& that)
+            : fMiddleOut(that.fMiddleOut)
+            , fLastPoint(that.fLastPoint)
+            , fEnd(that.fEnd)
+            , fNewTopVertex(that.fNewTopVertex)
+            , fNewTopValue(that.fNewTopValue) {
             that.fMiddleOut = nullptr;  // Don't do a stack update during our destructor.
         }
 
@@ -102,7 +106,7 @@ public:
         }
 
         struct Iter {
-            bool operator!=(const Iter& iter) { return fVertex != iter.fVertex; }
+            bool operator!=(const Iter& iter) const { return fVertex != iter.fVertex; }
             void operator++() { --fVertex; }
             std::tuple<SkPoint, SkPoint, SkPoint> operator*() {
                 return {fVertex[-1].fPoint, fVertex[0].fPoint, fLastPoint};

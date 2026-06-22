@@ -29,7 +29,7 @@ class SkiaVarsApi(recipe_api.RecipeApi):
     self.workdir = self.m.path.start_dir
 
     # Special input/output directories.
-    self.build_dir = self.workdir.join('build')
+    self.build_dir = self.workdir.joinpath('build')
 
     self.default_env = self.m.context.env
     self.default_env['CHROME_HEADLESS'] = '1'
@@ -37,12 +37,12 @@ class SkiaVarsApi(recipe_api.RecipeApi):
         self.default_env.get('PATH', '%(PATH)s'),
         str(self.m.bot_update.repo_resource()),
     ])
-    self.cache_dir = self.workdir.join('cache')
+    self.cache_dir = self.workdir.joinpath('cache')
 
-    self.swarming_out_dir = self.workdir.join(
+    self.swarming_out_dir = self.workdir.joinpath(
         self.m.properties.get('swarm_out_dir', 'tmp'))
 
-    self.tmp_dir = self.m.path.start_dir.join('tmp')
+    self.tmp_dir = self.m.path.start_dir.joinpath('tmp')
 
     self.builder_cfg = self.m.builder_name_schema.DictForBuilderName(
         self.builder_name)
@@ -95,21 +95,19 @@ class SkiaVarsApi(recipe_api.RecipeApi):
   @property
   def swarming_bot_id(self):
     if not self._swarming_bot_id:
-      script = self.resource('get_env_var.py')
-      step_stdout = self.m.step(
-          name='get swarming bot id',
-          cmd=['python3', script, 'SWARMING_BOT_ID'],
-          stdout=self.m.raw_io.output()).stdout.decode('utf-8')
-      self._swarming_bot_id = step_stdout.rstrip() if step_stdout else ''
+      self._swarming_bot_id = self.getenv('get swarming bot id', 'SWARMING_BOT_ID')
     return self._swarming_bot_id
 
   @property
   def swarming_task_id(self):
     if not self._swarming_task_id:
-      script = self.resource('get_env_var.py')
-      step_stdout = self.m.step(
-          name='get swarming task id',
-          cmd=['python3', script, 'SWARMING_TASK_ID'],
-          stdout=self.m.raw_io.output()).stdout.decode('utf-8')
-      self._swarming_task_id = step_stdout.rstrip() if step_stdout else ''
+      self._swarming_task_id = self.getenv('get swarming task id', 'SWARMING_TASK_ID')
     return self._swarming_task_id
+
+  def getenv(self, name, var):
+    script = self.resource('get_env_var.py')
+    step_stdout = self.m.step(
+        name=name,
+        cmd=['python3', script, var],
+        stdout=self.m.raw_io.output()).stdout.decode('utf-8')
+    return step_stdout.rstrip() if step_stdout else ''

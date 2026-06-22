@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Google Inc.
+ * Copyright 2023 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -82,8 +82,7 @@ static SkColor4f draw_1x1_gainmap(sk_sp<SkImage> baseImage,
                                                    SkSamplingOptions(),
                                                    gainmapInfo,
                                                    kRect,
-                                                   dstRatio,
-                                                   dstColorSpace);
+                                                   dstRatio);
     SkPaint paint;
     paint.setShader(shader);
     SkCanvas canvas(canvasBitmap);
@@ -140,8 +139,7 @@ DEF_TEST(GainmapShader_rects, r) {
                                                    SkSamplingOptions(),
                                                    gainmapInfo,
                                                    canvasRect,
-                                                   gainmapInfo.fDisplayRatioHdr,
-                                                   canvasInfo.refColorSpace());
+                                                   gainmapInfo.fDisplayRatioHdr);
     SkPaint paint;
     paint.setShader(shader);
     SkCanvas canvas(canvasBitmap);
@@ -230,8 +228,7 @@ DEF_TEST(GainmapShader_baseImageIsHdr, r) {
                                                    SkSamplingOptions(),
                                                    gainmapInfo,
                                                    canvasRect,
-                                                   gainmapInfo.fDisplayRatioSdr,
-                                                   canvasInfo.refColorSpace());
+                                                   gainmapInfo.fDisplayRatioSdr);
     SkPaint paint;
     paint.setShader(shader);
     SkCanvas canvas(canvasBitmap);

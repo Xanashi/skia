@@ -8,10 +8,10 @@
 #include "bench/Benchmark.h"
 
 #include "include/core/SkString.h"
-#include "include/gpu/GrDirectContext.h"
-#include "src/base/SkHalf.h"
-#include "src/base/SkRandom.h"
+#include "include/gpu/ganesh/GrDirectContext.h"
 #include "src/core/SkColorSpacePriv.h"
+#include "src/core/SkHalf.h"
+#include "src/core/SkRandom.h"
 #include "src/gpu/KeyBuilder.h"
 #include "src/gpu/ganesh/GrCaps.h"
 #include "src/gpu/ganesh/GrDirectContextPriv.h"
@@ -356,7 +356,7 @@ private:
     using INHERITED = Benchmark;
 };
 
-DEF_BENCH(return new VertexColorSpaceBench(kBaseline_Mode, "baseline"));
-DEF_BENCH(return new VertexColorSpaceBench(kFloat_Mode,    "float"));
-DEF_BENCH(return new VertexColorSpaceBench(kHalf_Mode,     "half"));
-DEF_BENCH(return new VertexColorSpaceBench(kShader_Mode,   "shader"));
+DEF_BENCH(return new VertexColorSpaceBench(kBaseline_Mode, "baseline"))
+DEF_BENCH(return new VertexColorSpaceBench(kFloat_Mode,    "float"))
+DEF_BENCH(return new VertexColorSpaceBench(kHalf_Mode,     "half"))
+DEF_BENCH(return new VertexColorSpaceBench(kShader_Mode,   "shader"))

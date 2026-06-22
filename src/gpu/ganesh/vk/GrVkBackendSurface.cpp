@@ -9,14 +9,14 @@
 #include "include/core/SkRefCnt.h"
 #include "include/core/SkTextureCompressionType.h"
 #include "include/gpu/GpuTypes.h"
-#include "include/gpu/GrBackendSurface.h"
-#include "include/gpu/GrTypes.h"
 #include "include/gpu/MutableTextureState.h"
-#include "include/gpu/vk/GrVkTypes.h"
+#include "include/gpu/ganesh/GrBackendSurface.h"
+#include "include/gpu/ganesh/GrTypes.h"
+#include "include/gpu/ganesh/vk/GrVkTypes.h"
 #include "include/gpu/vk/VulkanMutableTextureState.h"
 #include "include/gpu/vk/VulkanTypes.h"
-#include "include/private/base/SkAssert.h"
-#include "include/private/base/SkTo.h"
+#include "include/private/SkAssert.h"
+#include "include/private/SkDebug.h"
 #include "include/private/gpu/ganesh/GrTypesPriv.h"
 #include "src/gpu/ganesh/GrBackendSurfacePriv.h"
 #include "src/gpu/ganesh/vk/GrVkTypesPriv.h"
@@ -28,6 +28,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <utility>
 
 class GrVkBackendFormatData final : public GrBackendFormatData {
 public:
@@ -79,7 +80,7 @@ private:
     }
 
     std::string toString() const override {
-#if defined(SK_DEBUG) || GR_TEST_UTILS
+#if defined(SK_DEBUG) || defined(GPU_TEST_UTILS)
         return skgpu::VkFormatToStr(fFormat);
 #else
         return "";
@@ -126,13 +127,13 @@ GrBackendFormat MakeVk(const skgpu::VulkanYcbcrConversionInfo& ycbcrInfo,
                        bool willUseDRMFormatModifiers) {
     SkASSERT(ycbcrInfo.isValid());
     GrTextureType textureType =
-            ((ycbcrInfo.isValid() && ycbcrInfo.fExternalFormat) || willUseDRMFormatModifiers)
+            ((ycbcrInfo.isValid() && ycbcrInfo.hasExternalFormat()) || willUseDRMFormatModifiers)
                     ? GrTextureType::kExternal
                     : GrTextureType::k2D;
     return GrBackendSurfacePriv::MakeGrBackendFormat(
             textureType,
             GrBackendApi::kVulkan,
-            GrVkBackendFormatData(ycbcrInfo.fFormat, ycbcrInfo));
+            GrVkBackendFormatData(ycbcrInfo.format(), ycbcrInfo));
 }
 
 bool AsVkFormat(const GrBackendFormat& format, VkFormat* vkFormat) {
@@ -191,6 +192,7 @@ private:
 
     bool isProtected() const override { return fVkInfo.fProtected == skgpu::Protected::kYes; }
 
+#if defined(GPU_TEST_UTILS)
     bool equal(const GrBackendTextureData* that) const override {
         SkASSERT(!that || that->type() == GrBackendApi::kVulkan);
         if (auto otherVk = static_cast<const GrVkBackendTextureData*>(that)) {
@@ -204,6 +206,7 @@ private:
         }
         return false;
     }
+#endif
 
     bool isSameTexture(const GrBackendTextureData* that) const override {
         SkASSERT(!that || that->type() == GrBackendApi::kVulkan);
@@ -218,7 +221,7 @@ private:
         auto info = GrVkImageInfoWithMutableState(fVkInfo, fMutableState.get());
         bool usesDRMModifier = info.fImageTiling == VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT;
         if (info.fYcbcrConversionInfo.isValid()) {
-            SkASSERT(info.fFormat == info.fYcbcrConversionInfo.fFormat);
+            SkASSERT(info.fFormat == info.fYcbcrConversionInfo.format());
             return GrBackendFormats::MakeVk(info.fYcbcrConversionInfo, usesDRMModifier);
         }
         return GrBackendFormats::MakeVk(info.fFormat, usesDRMModifier);
@@ -245,7 +248,7 @@ static GrVkBackendTextureData* get_and_cast_data(GrBackendTexture* texture) {
 }
 
 static GrTextureType vk_image_info_to_texture_type(const GrVkImageInfo& info) {
-    if ((info.fYcbcrConversionInfo.isValid() && info.fYcbcrConversionInfo.fExternalFormat != 0) ||
+    if ((info.fYcbcrConversionInfo.isValid() && info.fYcbcrConversionInfo.hasExternalFormat()) ||
         info.fImageTiling == VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT) {
         return GrTextureType::kExternal;
     }
@@ -355,7 +358,7 @@ private:
     GrBackendFormat getBackendFormat() const override {
         auto info = GrVkImageInfoWithMutableState(fVkInfo, fMutableState.get());
         if (info.fYcbcrConversionInfo.isValid()) {
-            SkASSERT(info.fFormat == info.fYcbcrConversionInfo.fFormat);
+            SkASSERT(info.fFormat == info.fYcbcrConversionInfo.format());
             return GrBackendFormats::MakeVk(info.fYcbcrConversionInfo);
         }
         return GrBackendFormats::MakeVk(info.fFormat);
@@ -363,6 +366,7 @@ private:
 
     bool isProtected() const override { return fVkInfo.fProtected == skgpu::Protected::kYes; }
 
+#if defined(GPU_TEST_UTILS)
     bool equal(const GrBackendRenderTargetData* that) const override {
         SkASSERT(!that || that->type() == GrBackendApi::kVulkan);
         if (auto otherVk = static_cast<const GrVkBackendRenderTargetData*>(that)) {
@@ -376,6 +380,7 @@ private:
         }
         return false;
     }
+#endif
 
     void copyTo(AnyRenderTargetData& rtData) const override {
         rtData.emplace<GrVkBackendRenderTargetData>(fVkInfo, fMutableState);

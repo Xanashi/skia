@@ -2,7 +2,6 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-PYTHON_VERSION_COMPATIBILITY = "PY3"
 
 DEPS = [
   'checkout',
@@ -47,7 +46,7 @@ def GenTests(api):
                      patch_ref='refs/changes/89/456789/12',
                      patch_repo='https://skia.googlesource.com/skia.git',
                      patch_storage='gerrit') +
-      api.path.exists(api.path.start_dir.join('skp_output'))
+      api.path.exists(api.path.start_dir.joinpath('skp_output'))
   )
 
   buildername = 'Build-Debian10-Clang-x86_64-Release'

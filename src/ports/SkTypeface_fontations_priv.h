@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Google Inc.
+ * Copyright 2023 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -8,15 +8,19 @@
 #ifndef SkTypeface_Fontations_priv_DEFINED
 #define SkTypeface_Fontations_priv_DEFINED
 
+#include "include/core/SkFontArguments.h"
 #include "include/core/SkFontParameters.h"
 #include "include/core/SkPath.h"
+#include "include/core/SkRefCnt.h"
 #include "include/core/SkSpan.h"
 #include "include/core/SkStream.h"
 #include "include/core/SkTypeface.h"
-#include "include/private/base/SkOnce.h"
+#include "include/private/SkOnce.h"
+#include "include/private/SkTArray.h"
 #include "src/core/SkAdvancedTypefaceMetrics.h"
 #include "src/core/SkScalerContext.h"
 #include "src/ports/fontations/src/ffi.rs.h"
+#include "src/ports/SkTypeface_fontations_factory.h"
 
 #include <memory>
 
@@ -24,28 +28,6 @@ class SkStreamAsset;
 class SkFontationsScalerContext;
 
 namespace sk_fontations {
-
-/** Implementation of PathWrapper FFI C++ interface which allows Rust to call back
- * into C++ without exposing Skia types on the interface, see skpath_bridge.h. */
-class PathGeometrySink : public fontations_ffi::PathWrapper {
-public:
-    /* From fontations_ffi::PathWrapper. */
-    void move_to(float x, float y) override;
-    void line_to(float x, float y) override;
-    void quad_to(float cx0, float cy0, float x, float y) override;
-    void curve_to(float cx0, float cy0, float cx1, float cy1, float x, float y) override;
-    void close() override;
-
-    SkPath into_inner() &&;
-
-private:
-    void going_to(SkPoint point);
-    bool current_is_not(SkPoint);
-
-    SkPath fPath;
-    bool fStarted{false};
-    SkPoint fCurrent{0, 0};
-};
 
 /** Implementation of AxisWrapper FFI C++ interface, allowing Rust to call back into
  * C++ for populating variable axis availability information, see skpath_bridge.h. */
@@ -74,6 +56,7 @@ public:
                  uint16_t upem);
 
     // fontations_ffi::ColorPainter interface.
+    virtual bool is_bounds_mode() override { return false; }
     virtual void push_transform(const fontations_ffi::Transform& transform) override;
     virtual void pop_transform() override;
     virtual void push_clip_glyph(uint16_t glyph_id) override;
@@ -150,6 +133,7 @@ public:
     SkRect getBoundingBox();
 
     // fontations_ffi::ColorPainter interface.
+    virtual bool is_bounds_mode() override { return true; }
     virtual void push_transform(const fontations_ffi::Transform& transform) override;
     virtual void pop_transform() override;
     virtual void push_clip_glyph(uint16_t glyph_id) override;
@@ -192,8 +176,7 @@ public:
 
 private:
     SkFontationsScalerContext& fScalerContext;
-    SkMatrix fCurrentTransform;
-    SkMatrix fStackTopTransformInverse;
+    skia_private::STArray<4, SkMatrix> fMatrixStack;
 
     uint16_t fUpem;
     SkRect fBounds;
@@ -204,28 +187,31 @@ private:
 /** SkTypeface implementation based on Google Fonts Fontations Rust libraries. */
 class SkTypeface_Fontations : public SkTypeface {
 private:
-    SkTypeface_Fontations(sk_sp<SkData> fontData,
+    SkTypeface_Fontations(sk_sp<const SkData> fontData,
                           const SkFontStyle& style,
                           uint32_t ttcIndex,
                           rust::Box<fontations_ffi::BridgeFontRef>&& fontRef,
                           rust::Box<fontations_ffi::BridgeMappingIndex>&& mappingIndex,
                           rust::Box<fontations_ffi::BridgeNormalizedCoords>&& normalizedCoords,
                           rust::Box<fontations_ffi::BridgeOutlineCollection>&& outlines,
+                          rust::Box<fontations_ffi::BridgeGlyphStyles>&& glyph_styles,
                           rust::Vec<uint32_t>&& palette);
 
 public:
-    const fontations_ffi::BridgeFontRef& getBridgeFontRef() { return *fBridgeFontRef; }
-    const fontations_ffi::BridgeNormalizedCoords& getBridgeNormalizedCoords() {
+    const fontations_ffi::BridgeFontRef& getBridgeFontRef() const { return *fBridgeFontRef; }
+    const fontations_ffi::BridgeNormalizedCoords& getBridgeNormalizedCoords() const {
         return *fBridgeNormalizedCoords;
     }
-    const fontations_ffi::BridgeOutlineCollection& getOutlines() { return *fOutlines; }
+    const fontations_ffi::BridgeOutlineCollection& getOutlines() const { return *fOutlines; }
+    const fontations_ffi::BridgeGlyphStyles& getGlyphStyles() const { return *fGlyphStyles; }
+    const fontations_ffi::BridgeMappingIndex& getMappingIndex() const { return *fMappingIndex; }
     SkSpan<const SkColor> getPalette() const {
         return SkSpan(reinterpret_cast<const SkColor*>(fPalette.data()), fPalette.size());
     }
 
-    static constexpr SkTypeface::FactoryId FactoryId = SkSetFourByteTag('f', 'n', 't', 'a');
+    static constexpr SkTypeface::FactoryId FactoryId = SkTypefaces::Fontations::FactoryId;
 
-    static sk_sp<SkTypeface> MakeFromData(sk_sp<SkData> fontData, const SkFontArguments&);
+    static sk_sp<SkTypeface> MakeFromData(sk_sp<const SkData> fontData, const SkFontArguments&);
     static sk_sp<SkTypeface> MakeFromStream(std::unique_ptr<SkStreamAsset>, const SkFontArguments&);
 
 protected:
@@ -233,27 +219,30 @@ protected:
     sk_sp<SkTypeface> onMakeClone(const SkFontArguments& args) const override;
     std::unique_ptr<SkScalerContext> onCreateScalerContext(const SkScalerContextEffects& effects,
                                                            const SkDescriptor* desc) const override;
+    std::unique_ptr<SkScalerContext> onCreateScalerContextAsProxyTypeface(
+            const SkScalerContextEffects&,
+            const SkDescriptor*,
+            SkTypeface* proxyTypeface) const override;
     void onFilterRec(SkScalerContextRec*) const override;
     std::unique_ptr<SkAdvancedTypefaceMetrics> onGetAdvancedMetrics() const override;
     void onGetFontDescriptor(SkFontDescriptor*, bool*) const override;
-    void onCharsToGlyphs(const SkUnichar* chars, int count, SkGlyphID glyphs[]) const override;
+    void onCharsToGlyphs(SkSpan<const SkUnichar>, SkSpan<SkGlyphID>) const override;
     int onCountGlyphs() const override;
     void getPostScriptGlyphNames(SkString*) const override {}
-    void getGlyphToUnicodeMap(SkUnichar*) const override;
+    void getGlyphToUnicodeMap(SkSpan<SkUnichar>) const override;
     int onGetUPEM() const override;
     void onGetFamilyName(SkString* familyName) const override;
     bool onGetPostScriptName(SkString*) const override;
     SkTypeface::LocalizedStrings* onCreateFamilyNameIterator() const override;
     bool onGlyphMaskNeedsCurrentColor() const override;
-    int onGetVariationDesignPosition(SkFontArguments::VariationPosition::Coordinate coordinates[],
-                                     int coordinateCount) const override;
-    int onGetVariationDesignParameters(SkFontParameters::Variation::Axis parameters[],
-                                       int parameterCount) const override;
-    int onGetTableTags(SkFontTableTag tags[]) const override;
+    int onGetVariationDesignPosition(
+                             SkSpan<SkFontArguments::VariationPosition::Coordinate>) const override;
+    int onGetVariationDesignParameters(SkSpan<SkFontParameters::Variation::Axis>) const override;
+    int onGetTableTags(SkSpan<SkFontTableTag>) const override;
     size_t onGetTableData(SkFontTableTag, size_t, size_t, void*) const override;
 
 private:
-    sk_sp<SkData> fFontData;
+    sk_sp<const SkData> fFontData;
     // Incoming ttc index requested when this typeface was instantiated from data.
     uint32_t fTtcIndex = 0;
     // fBridgeFontRef accesses the data in fFontData. fFontData needs to be kept around for the
@@ -262,6 +251,7 @@ private:
     rust::Box<fontations_ffi::BridgeMappingIndex> fMappingIndex;
     rust::Box<fontations_ffi::BridgeNormalizedCoords> fBridgeNormalizedCoords;
     rust::Box<fontations_ffi::BridgeOutlineCollection> fOutlines;
+    rust::Box<fontations_ffi::BridgeGlyphStyles> fGlyphStyles;
     rust::Vec<uint32_t> fPalette;
 
     mutable SkOnce fGlyphMasksMayNeedCurrentColorOnce;

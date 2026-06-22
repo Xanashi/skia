@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Google Inc.
+ * Copyright 2019 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -7,8 +7,8 @@
 #include "src/gpu/ganesh/GrSPIRVUniformHandler.h"
 
 #include "include/core/SkString.h"
-#include "include/gpu/GrBackendSurface.h"
-#include "include/private/base/SkAssert.h"
+#include "include/gpu/ganesh/GrBackendSurface.h"
+#include "include/private/SkAssert.h"
 #include "src/core/SkSLTypeShared.h"
 #include "src/gpu/ganesh/GrShaderVar.h"
 #include "src/gpu/ganesh/GrUtil.h"
@@ -177,7 +177,7 @@ static inline uint32_t sksltype_to_size(SkSLType type) {
 uint32_t get_ubo_offset(uint32_t* currentOffset, SkSLType type, int arrayCount) {
     uint32_t alignmentMask = sksltype_to_alignment_mask(type);
     // We want to use the std140 layout here, so we must make arrays align to 16 bytes.
-    // TODO(skia:13380): make sure 2x3 and 3x2 matrices are handled properly once SkSLType adds
+    // TODO(skbug.com/40044465): make sure 2x3 and 3x2 matrices are handled properly once SkSLType adds
     // support for non-square matrices
     if (arrayCount || type == SkSLType::kFloat2x2 || type == SkSLType::kHalf2x2) {
         alignmentMask = 0xF;

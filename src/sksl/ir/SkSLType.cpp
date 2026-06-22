@@ -7,10 +7,11 @@
 
 #include "src/sksl/ir/SkSLType.h"
 
-#include "include/private/base/SkTo.h"
-#include "src/base/SkEnumBitMask.h"
-#include "src/base/SkMathPriv.h"
-#include "src/base/SkSafeMath.h"
+#include "include/private/SkTo.h"
+#include "src/core/SkEnumBitMask.h"
+#include "src/core/SkHalf.h"
+#include "src/core/SkMathPriv.h"
+#include "src/core/SkSafeMath.h"
 #include "src/core/SkTHash.h"
 #include "src/sksl/SkSLBuiltinTypes.h"
 #include "src/sksl/SkSLConstantFolder.h"
@@ -166,8 +167,14 @@ public:
             , fCount(count)
             , fIsBuiltin(isBuiltin) {
         SkASSERT(count > 0 || count == kUnsizedArray);
-        // Disallow multi-dimensional arrays.
+        // Multi-dimensional arrays are disallowed.
         SkASSERT(!componentType.is<ArrayType>());
+    }
+
+    bool matches(const Type& otherType) const override {
+        const Type& that = otherType.resolve();
+        return that.isArray() && this->columns() == that.columns() &&
+               this->componentType().matches(that.componentType());
     }
 
     bool isArray() const override {
@@ -409,7 +416,8 @@ public:
 
             case NumberKind::kFloat:
             default:
-                return float_limits::lowest();
+                return this->highPrecision() ? float_limits::lowest()
+                                             : -SkHalfToFloat(SK_HalfMax);
         }
     }
 
@@ -426,7 +434,8 @@ public:
 
             case NumberKind::kFloat:
             default:
-                return float_limits::max();
+                return this->highPrecision() ? float_limits::max()
+                                             : SkHalfToFloat(SK_HalfMax);
         }
     }
 
@@ -800,7 +809,7 @@ std::unique_ptr<Type> Type::MakeArrayType(const Context& context,
                                           const Type& componentType,
                                           int columns) {
     return std::make_unique<ArrayType>(std::move(name), componentType.abbreviatedName(),
-                                       componentType, columns, context.fConfig->fIsBuiltinCode);
+                                       componentType, columns, context.fConfig->isBuiltinCode());
 }
 
 std::unique_ptr<Type> Type::MakeGenericType(const char* name,
@@ -916,7 +925,7 @@ std::unique_ptr<Type> Type::MakeStructType(const Context& context,
                                     "' is too deeply nested");
     }
     return std::make_unique<StructType>(pos, name, std::move(fields), nestingDepth + 1,
-                                        interfaceBlock, context.fConfig->fIsBuiltinCode);
+                                        interfaceBlock, context.fConfig->isBuiltinCode());
 }
 
 std::unique_ptr<Type> Type::MakeTextureType(const char* name, SpvDim_ dimensions, bool isDepth,
@@ -946,8 +955,16 @@ CoercionCost Type::coercionCost(const Type& other) const {
         }
         return this->componentType().coercionCost(other.componentType());
     }
+
     if (this->isNumber() && other.isNumber()) {
-        if (this->isLiteral() && this->isInteger()) {
+        if (this->isLiteral() && (this->isInteger() ||
+                                  this->numberKind() == other.numberKind())) {
+            // NOTE: We allow ${intLiteral} and ${floatLiteral} to coerce freely to `float` and
+            // `half`. Without this check, ${floatLiteral}'s priority would treat conversion to
+            // `half` as a cheaper "normal" conversion compared to conversion to `float`. Treating
+            // the cost as free means function overload selection is based off the types of the
+            // non-literal arguments; in the case where only literals are passed in, SkSL will
+            // require a cast to disambiguate between half or float function calls.
             return CoercionCost::Free();
         } else if (this->numberKind() != other.numberKind()) {
             return CoercionCost::Impossible();
@@ -1225,7 +1242,7 @@ const Type* Type::clone(const Context& context, SymbolTable* symbolTable) const 
     // If we are compiling a program, and the type comes from the program's module, it is safe to
     // assume that the type is in-scope anywhere in the program without actually recursing through
     // the SymbolTable hierarchy to prove it.
-    if (!context.fConfig->fIsBuiltinCode && this->isBuiltin()) {
+    if (!context.fConfig->isBuiltinCode() && this->isBuiltin()) {
         return this;
     }
     // Even if the type isn't a built-in, it might already exist in the SymbolTable. Search by name.
@@ -1252,7 +1269,7 @@ const Type* Type::clone(const Context& context, SymbolTable* symbolTable) const 
                                                  TArray<Field>(fieldSpan.data(), fieldSpan.size()),
                                                  this->structNestingDepth(),
                                                  /*interfaceBlock=*/this->isInterfaceBlock(),
-                                                 /*isBuiltin=*/context.fConfig->fIsBuiltinCode));
+                                                 /*isBuiltin=*/context.fConfig->isBuiltinCode()));
         }
         default:
             SkDEBUGFAILF("don't know how to clone type '%s'", this->description().c_str());
@@ -1300,7 +1317,8 @@ bool Type::checkForOutOfRangeLiteral(const Context& context, const Expression& e
     if (baseType.isNumber()) {
         // Replace constant expressions with their corresponding values.
         const Expression* valueExpr = ConstantFolder::GetConstantValueForVariable(expr);
-        if (valueExpr->supportsConstantValues()) {
+        // Unsized arrays can't have constants and fails to get a slotCount.
+        if (valueExpr->supportsConstantValues() && !valueExpr->type().isUnsizedArray()) {
             // Iterate over every constant subexpression in the value.
             int numSlots = valueExpr->type().slotCount();
             for (int slot = 0; slot < numSlots; ++slot) {

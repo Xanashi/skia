@@ -24,34 +24,38 @@
 #include "include/codec/SkAndroidCodec.h"
 #include "include/codec/SkCodec.h"
 #include "include/codec/SkJpegDecoder.h"
-#include "include/codec/SkPngDecoder.h"
 #include "include/core/SkBBHFactory.h"
 #include "include/core/SkCanvas.h"
 #include "include/core/SkData.h"
 #include "include/core/SkGraphics.h"
 #include "include/core/SkPictureRecorder.h"
+#include "include/core/SkSerialProcs.h"
 #include "include/core/SkString.h"
 #include "include/core/SkSurface.h"
 #include "include/encode/SkPngEncoder.h"
-#include "include/private/base/SkMacros.h"
-#include "src/base/SkAutoMalloc.h"
-#include "src/base/SkLeanWindows.h"
-#include "src/base/SkTime.h"
+#include "include/private/SkAssert.h"
+#include "include/private/SkLog.h"
+#include "include/private/SkMacros.h"
+#include "src/core/SkAutoMalloc.h"
 #include "src/core/SkColorSpacePriv.h"
+#include "src/core/SkLeanWindows.h"
 #include "src/core/SkOSFile.h"
 #include "src/core/SkTaskGroup.h"
+#include "src/core/SkTime.h"
 #include "src/core/SkTraceEvent.h"
 #include "src/utils/SkJSONWriter.h"
 #include "src/utils/SkOSPath.h"
 #include "src/utils/SkShaderUtils.h"
 #include "tools/AutoreleasePool.h"
 #include "tools/CrashHandler.h"
+#include "tools/DeserialProcsUtils.h"
 #include "tools/MSKPPlayer.h"
 #include "tools/ProcStats.h"
 #include "tools/Stats.h"
 #include "tools/ToolUtils.h"
 #include "tools/flags/CommonFlags.h"
 #include "tools/flags/CommonFlagsConfig.h"
+#include "tools/flags/CommonFlagsGanesh.h"
 #include "tools/fonts/FontToolUtils.h"
 #include "tools/ios_utils.h"
 #include "tools/trace/EventTracingPriv.h"
@@ -73,9 +77,25 @@
 #include "include/gpu/graphite/Recorder.h"
 #include "include/gpu/graphite/Recording.h"
 #include "include/gpu/graphite/Surface.h"
-#include "tools/GpuToolUtils.h"
+#include "tools/flags/CommonFlagsGraphite.h"
 #include "tools/graphite/ContextFactory.h"
 #include "tools/graphite/GraphiteTestContext.h"
+#include "tools/graphite/GraphiteToolUtils.h"
+#endif
+
+#if defined(SK_CODEC_DECODES_PNG_WITH_RUST)
+#include "include/codec/SkPngRustDecoder.h"
+#else
+#include "include/codec/SkPngDecoder.h"
+#endif
+
+#if defined(SK_USE_PPROF)
+#include <gperftools/profiler.h>
+#include <gperftools/heap-profiler.h>
+#endif
+
+#if defined(SK_USE_PARTITION_ALLOC)
+    #include "tools/partition_alloc/TestSupport.h"
 #endif
 
 #include <cinttypes>
@@ -91,12 +111,12 @@ extern bool gForceHighPrecisionRasterPipeline;
 #include <unistd.h>
 #endif
 
-#include "include/gpu/GrDirectContext.h"
+#include "include/gpu/ganesh/GrDirectContext.h"
 #include "include/gpu/ganesh/SkSurfaceGanesh.h"
 #include "src/gpu/ganesh/GrCaps.h"
 #include "src/gpu/ganesh/GrDirectContextPriv.h"
 #include "src/gpu/ganesh/SkGr.h"
-#include "tools/gpu/GrContextFactory.h"
+#include "tools/ganesh/GrContextFactory.h"
 
 using namespace skia_private;
 
@@ -105,6 +125,10 @@ using sk_gpu_test::GrContextFactory;
 using sk_gpu_test::TestContext;
 
 GrContextOptions grContextOpts;
+
+#if defined(SK_GRAPHITE)
+skiatest::graphite::TestOptions gTestOptions;
+#endif
 
 static const int kAutoTuneLoops = 0;
 
@@ -185,6 +209,9 @@ static DEFINE_string2(match, m, nullptr,
 static DEFINE_bool2(quiet, q, false, "if true, don't print status updates.");
 static DEFINE_bool2(verbose, v, false, "enable verbose output from the test driver.");
 
+static DEFINE_string(cpuprofile, "", "Write a pprof cpu profile to this file");
+static DEFINE_string(memprofile, "", "Write a pprof heap profile to files with this prefix.\n"
+                                     "Will produce files like prefix.NNNN.heap while running");
 
 static DEFINE_string(skps, "skps", "Directory to read skps from.");
 static DEFINE_string(mskps, "mskps", "Directory to read mskps from.");
@@ -256,7 +283,7 @@ struct GPUTarget : public Target {
     void onSetup() override {
         this->contextInfo.testContext()->makeCurrent();
     }
-    void endTiming() override {
+    void submitFrame() override {
         if (this->contextInfo.testContext()) {
             this->contextInfo.testContext()->flushAndWaitOnSync(contextInfo.directContext());
         }
@@ -324,8 +351,7 @@ struct GraphiteTarget : public Target {
         // holds a ref to the Graphite device
         surface.reset();
     }
-
-    void endTiming() override {
+    void submitFrame() override {
         if (context && recorder) {
             std::unique_ptr<skgpu::graphite::Recording> recording = this->recorder->snap();
             if (recording) {
@@ -353,11 +379,11 @@ struct GraphiteTarget : public Target {
         return true;
     }
     bool init(SkImageInfo info, Benchmark* bench) override {
-        GrContextOptions options = grContextOpts;
-        bench->modifyGrContextOptions(&options);
-        // TODO: We should merge Ganesh and Graphite context options and then actually use the
-        // context options when we make the factory here.
-        this->factory = std::make_unique<ContextFactory>();
+        skiatest::graphite::TestOptions testOptions = gTestOptions;
+        testOptions.fContextOptions.fRequireOrderedRecordings = true;
+        bench->modifyGraphiteContextOptions(&testOptions.fContextOptions);
+
+        this->factory = std::make_unique<ContextFactory>(testOptions);
 
         skiatest::graphite::ContextInfo ctxInfo =
                 this->factory->getContextInfo(this->config.ctxType);
@@ -400,9 +426,10 @@ static double time(int loops, Benchmark* bench, Target* target) {
     double start = now_ms();
     canvas = target->beginTiming(canvas);
 
-    bench->draw(loops, canvas);
+    auto submitFrame = [target]() { target->submitFrame(); };
 
-    target->endTiming();
+    bench->draw(loops, canvas, submitFrame);
+
     double elapsed = now_ms() - start;
     bench->postDraw(canvas);
     return elapsed;
@@ -542,14 +569,18 @@ static int setup_gpu_bench(Target* target, Benchmark* bench, int maxGpuFrameLag)
 
         // Make sure we're not still timing our calibration.
         target->submitWorkAndSyncCPU();
+
+        // Pretty much the same deal as the calibration: do some warmup to make
+        // sure we're timing steady-state pipelined frames.
+        for (int i = 0; i < maxGpuFrameLag; i++) {
+            time(loops, bench, target);
+        }
     } else {
+        // We skip running the bench for calibration or to reach a steady state. When an explicit
+        // loop count is provided, we want to just run that number of loops.
         loops = detect_forever_loops(loops);
     }
-    // Pretty much the same deal as the calibration: do some warmup to make
-    // sure we're timing steady-state pipelined frames.
-    for (int i = 0; i < maxGpuFrameLag; i++) {
-        time(loops, bench, target);
-    }
+
 
     return loops;
 }
@@ -612,7 +643,7 @@ static std::optional<Config> create_config(const SkCommandLineConfig* config) {
 
         using ContextFactory = skiatest::graphite::ContextFactory;
 
-        ContextFactory factory(gpuConfig->asConfigGraphite()->getOptions());
+        ContextFactory factory(gTestOptions);
         skiatest::graphite::ContextInfo ctxInfo = factory.getContextInfo(graphiteCtxType);
         skgpu::graphite::Context* ctx = ctxInfo.fContext;
         if (ctx) {
@@ -672,6 +703,8 @@ static std::optional<Config> create_config(const SkCommandLineConfig* config) {
     CPU_CONFIG("nonrendering", Backend::kNonRendering, kUnknown_SkColorType, kUnpremul_SkAlphaType)
 
     CPU_CONFIG("a8",    Backend::kRaster,    kAlpha_8_SkColorType, kPremul_SkAlphaType)
+    CPU_CONFIG("gray8", Backend::kRaster,     kGray_8_SkColorType, kOpaque_SkAlphaType)
+    CPU_CONFIG("r8",    Backend::kRaster,   kR8_unorm_SkColorType, kOpaque_SkAlphaType)
     CPU_CONFIG("565",   Backend::kRaster,    kRGB_565_SkColorType, kOpaque_SkAlphaType)
     CPU_CONFIG("8888",  Backend::kRaster,        kN32_SkColorType, kPremul_SkAlphaType)
     CPU_CONFIG("rgba",  Backend::kRaster,  kRGBA_8888_SkColorType, kPremul_SkAlphaType)
@@ -842,8 +875,8 @@ public:
             SkDebugf("Could not read %s.\n", path);
             return nullptr;
         }
-
-        return SkPicture::MakeFromStream(stream.get());
+        SkDeserialProcs procs = ToolUtils::get_default_skp_deserial_procs();
+        return SkPicture::MakeFromStream(stream.get(), &procs);
     }
 
     static std::unique_ptr<MSKPPlayer> ReadMSKP(const char* path) {
@@ -921,13 +954,6 @@ public:
 
         while (fGMs) {
             std::unique_ptr<skiagm::GM> gm = fGMs->get()();
-            if (gm->isBazelOnly()) {
-                // We skip Bazel-only GMs because they might not be regular GMs. The Bazel build
-                // reuses the notion of GMs to replace the notion of DM sources of various kinds,
-                // such as codec sources and image generation sources. See comments in the
-                // skiagm::GM::isBazelOnly function declaration for context.
-                continue;
-            }
             fGMs = fGMs->next();
             if (gm->runAsBench()) {
                 fSourceType = "gm";
@@ -1319,7 +1345,7 @@ private:
     int fCurrentAnimSKP = 0;
 };
 
-// Some runs (mostly, Valgrind) are so slow that the bot framework thinks we've hung.
+// Some runs are so slow that the Swarming thinks we've hung.
 // This prints something every once in a while so that it knows we're still working.
 static void start_keepalive() {
     static std::thread* intentionallyLeaked = new std::thread([]{
@@ -1347,6 +1373,13 @@ class NanobenchShaderErrorHandler : public GrContextOptions::ShaderErrorHandler 
 };
 
 int main(int argc, char** argv) {
+#if defined(SK_USE_PARTITION_ALLOC)
+    // To achieve benchmark results closers to what Chromium based applications would obtain, the
+    // benchmark are run with PartitionAlloc enabled. This is the memory allocator used by Chromium
+    // based applications.
+    skiatest::InitializePartitionAllocForTesting();
+#endif
+
     CommandLineFlags::Parse(argc, argv);
 
     initializeEventTracingForTools();
@@ -1360,12 +1393,20 @@ int main(int argc, char** argv) {
     }
 
     // Our benchmarks only currently decode .png or .jpg files
+#if defined(SK_CODEC_DECODES_PNG_WITH_RUST)
+    SkCodecs::Register(SkPngRustDecoder::Decoder());
+#else
     SkCodecs::Register(SkPngDecoder::Decoder());
+#endif
     SkCodecs::Register(SkJpegDecoder::Decoder());
 
     SkTaskGroup::Enabler enabled(FLAGS_threads);
 
     CommonFlags::SetCtxOptions(&grContextOpts);
+
+#if defined(SK_GRAPHITE)
+    CommonFlags::SetTestOptions(&gTestOptions);
+#endif
 
     NanobenchShaderErrorHandler errorHandler;
     grContextOpts.fShaderErrorHandler = &errorHandler;
@@ -1448,6 +1489,27 @@ int main(int argc, char** argv) {
     gSkForceRasterPipelineBlitter     = FLAGS_forceRasterPipelineHP || FLAGS_forceRasterPipeline;
     gForceHighPrecisionRasterPipeline = FLAGS_forceRasterPipelineHP;
 
+#if defined(SK_USE_PPROF)
+    if (FLAGS_cpuprofile.isEmpty() && FLAGS_memprofile.isEmpty()) {
+        SKIA_LOG_W("Neither --cpuprofile nor --memprofile set. No profiling data will be output.");
+    }
+#endif
+
+    if (!FLAGS_cpuprofile.isEmpty()) {
+#if defined(SK_USE_PPROF)
+        ProfilerStart(FLAGS_cpuprofile[0]);
+#else
+        SK_ABORT("Must be compiled with -DSK_USE_PPROF (e.g. skia_use_pprof)");
+#endif
+    }
+    if (!FLAGS_memprofile.isEmpty()) {
+#if defined(SK_USE_PPROF)
+        HeapProfilerStart(FLAGS_memprofile[0]);
+#else
+        SK_ABORT("Must be compiled with -DSK_USE_PPROF (e.g. skia_use_pprof)");
+#endif
+    }
+
     // The SkSL memory benchmark must run before any GPU painting occurs. SkSL allocates memory for
     // its modules the first time they are accessed, and this test is trying to measure the size of
     // those allocations. If a paint has already occurred, some modules will have already been
@@ -1512,7 +1574,7 @@ int main(int argc, char** argv) {
                 continue;
             }
 
-            if (runs == 0 && FLAGS_ms < 1000) {
+            if (runs == 0 && FLAGS_ms < 1000 && kAutoTuneLoops == FLAGS_loops) {
                 // Run the first bench for 1000ms to warm up the nanobench if FLAGS_ms < 1000.
                 // Otherwise, the first few benches' measurements will be inaccurate.
                 auto stop = now_ms() + 1000;
@@ -1669,6 +1731,16 @@ int main(int argc, char** argv) {
             log.endBench();
         }
     }
+
+#if defined(SK_USE_PPROF)
+    if (!FLAGS_cpuprofile.isEmpty()) {
+        ProfilerStop();
+    }
+    if (!FLAGS_memprofile.isEmpty()) {
+        HeapProfilerDump("final");
+        HeapProfilerStop();
+    }
+#endif
 
     if (FLAGS_dmsaaStatsDump) {
         SkDebugf("<<Total Combined DMSAA Stats>>\n");

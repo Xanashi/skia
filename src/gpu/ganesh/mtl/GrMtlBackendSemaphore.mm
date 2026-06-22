@@ -6,8 +6,8 @@
  */
 #include "include/gpu/ganesh/mtl/GrMtlBackendSemaphore.h"
 
-#include "include/gpu/GrTypes.h"
-#include "include/private/base/SkAssert.h"
+#include "include/gpu/ganesh/GrTypes.h"
+#include "include/private/SkAssert.h"
 #include "src/gpu/ganesh/GrBackendSemaphorePriv.h"
 
 #if !__has_feature(objc_arc)

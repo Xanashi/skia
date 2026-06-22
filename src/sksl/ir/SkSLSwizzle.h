@@ -9,7 +9,7 @@
 #define SKSL_SWIZZLE
 
 #include "include/core/SkTypes.h"
-#include "src/base/SkFixedArray.h"
+#include "src/core/SkFixedArray.h"
 #include "src/sksl/SkSLPosition.h"
 #include "src/sksl/ir/SkSLExpression.h"
 #include "src/sksl/ir/SkSLIRNode.h"
@@ -77,7 +77,13 @@ public:
     static std::unique_ptr<Expression> Make(const Context& context,
                                             Position pos,
                                             std::unique_ptr<Expression> expr,
-                                            ComponentArray inComponents);
+                                            ComponentArray components);
+
+    // Swizzle::MakeExact creates the swizzle as requested, without simplification.
+    static std::unique_ptr<Expression> MakeExact(const Context& context,
+                                                 Position pos,
+                                                 std::unique_ptr<Expression> expr,
+                                                 ComponentArray components);
 
     std::unique_ptr<Expression>& base() {
         return fBase;

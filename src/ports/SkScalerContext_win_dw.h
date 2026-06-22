@@ -10,7 +10,7 @@
 
 #include "include/core/SkScalar.h"
 #include "include/core/SkTypes.h"
-#include "include/private/base/SkTDArray.h"
+#include "include/private/SkTDArray.h"
 #include "src/core/SkScalerContext.h"
 #include "src/ports/SkTypeface_win_dw.h"
 
@@ -26,7 +26,7 @@ struct DWRITE_PAINT_ELEMENT;
 
 class SkScalerContext_DW : public SkScalerContext {
 public:
-    SkScalerContext_DW(sk_sp<DWriteFontTypeface>,
+    SkScalerContext_DW(DWriteFontTypeface&,
                        const SkScalerContextEffects&,
                        const SkDescriptor*);
     ~SkScalerContext_DW() override;
@@ -34,7 +34,7 @@ public:
 protected:
     GlyphMetrics generateMetrics(const SkGlyph&, SkArenaAlloc*) override;
     void generateImage(const SkGlyph&, void* imageBuffer) override;
-    bool generatePath(const SkGlyph&, SkPath*) override;
+    std::optional<GeneratedPath> generatePath(const SkGlyph&) override;
     sk_sp<SkDrawable> generateDrawable(const SkGlyph&) override;
     void generateFontMetrics(SkFontMetrics*) override;
 

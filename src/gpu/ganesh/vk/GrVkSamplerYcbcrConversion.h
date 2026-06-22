@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Google Inc.
+ * Copyright 2018 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -8,14 +8,21 @@
 #ifndef GrVkSamplerYcbcrConverison_DEFINED
 #define GrVkSamplerYcbcrConverison_DEFINED
 
+#include "include/private/SkDebug.h"
+#include "include/private/SkMacros.h"
+#include "include/private/gpu/vk/SkiaVulkan.h"
+#include "src/core/SkChecksum.h"
+#include "src/gpu/ganesh/GrManagedResource.h"
 #include "src/gpu/ganesh/vk/GrVkManagedResource.h"
 
-#include "include/gpu/vk/VulkanTypes.h"
-#include "src/core/SkChecksum.h"
-
 #include <cinttypes>
+#include <cstdint>
+#include <optional>
 
 class GrVkGpu;
+namespace skgpu {
+struct VulkanYcbcrConversionInfo;
+}
 
 class GrVkSamplerYcbcrConversion : public GrVkManagedResource {
 public:
@@ -23,6 +30,12 @@ public:
                                               const skgpu::VulkanYcbcrConversionInfo&);
 
     VkSamplerYcbcrConversion ycbcrConversion() const { return fYcbcrConversion; }
+
+    // If the format does not support
+    // VK_FORMAT_FEATURE_SAMPLED_IMAGE_YCBCR_CONVERSION_SEPARATE_RECONSTRUCTION_FILTER_BIT,
+    // sampler's minFilter and magFilter must match the conversion's chromaFilter, which can be
+    // found in fRequiredFilter. If not set, minFilter and magFilter can be independently set.
+    std::optional<VkFilter> requiredFilter() const { return fRequiredFilter; }
 
     SK_BEGIN_REQUIRE_DENSE
     struct Key {
@@ -63,15 +76,19 @@ public:
 #endif
 
 private:
-    GrVkSamplerYcbcrConversion(const GrVkGpu* gpu, VkSamplerYcbcrConversion ycbcrConversion,
+    GrVkSamplerYcbcrConversion(const GrVkGpu* gpu,
+                               VkSamplerYcbcrConversion ycbcrConversion,
+                               std::optional<VkFilter> requiredFilter,
                                Key key)
             : INHERITED(gpu)
             , fYcbcrConversion(ycbcrConversion)
+            , fRequiredFilter(requiredFilter)
             , fKey(key) {}
 
     void freeGPUData() const override;
 
     VkSamplerYcbcrConversion fYcbcrConversion;
+    std::optional<VkFilter> fRequiredFilter;
     Key                      fKey;
 
     using INHERITED = GrVkManagedResource;

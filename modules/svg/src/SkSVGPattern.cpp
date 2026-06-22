@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 Google Inc.
+ * Copyright 2017 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -8,12 +8,17 @@
 #include "modules/svg/include/SkSVGPattern.h"
 
 #include "include/core/SkCanvas.h"
+#include "include/core/SkPaint.h"
 #include "include/core/SkPicture.h"
 #include "include/core/SkPictureRecorder.h"
-#include "include/core/SkShader.h"
+#include "include/core/SkRect.h"
+#include "include/core/SkSamplingOptions.h"
 #include "include/core/SkTileMode.h"
+#include "modules/svg/include/SkSVGAttributeParser.h"
+#include "modules/svg/include/SkSVGContainer.h"
 #include "modules/svg/include/SkSVGRenderContext.h"
-#include "modules/svg/include/SkSVGValue.h"
+
+class SkMatrix;
 
 SkSVGPattern::SkSVGPattern() : INHERITED(SkSVGTag::kPattern) {}
 
@@ -37,12 +42,12 @@ void SkSVGPattern::onSetAttribute(SkSVGAttribute attr, const SkSVGValue& v) {
     switch (attr) {
         case SkSVGAttribute::kViewBox:
             if (const auto* vb = v.as<SkSVGViewBoxValue>()) {
-                this->setViewBox(*vb);
+                this->setViewBox(SkSVGViewBoxType(*vb));
             }
             break;
         case SkSVGAttribute::kPreserveAspectRatio:
             if (const auto* par = v.as<SkSVGPreserveAspectRatioValue>()) {
-                this->setPreserveAspectRatio(*par);
+                this->setPreserveAspectRatio(SkSVGPreserveAspectRatio(*par));
             }
             break;
         default:
@@ -64,8 +69,8 @@ const SkSVGPattern* SkSVGPattern::hrefTarget(const SkSVGRenderContext& ctx) cons
 }
 
 template <typename T>
-int inherit_if_needed(const SkTLazy<T>& src, SkTLazy<T>& dst) {
-    if (!dst.isValid()) {
+int inherit_if_needed(const std::optional<T>& src, std::optional<T>& dst) {
+    if (!dst.has_value()) {
         dst = src;
         return 1;
     }
@@ -121,33 +126,32 @@ bool SkSVGPattern::onAsPaint(const SkSVGRenderContext& ctx, SkPaint* paint) cons
     const auto* contentNode = this->resolveHref(ctx, &attrs);
 
     const auto tile = ctx.lengthContext().resolveRect(
-            attrs.fX.isValid()      ? *attrs.fX      : SkSVGLength(0),
-            attrs.fY.isValid()      ? *attrs.fY      : SkSVGLength(0),
-            attrs.fWidth.isValid()  ? *attrs.fWidth  : SkSVGLength(0),
-            attrs.fHeight.isValid() ? *attrs.fHeight : SkSVGLength(0));
+            attrs.fX.has_value()      ? *attrs.fX      : SkSVGLength(0),
+            attrs.fY.has_value()      ? *attrs.fY      : SkSVGLength(0),
+            attrs.fWidth.has_value()  ? *attrs.fWidth  : SkSVGLength(0),
+            attrs.fHeight.has_value() ? *attrs.fHeight : SkSVGLength(0));
 
     // TODO: Figure out how to implement the patternUnits attribute 
     
-    //auto patternUnits = attrs.fPatternUnits.isValid() 
+    //auto patternUnits = attrs.fPatternUnits.has_value() 
     //        ? *attrs.fPatternUnits : SkSVGObjectBoundingBoxUnits(
     //            SkSVGObjectBoundingBoxUnits::Type::kObjectBoundingBox);
 
     //const auto tile = ctx.resolveOBBRect(
-    //        attrs.fX.isValid()      ? *attrs.fX      : SkSVGLength(0),
-    //        attrs.fY.isValid()      ? *attrs.fY      : SkSVGLength(0),
-    //        attrs.fWidth.isValid()  ? *attrs.fWidth  : SkSVGLength(0),
-    //        attrs.fHeight.isValid() ? *attrs.fHeight : SkSVGLength(0),
+    //        attrs.fX.has_value()      ? *attrs.fX      : SkSVGLength(0),
+    //        attrs.fY.has_value()      ? *attrs.fY      : SkSVGLength(0),
+    //        attrs.fWidth.has_value()  ? *attrs.fWidth  : SkSVGLength(0),
+    //        attrs.fHeight.has_value() ? *attrs.fHeight : SkSVGLength(0),
     //        patternUnits);
 
     if (tile.isEmpty()) {
         return false;
     }
 
-    auto patternTransform = attrs.fPatternTransform.isValid()
-            ? attrs.fPatternTransform.get() : nullptr;
-    auto patternContentUnits = attrs.fPatternContentUnits.isValid() 
+    auto patternTransform = SkOptAddressOrNull(attrs.fPatternTransform);
+    auto patternContentUnits = attrs.fPatternContentUnits.has_value() 
             ? *attrs.fPatternContentUnits : SkSVGObjectBoundingBoxUnits();
-    auto preserveAspectRatio = attrs.fPreserveAspectRatio.isValid() 
+    auto preserveAspectRatio = attrs.fPreserveAspectRatio.has_value() 
             ? *attrs.fPreserveAspectRatio : SkSVGPreserveAspectRatio();
     auto viewPort = SkSize::Make(tile.width(), tile.height());
 
@@ -156,7 +160,7 @@ bool SkSVGPattern::onAsPaint(const SkSVGRenderContext& ctx, SkPaint* paint) cons
     SkPictureRecorder recorder;
     SkSVGRenderContext recordingContext(ctx, recorder.beginRecording(tile));
 
-    if (attrs.fViewBox.isValid()) {
+    if (attrs.fViewBox.has_value()) {
         const SkRect& viewBox = *attrs.fViewBox;
         viewPort = SkSize::Make(viewBox.width(), viewBox.height());
         viewTransform.preConcat(ComputeViewboxMatrix(viewBox, tile, preserveAspectRatio));

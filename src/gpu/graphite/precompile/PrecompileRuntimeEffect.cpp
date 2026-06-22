@@ -12,7 +12,8 @@
 #include "include/gpu/graphite/precompile/PrecompileBlender.h"
 #include "include/gpu/graphite/precompile/PrecompileColorFilter.h"
 #include "include/gpu/graphite/precompile/PrecompileShader.h"
-#include "include/private/base/SkTArray.h"
+#include "include/private/SkTArray.h"
+#include "src/core/SkRuntimeEffectPriv.h"
 #include "src/gpu/graphite/KeyContext.h"
 #include "src/gpu/graphite/KeyHelpers.h"
 #include "src/gpu/graphite/PaintParams.h"
@@ -88,11 +89,13 @@ bool children_are_valid(SkRuntimeEffect* effect,
 
 } // anonymous namespace
 
-template<typename T>
-class PrecompileRTEffect : public T {
+template <typename Base>
+class PrecompileRTEffectBase : public Base {
+    static_assert(std::is_base_of<PrecompileBase, Base>::value);
+
 public:
-    PrecompileRTEffect(sk_sp<SkRuntimeEffect> effect,
-                       SkSpan<const PrecompileChildOptions> childOptions)
+    PrecompileRTEffectBase(sk_sp<SkRuntimeEffect> effect,
+                           SkSpan<const PrecompileChildOptions> childOptions)
             : fEffect(std::move(effect)) {
         fChildOptions.reserve(childOptions.size());
         for (PrecompileChildOptions c : childOptions) {
@@ -109,21 +112,18 @@ public:
         SkASSERT(fChildOptions.size() == fEffect->children().size());
     }
 
-private:
+protected:
     int numChildCombinations() const override { return fNumChildCombinations; }
 
-    void addToKey(const KeyContext& keyContext,
-                  PaintParamsKeyBuilder* builder,
-                  PipelineDataGatherer* gatherer,
-                  int desiredCombination) const override {
-
+    void addToKey(const KeyContext& keyContext, int desiredCombination) const override {
         SkASSERT(desiredCombination < this->numCombinations());
 
         SkSpan<const SkRuntimeEffect::Child> childInfo = fEffect->children();
 
-        RuntimeEffectBlock::BeginBlock(keyContext, builder, gatherer, { fEffect });
-
-        KeyContextWithScope childContext(keyContext, KeyContext::Scope::kRuntimeEffect);
+        if (!RuntimeEffectBlock::BeginBlock(keyContext, { fEffect })) {
+            RuntimeEffectBlock::AddNoOpEffect(keyContext, fEffect.get());
+            return;
+        }
 
         int remainingCombinations = desiredCombination;
 
@@ -135,12 +135,14 @@ private:
             remainingCombinations /= numSlotCombinations;
 
             auto [option, childOptions] = PrecompileBase::SelectOption(
-                    SkSpan<const sk_sp<PrecompileBase>>(slotOptions),
+                    SkSpan(slotOptions),
                     slotOption);
+
+            KeyContext childContext = keyContext.forRuntimeEffect(fEffect.get(), rowIndex);
 
             SkASSERT(precompilebase_is_valid_as_child(option.get()));
             if (option) {
-                option->priv().addToKey(keyContext, builder, gatherer, childOptions);
+                option->priv().addToKey(childContext, childOptions);
             } else {
                 SkASSERT(childOptions == 0);
 
@@ -148,30 +150,65 @@ private:
                 switch (childInfo[rowIndex].type) {
                     case SkRuntimeEffect::ChildType::kShader:
                         // A missing shader returns transparent black
-                        SolidColorShaderBlock::AddBlock(childContext, builder, gatherer,
-                                                        SK_PMColor4fTRANSPARENT);
+                        SolidColorShaderBlock::AddBlock(childContext, SK_PMColor4fTRANSPARENT);
                         break;
 
                     case SkRuntimeEffect::ChildType::kColorFilter:
                         // A "passthrough" shader returns the input color as-is.
-                        builder->addBlock(BuiltInCodeSnippetID::kPriorOutput);
+                        keyContext.paintParamsKeyBuilder()->addBlock(
+                                BuiltInCodeSnippetID::kPriorOutput);
                         break;
 
                     case SkRuntimeEffect::ChildType::kBlender:
                         // A "passthrough" blender performs `blend_src_over(src, dest)`.
-                        AddKnownModeBlend(childContext, builder, gatherer, SkBlendMode::kSrcOver);
+                        AddFixedBlendMode(childContext, SkBlendMode::kSrcOver);
                         break;
                 }
             }
         }
 
-        builder->endBlock();
+        RuntimeEffectBlock::HandleIntrinsics(keyContext, fEffect.get());
+
+        keyContext.paintParamsKeyBuilder()->endBlock();
     }
 
     sk_sp<SkRuntimeEffect> fEffect;
     std::vector<std::vector<sk_sp<PrecompileBase>>> fChildOptions;
     skia_private::TArray<int> fNumSlotCombinations;
     int fNumChildCombinations;
+};
+
+class PrecompileRTShader : public PrecompileRTEffectBase<PrecompileShader> {
+public:
+    PrecompileRTShader(sk_sp<SkRuntimeEffect> effect,
+                       SkSpan<const PrecompileChildOptions> childOptions)
+            : PrecompileRTEffectBase(std::move(effect), childOptions) {}
+
+private:
+    bool isOpaque(int /*desiredCombination*/) const override {
+        // Runtime effect's analysis is not dependent on the actual bound children.
+        return SkRuntimeEffectPriv::AlwaysOpaque(fEffect.get());
+    }
+};
+
+class PrecompileRTColorFilter : public PrecompileRTEffectBase<PrecompileColorFilter> {
+public:
+    PrecompileRTColorFilter(sk_sp<SkRuntimeEffect> effect,
+                            SkSpan<const PrecompileChildOptions> childOptions)
+            : PrecompileRTEffectBase(std::move(effect), childOptions) {}
+
+private:
+    bool isAlphaUnchanged(int /*desiredOption*/) const override {
+        // Runtime effect's analysis is not dependent on the actual bound children.
+        return SkRuntimeEffectPriv::IsAlphaUnchanged(fEffect.get());
+    }
+};
+
+class PrecompileRTBlender : public PrecompileRTEffectBase<PrecompileBlender> {
+public:
+    PrecompileRTBlender(sk_sp<SkRuntimeEffect> effect,
+                        SkSpan<const PrecompileChildOptions> childOptions)
+            : PrecompileRTEffectBase(std::move(effect), childOptions) {}
 };
 
 sk_sp<PrecompileShader> PrecompileRuntimeEffects::MakePrecompileShader(
@@ -185,7 +222,7 @@ sk_sp<PrecompileShader> PrecompileRuntimeEffects::MakePrecompileShader(
         return nullptr;
     }
 
-    return sk_make_sp<PrecompileRTEffect<PrecompileShader>>(std::move(effect), childOptions);
+    return sk_make_sp<PrecompileRTShader>(std::move(effect), childOptions);
 }
 
 sk_sp<PrecompileColorFilter> PrecompileRuntimeEffects::MakePrecompileColorFilter(
@@ -199,7 +236,7 @@ sk_sp<PrecompileColorFilter> PrecompileRuntimeEffects::MakePrecompileColorFilter
         return nullptr;
     }
 
-    return sk_make_sp<PrecompileRTEffect<PrecompileColorFilter>>(std::move(effect), childOptions);
+    return sk_make_sp<PrecompileRTColorFilter>(std::move(effect), childOptions);
 }
 
 sk_sp<PrecompileBlender> PrecompileRuntimeEffects::MakePrecompileBlender(
@@ -213,7 +250,7 @@ sk_sp<PrecompileBlender> PrecompileRuntimeEffects::MakePrecompileBlender(
         return nullptr;
     }
 
-    return sk_make_sp<PrecompileRTEffect<PrecompileBlender>>(std::move(effect), childOptions);
+    return sk_make_sp<PrecompileRTBlender>(std::move(effect), childOptions);
 }
 
 } // namespace skgpu::graphite

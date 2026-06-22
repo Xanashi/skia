@@ -10,20 +10,22 @@
 
 #include "include/core/SkColor.h"
 #include "include/core/SkRefCnt.h"
+#include "include/core/SkSpan.h"
 #include "include/core/SkString.h"
 #include "include/effects/SkRuntimeEffect.h"
+#include "include/private/SkAssert.h"
+#include "include/private/SkDebug.h"
 #include "include/private/SkSLSampleUsage.h"
-#include "include/private/base/SkAssert.h"
-#include "include/private/base/SkDebug.h"
-#include "include/private/base/SkSpan_impl.h"
-#include "include/private/base/SkTArray.h"
+#include "include/private/SkTArray.h"
 #include "src/core/SkEffectPriv.h"
+#include "src/core/SkKnownRuntimeEffects.h"
 #include "src/sksl/codegen/SkSLRasterPipelineBuilder.h"
 
 #include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <vector>
 
 #include "include/sksl/SkSLVersion.h"
 
@@ -79,8 +81,34 @@ public:
         return effect.hash();
     }
 
+    static bool HasName(const SkRuntimeEffect& effect) {
+        return !effect.fName.isEmpty();
+    }
+
+    static const char* GetName(const SkRuntimeEffect& effect) {
+        return effect.fName.c_str();
+    }
+
     static uint32_t StableKey(const SkRuntimeEffect& effect) {
         return effect.fStableKey;
+    }
+
+    // This method is only used on user-defined known runtime effects
+    static void SetStableKey(SkRuntimeEffect* effect, uint32_t stableKey) {
+        SkASSERT(!effect->fStableKey);
+        SkASSERT(SkKnownRuntimeEffects::IsViableUserDefinedKnownRuntimeEffect(stableKey));
+        effect->fStableKey = stableKey;
+    }
+
+    // This method is only used for Skia-internal known runtime effects
+    static void SetStableKeyOnOptions(SkRuntimeEffect::Options* options, uint32_t stableKey) {
+        SkASSERT(!options->fStableKey);
+        SkASSERT(SkKnownRuntimeEffects::IsSkiaKnownRuntimeEffect(stableKey));
+        options->fStableKey = stableKey;
+    }
+
+    static void ResetStableKey(SkRuntimeEffect* effect) {
+        effect->fStableKey = 0;
     }
 
     static const SkSL::Program& Program(const SkRuntimeEffect& effect) {
@@ -95,10 +123,6 @@ public:
 
     static void AllowPrivateAccess(SkRuntimeEffect::Options* options) {
         options->allowPrivateAccess = true;
-    }
-
-    static void SetStableKey(SkRuntimeEffect::Options* options, uint32_t stableKey) {
-        options->fStableKey = stableKey;
     }
 
     static SkRuntimeEffect::Uniform VarAsUniform(const SkSL::Variable&,
@@ -134,8 +158,24 @@ public:
     static void WriteChildEffects(SkWriteBuffer& buffer,
                                   SkSpan<const SkRuntimeEffect::ChildPtr> children);
 
+    // Analysis from the runtime SkSL
+    static bool UsesSampleCoords(const SkRuntimeEffect* effect) {
+        return effect->usesSampleCoords();
+    }
+    static bool SamplesOutsideMain(const SkRuntimeEffect* effect) {
+        return effect->samplesOutsideMain();
+    }
     static bool UsesColorTransform(const SkRuntimeEffect* effect) {
         return effect->usesColorTransform();
+    }
+    static bool AlwaysOpaque(const SkRuntimeEffect* effect) {
+        return effect->alwaysOpaque();
+    }
+    static bool IsAlphaUnchanged(const SkRuntimeEffect* effect) {
+        return effect->isAlphaUnchanged();
+    }
+    static SkSL::SampleUsage ChildSampleUsage(const SkRuntimeEffect* effect, int child) {
+        return effect->fSampleUsages[child];
     }
 };
 
@@ -159,7 +199,7 @@ inline sk_sp<SkRuntimeEffect> SkMakeCachedRuntimeEffect(
 
 // Internal API that assumes (and asserts) that the shader code is valid, but does no internal
 // caching. Used when the caller will cache the result in a static variable. Ownership is passed to
-// the caller; the effect will be leaked if it the pointer is not stored or explicitly deleted.
+// the caller; the effect will be leaked if the pointer is not stored or explicitly deleted.
 inline SkRuntimeEffect* SkMakeRuntimeEffect(
         SkRuntimeEffect::Result (*make)(SkString, const SkRuntimeEffect::Options&),
         const char* sksl,
@@ -193,7 +233,8 @@ public:
                      s.fDstColorType,
                      s.fDstCS,
                      SkColors::kTransparent,
-                     s.fSurfaceProps}
+                     s.fSurfaceProps,
+                     s.fDstBounds}
             , fMatrix(m)
             , fChildren(c)
             , fSampleUsages(u) {}

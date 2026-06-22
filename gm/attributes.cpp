@@ -8,7 +8,7 @@
 #include "gm/gm.h"
 #include "include/core/SkPoint.h"
 #include "include/core/SkRect.h"
-#include "include/gpu/GrRecordingContext.h"
+#include "include/gpu/ganesh/GrRecordingContext.h"
 #include "src/core/SkCanvasPriv.h"
 #include "src/gpu/KeyBuilder.h"
 #include "src/gpu/ganesh/GrBuffer.h"
@@ -27,7 +27,7 @@
 #include "src/gpu/ganesh/glsl/GrGLSLVertexGeoBuilder.h"
 #include "src/gpu/ganesh/ops/GrDrawOp.h"
 #include "src/gpu/ganesh/ops/GrOp.h"
-#include "tools/gpu/ProxyUtils.h"
+#include "tools/ganesh/ProxyUtils.h"
 
 #include <memory>
 #include <vector>
@@ -201,7 +201,7 @@ private:
         context->priv().recordProgramInfo(fProgramInfo);
     }
 
-    template <typename V> void makeVB(GrOpFlushState* flushState, const SkRect rect) {
+    template <typename V> void makeVB(GrOpFlushState* flushState, const SkRect& rect) {
         V v[4];
         v[0].p = {rect.left() , rect.top()   };
         v[1].p = {rect.right(), rect.top()   };

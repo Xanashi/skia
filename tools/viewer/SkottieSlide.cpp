@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 Google Inc.
+ * Copyright 2017 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -12,17 +12,19 @@
 #include "include/core/SkCanvas.h"
 #include "include/core/SkFont.h"
 #include "include/core/SkFontMgr.h"
-#include "include/private/base/SkNoncopyable.h"
-#include "include/private/base/SkTPin.h"
+#include "include/private/SkNoncopyable.h"
+#include "include/private/SkTPin.h"
 #include "modules/audioplayer/SkAudioPlayer.h"
 #include "modules/skottie/include/Skottie.h"
 #include "modules/skottie/include/SkottieProperty.h"
 #include "modules/skottie/include/SlotManager.h"
+#include "modules/skottie/include/TextShaper.h"
 #include "modules/skottie/utils/SkottieUtils.h"
 #include "modules/skottie/utils/TextEditor.h"
 #include "modules/skresources/include/SkResources.h"
-#include "src/base/SkTime.h"
+#include "modules/skshaper/utils/FactoryHelpers.h"
 #include "src/core/SkOSFile.h"
+#include "src/core/SkTime.h"
 #include "src/utils/SkOSPath.h"
 #include "tools/Resources.h"
 #include "tools/fonts/FontToolUtils.h"
@@ -169,6 +171,21 @@ private:
     std::vector<std::unique_ptr<skottie::TextPropertyHandle>> fTextProps;
 };
 
+sk_sp<SkShapers::Factory> make_shapers_factory(bool prefer_coretext) {
+#if defined(SK_SHAPER_CORETEXT_AVAILABLE)
+    if (prefer_coretext) {
+        return sk_make_sp<SkShapers::CoreTextFactory>(SkShapers::CT::LineBreakMode::kStrict);
+    }
+#endif
+#if defined(SK_SHAPER_UNICODE_AVAILABLE)
+    return sk_make_sp<SkShapers::HarfbuzzFactory>(
+        skottie::MakeStrictLinebreakUnicode(
+            SkShapers::BestAvailableUnicode()));
+#else
+    return nullptr;
+#endif
+}
+
 } // namespace
 
 class SkottieSlide::TransformTracker : public skottie::PropertyObserver {
@@ -222,9 +239,9 @@ public:
                      * SkMatrix::Scale    (tprop.fScale.fX*0.01f, tprop.fScale.fY*0.01f)
                      * SkMatrix::Translate(tprop.fAnchorPoint.fX, tprop.fAnchorPoint.fY);
 
-        const auto viewer_matrix = SkMatrix::RectToRect(SkRect::MakeSize(anim_size),
-                                                        SkRect::MakeSize(win_size),
-                                                        SkMatrix::kCenter_ScaleToFit);
+        const auto viewer_matrix = SkMatrix::RectToRectOrIdentity(SkRect::MakeSize(anim_size),
+                                                                  SkRect::MakeSize(win_size),
+                                                                  SkMatrix::kCenter_ScaleToFit);
 
         SkAutoCanvasRestore acr(canvas, true);
         canvas->concat(viewer_matrix);
@@ -539,19 +556,34 @@ void SkottieSlide::init() {
            .setFontManager(ToolUtils::TestFontMgr())
            .setPrecompInterceptor(std::move(precomp_interceptor))
            .setResourceProvider(resource_provider)
-           .setPropertyObserver(text_tracker);
+           .setPropertyObserver(text_tracker)
+           .setTextShapingFactory(make_shapers_factory(fPreferCoretext));
 
     fAnimation = builder.makeFromFile(fPath.c_str());
     fAnimationStats = builder.getStats();
     fTimeBase       = 0; // force a time reset
 
-    if (!fSlotManagerInterface) {
-        fSlotManagerInterface = std::make_unique<SlotManagerInterface>(builder.getSlotManager(), resource_provider);
+    if (fAnimation) {
+        if (!fSlotManagerInterface) {
+            fSlotManagerInterface =
+                std::make_unique<SlotManagerInterface>(builder.getSlotManager(), resource_provider);
+        }
+
+        auto li = builder.getLayerInfo();
+
+        for (const auto& layer : li) {
+            SkDebugf(
+                "Layer: Name: \"%s\" | Size: %.2fx%.2f | In/Out: [%.2f, %.2f]\n",
+                layer.fName.c_str(),
+                layer.fSize.width(),
+                layer.fSize.height(),
+                layer.fInPoint,
+                layer.fOutPoint
+            );
     }
 
-    fSlotManagerInterface->initializeSlotManagerUI();
+        fSlotManagerInterface->initializeSlotManagerUI();
 
-    if (fAnimation) {
         fAnimation->seek(0);
         fFrameTimes.resize(SkScalarCeilToInt(fAnimation->duration() * fAnimation->fps()));
         SkDebugf("Loaded Bodymovin animation v: %s, size: [%f %f]\n",
@@ -610,8 +642,8 @@ void SkottieSlide::draw(SkCanvas* canvas) {
             draw_stats_box(canvas, fAnimationStats);
         }
         if (fShowAnimationInval) {
-            const auto t = SkMatrix::RectToRect(SkRect::MakeSize(fAnimation->size()), dstR,
-                                                SkMatrix::kCenter_ScaleToFit);
+            const auto t = SkMatrix::RectToRectOrIdentity(SkRect::MakeSize(fAnimation->size()), dstR,
+                                                          SkMatrix::kCenter_ScaleToFit);
             SkPaint fill, stroke;
             fill.setAntiAlias(true);
             fill.setColor(0x40ff0000);
@@ -679,6 +711,10 @@ bool SkottieSlide::onChar(SkUnichar c) {
     }
 
     switch (c) {
+    case 'C':
+        fPreferCoretext = !fPreferCoretext;
+        this->load(fWinSize.width(), fWinSize.height());
+        return true;
     case 'I':
         fShowAnimationStats = !fShowAnimationStats;
         return true;

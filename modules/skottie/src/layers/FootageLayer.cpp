@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Google Inc.
+ * Copyright 2019 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -12,7 +12,8 @@
 #include "include/core/SkSamplingOptions.h"
 #include "include/core/SkSize.h"
 #include "include/core/SkString.h"
-#include "include/private/base/SkAssert.h"
+#include "include/private/SkAssert.h"
+#include "modules/jsonreader/SkJSONReader.h"
 #include "modules/skottie/include/Skottie.h"
 #include "modules/skottie/include/SlotManager.h"
 #include "modules/skottie/src/SkottieJson.h"
@@ -23,7 +24,6 @@
 #include "modules/sksg/include/SkSGRenderNode.h"
 #include "modules/sksg/include/SkSGTransform.h"
 #include "src/core/SkTHash.h"
-#include "src/utils/SkJSON.h"
 
 #include <utility>
 
@@ -39,9 +39,9 @@ SkMatrix image_matrix(const ImageAsset::FrameData& frame_data, const SkISize& de
 
     const auto size_fit_matrix = frame_data.scaling == ImageAsset::SizeFit::kNone
             ? SkMatrix::I()
-            : SkMatrix::RectToRect(SkRect::Make(frame_data.image->bounds()),
-                                   SkRect::Make(dest_size),
-                                   static_cast<SkMatrix::ScaleToFit>(frame_data.scaling));
+            : SkMatrix::RectToRectOrIdentity(SkRect::Make(frame_data.image->bounds()),
+                                             SkRect::Make(dest_size),
+                                             static_cast<SkMatrix::ScaleToFit>(frame_data.scaling));
 
     return frame_data.matrix * size_fit_matrix;
 }

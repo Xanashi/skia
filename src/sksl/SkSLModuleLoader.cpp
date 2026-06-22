@@ -4,11 +4,12 @@
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
+
 #include "src/sksl/SkSLModuleLoader.h"
 
 #include "include/core/SkTypes.h"
-#include "include/private/base/SkMutex.h"
-#include "src/base/SkNoDestructor.h"
+#include "include/private/SkMutex.h"
+#include "src/core/SkNoDestructor.h"
 #include "src/sksl/SkSLBuiltinTypes.h"
 #include "src/sksl/SkSLCompiler.h"
 #include "src/sksl/SkSLModule.h"
@@ -28,7 +29,7 @@
 #include <utility>
 #include <vector>
 
-#define MODULE_DATA(type) ModuleType::type, #type, GetModuleData(ModuleType::type, #type ".sksl")
+#define MODULE_DATA(type) ModuleType::type, GetModuleData(ModuleType::type, #type ".sksl")
 
 namespace SkSL {
 
@@ -56,7 +57,7 @@ static constexpr BuiltinTypePtr kRootTypes[] = {
     TYPE(SquareMat), TYPE(SquareHMat),
     TYPE(Mat),       TYPE(HMat),
 
-    // TODO(skia:12349): generic short/ushort
+    // TODO(skbug.com/40043431): generic short/ushort
     TYPE(GenType),   TYPE(GenIType), TYPE(GenUType),
     TYPE(GenHType),   /* (GenSType)      (GenUSType) */
     TYPE(GenBType),
@@ -107,8 +108,6 @@ struct ModuleLoader::Impl {
     std::unique_ptr<const Module> fComputeModule;           // [GPU] + Compute stage decls
     std::unique_ptr<const Module> fGraphiteVertexModule;    // [Vert] + Graphite vertex helpers
     std::unique_ptr<const Module> fGraphiteFragmentModule;  // [Frag] + Graphite fragment helpers
-    std::unique_ptr<const Module> fGraphiteVertexES2Module; // [Vert] + Graphite vertex ES2 helpers
-    std::unique_ptr<const Module> fGraphiteFragmentES2Module;//[Frag] + Graphite fragment ES2 "  "
 
     std::unique_ptr<const Module> fPublicModule;            // [Shared] minus Private types +
                                                             //     Runtime effect intrinsics
@@ -147,19 +146,16 @@ ModuleLoader::Impl::Impl() {
 static std::unique_ptr<Module> compile_and_shrink(SkSL::Compiler* compiler,
                                                   ProgramKind kind,
                                                   ModuleType moduleType,
-                                                  const char* moduleName,
                                                   std::string moduleSource,
                                                   const Module* parent) {
     std::unique_ptr<Module> m = compiler->compileModule(kind,
-                                                        moduleName,
+                                                        moduleType,
                                                         std::move(moduleSource),
                                                         parent,
                                                         /*shouldInline=*/true);
     if (!m) {
-        SK_ABORT("Unable to load module %s", moduleName);
+        SK_ABORT("Unable to load module %s", ModuleTypeToString(moduleType));
     }
-
-    m->fModuleType = moduleType;
 
     // We can eliminate FunctionPrototypes without changing the meaning of the module; the function
     // declaration is still safely in the symbol table. This only impacts our ability to recreate
@@ -320,7 +316,6 @@ const Module* ModuleLoader::loadComputeModule(SkSL::Compiler* compiler) {
 }
 
 const Module* ModuleLoader::loadGraphiteFragmentModule(SkSL::Compiler* compiler) {
-#if defined(SK_GRAPHITE)
     if (!fModuleLoader.fGraphiteFragmentModule) {
         const Module* fragmentModule = this->loadFragmentModule(compiler);
         fModuleLoader.fGraphiteFragmentModule = compile_and_shrink(compiler,
@@ -329,29 +324,9 @@ const Module* ModuleLoader::loadGraphiteFragmentModule(SkSL::Compiler* compiler)
                                                                    fragmentModule);
     }
     return fModuleLoader.fGraphiteFragmentModule.get();
-#else
-    return this->loadFragmentModule(compiler);
-#endif
-}
-
-const Module* ModuleLoader::loadGraphiteFragmentES2Module(SkSL::Compiler* compiler) {
-#if defined(SK_GRAPHITE)
-    if (!fModuleLoader.fGraphiteFragmentES2Module) {
-        const Module* fragmentModule = this->loadFragmentModule(compiler);
-        fModuleLoader.fGraphiteFragmentES2Module =
-                compile_and_shrink(compiler,
-                                   ProgramKind::kGraphiteFragmentES2,
-                                   MODULE_DATA(sksl_graphite_frag_es2),
-                                   fragmentModule);
-    }
-    return fModuleLoader.fGraphiteFragmentES2Module.get();
-#else
-    return this->loadFragmentModule(compiler);
-#endif
 }
 
 const Module* ModuleLoader::loadGraphiteVertexModule(SkSL::Compiler* compiler) {
-#if defined(SK_GRAPHITE)
     if (!fModuleLoader.fGraphiteVertexModule) {
         const Module* vertexModule = this->loadVertexModule(compiler);
         fModuleLoader.fGraphiteVertexModule = compile_and_shrink(compiler,
@@ -360,25 +335,6 @@ const Module* ModuleLoader::loadGraphiteVertexModule(SkSL::Compiler* compiler) {
                                                                  vertexModule);
     }
     return fModuleLoader.fGraphiteVertexModule.get();
-#else
-    return this->loadVertexModule(compiler);
-#endif
-}
-
-const Module* ModuleLoader::loadGraphiteVertexES2Module(SkSL::Compiler* compiler) {
-#if defined(SK_GRAPHITE)
-    if (!fModuleLoader.fGraphiteVertexES2Module) {
-        const Module* vertexModule = this->loadVertexModule(compiler);
-        fModuleLoader.fGraphiteVertexES2Module =
-                compile_and_shrink(compiler,
-                                   ProgramKind::kGraphiteVertexES2,
-                                   MODULE_DATA(sksl_graphite_vert_es2),
-                                   vertexModule);
-    }
-    return fModuleLoader.fGraphiteVertexES2Module.get();
-#else
-    return this->loadVertexModule(compiler);
-#endif
 }
 
 void ModuleLoader::Impl::makeRootSymbolTable() {

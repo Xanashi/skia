@@ -23,12 +23,12 @@ void SkSVGMarker::onSetAttribute(SkSVGAttribute attr, const SkSVGValue& v) {
     switch (attr) {
         case SkSVGAttribute::kViewBox:
             if (const auto* vb = v.as<SkSVGViewBoxValue>()) {
-                this->setViewBox(*vb);
+                this->setViewBox(SkSVGViewBoxType(*vb));
             }
             break;
         case SkSVGAttribute::kPreserveAspectRatio:
             if (const auto* par = v.as<SkSVGPreserveAspectRatioValue>()) {
-                this->setPreserveAspectRatio(*par);
+                this->setPreserveAspectRatio(SkSVGPreserveAspectRatio(*par));
             }
             break;
         default:

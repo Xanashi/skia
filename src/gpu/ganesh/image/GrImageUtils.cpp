@@ -21,13 +21,13 @@
 #include "include/core/SkYUVAInfo.h"
 #include "include/core/SkYUVAPixmaps.h"
 #include "include/gpu/GpuTypes.h"
-#include "include/gpu/GrBackendSurface.h"
-#include "include/gpu/GrContextOptions.h"
-#include "include/gpu/GrRecordingContext.h"
-#include "include/gpu/GrTypes.h"
+#include "include/gpu/ganesh/GrBackendSurface.h"
+#include "include/gpu/ganesh/GrContextOptions.h"
+#include "include/gpu/ganesh/GrRecordingContext.h"
+#include "include/gpu/ganesh/GrTypes.h"
 #include "include/gpu/ganesh/SkSurfaceGanesh.h"
 #include "include/private/SkIDChangeListener.h"
-#include "include/private/base/SkMutex.h"
+#include "include/private/SkMutex.h"
 #include "include/private/gpu/ganesh/GrImageContext.h"
 #include "include/private/gpu/ganesh/GrTextureGenerator.h"
 #include "include/private/gpu/ganesh/GrTypesPriv.h"
@@ -53,10 +53,12 @@
 #include "src/gpu/ganesh/GrThreadSafeCache.h"
 #include "src/gpu/ganesh/GrYUVATextureProxies.h"
 #include "src/gpu/ganesh/SkGr.h"
+#include "src/gpu/ganesh/SurfaceDrawContext.h"
 #include "src/gpu/ganesh/SurfaceFillContext.h"
 #include "src/gpu/ganesh/effects/GrBicubicEffect.h"
 #include "src/gpu/ganesh/effects/GrTextureEffect.h"
 #include "src/gpu/ganesh/effects/GrYUVtoRGBEffect.h"
+#include "src/gpu/ganesh/image/GrMippedBitmap.h"
 #include "src/gpu/ganesh/image/SkImage_Ganesh.h"
 #include "src/gpu/ganesh/image/SkImage_GaneshBase.h"
 #include "src/gpu/ganesh/image/SkImage_RasterPinnable.h"
@@ -74,15 +76,7 @@ class SkMatrix;
 class SkSurfaceProps;
 enum SkColorType : int;
 
-#if defined(SK_USE_LEGACY_BLUR_GANESH)
-#include "include/core/SkPoint.h"
-#include "include/core/SkScalar.h"
-#include "src/core/SkSpecialImage.h"
-#include "src/gpu/ganesh/GrBlurUtils.h"
-#include "src/gpu/ganesh/SurfaceDrawContext.h"
-#else
 class SkSpecialImage;
-#endif
 
 namespace skgpu::ganesh {
 
@@ -115,15 +109,18 @@ std::tuple<GrSurfaceProxyView, GrColorType> RasterAsView(GrRecordingContext* rCo
             mipmapped = skgpu::Mipmapped::kYes;
         }
         return GrMakeCachedBitmapProxyView(rContext,
-                                           raster->bitmap(),
+                                           GrMippedBitmap(raster->bitmap(), raster->refMips()),
                                            /*label=*/"TextureForImageRasterWithPolicyEqualKDraw",
                                            mipmapped);
     }
     auto budgeted = (policy == GrImageTexGenPolicy::kNew_Uncached_Unbudgeted)
                             ? skgpu::Budgeted::kNo
                             : skgpu::Budgeted::kYes;
-    return GrMakeUncachedBitmapProxyView(
-            rContext, raster->bitmap(), mipmapped, SkBackingFit::kExact, budgeted);
+    return GrMakeUncachedBitmapProxyView(rContext,
+                                         GrMippedBitmap(raster->bitmap(), raster->refMips()),
+                                         mipmapped,
+                                         SkBackingFit::kExact,
+                                         budgeted);
 }
 
 // Returns the GrColorType to use with the GrTextureProxy returned from lockTextureProxy. This
@@ -180,20 +177,21 @@ static GrSurfaceProxyView texture_proxy_view_from_planes(GrRecordingContext* ctx
             SkASSERT(cachedData);
             cachedData->unref();
         };
-        SkBitmap bitmap;
-        bitmap.installPixels(yuvaPixmaps.plane(i).info(),
-                             yuvaPixmaps.plane(i).writable_addr(),
-                             yuvaPixmaps.plane(i).rowBytes(),
-                             releaseProc,
-                             SkRef(dataStorage.get()));
-        bitmap.setImmutable();
-
+        std::optional<GrMippedBitmap> bitmap =
+                GrMippedBitmap::Make(yuvaPixmaps.plane(i).info(),
+                                     yuvaPixmaps.plane(i).writable_addr(),
+                                     yuvaPixmaps.plane(i).rowBytes(),
+                                     releaseProc,
+                                     SkRef(dataStorage.get()));
+        if (!bitmap) {
+            return {};
+        }
+        pixmapColorTypes[i] = SkColorTypeToGrColorType(bitmap->colorType());
         std::tie(views[i], std::ignore) =
-                GrMakeUncachedBitmapProxyView(ctx, bitmap, skgpu::Mipmapped::kNo, fit);
+                GrMakeUncachedBitmapProxyView(ctx, bitmap.value(), skgpu::Mipmapped::kNo, fit);
         if (!views[i]) {
             return {};
         }
-        pixmapColorTypes[i] = SkColorTypeToGrColorType(bitmap.colorType());
     }
 
     // TODO: investigate preallocating mip maps here
@@ -267,7 +265,9 @@ static GrSurfaceProxyView generate_picture_texture(GrRecordingContext* ctx,
         return {};
     }
 
-    auto [view, ct] = AsView(ctx, image, mipmapped);
+    // The surface the image was created from is only local to this function so there will not be a
+    // need for a copy when getting the view of the image for a future draw.
+    auto [view, ct] = AsView(ctx, image, mipmapped, /*targetSurface=*/nullptr);
     SkASSERT(view);
     SkASSERT(mipmapped == skgpu::Mipmapped::kNo ||
              view.asTextureProxy()->mipmapped() == skgpu::Mipmapped::kYes);
@@ -322,7 +322,7 @@ GrSurfaceProxyView LockTextureProxyView(GrRecordingContext* rContext,
                 if (!mippedView) {
                     // We failed to make a mipped proxy with the base copied into it. This could
                     // have been from failure to make the proxy or failure to do the copy. Thus we
-                    // will fall back to just using the non mipped proxy; See skbug.com/7094.
+                    // will fall back to just using the non mipped proxy; See skbug.com/40038328.
                     return view;
                 }
                 proxyProvider->removeUniqueKeyFromProxy(view.asTextureProxy());
@@ -342,6 +342,9 @@ GrSurfaceProxyView LockTextureProxyView(GrRecordingContext* rContext,
                 installKey(view);
                 return view;
             }
+            // The fallback for this would be to generate a bitmap, but some picture-backed
+            // images can only be played back on the GPU.
+            return {};
         } else if (img->generator()->isTextureGenerator()) {
             auto sharedGenerator = img->generator();
             SkAutoMutexExclusive mutex(sharedGenerator->fMutex);
@@ -381,11 +384,13 @@ GrSurfaceProxyView LockTextureProxyView(GrRecordingContext* rContext,
         auto budgeted = texGenPolicy == GrImageTexGenPolicy::kNew_Uncached_Unbudgeted
                                 ? skgpu::Budgeted::kNo
                                 : skgpu::Budgeted::kYes;
-        auto view = std::get<0>(GrMakeUncachedBitmapProxyView(rContext,
-                                                              bitmap,
-                                                              mipmapped,
-                                                              SkBackingFit::kExact,
-                                                              budgeted));
+
+        auto view = std::get<0>(
+                GrMakeUncachedBitmapProxyView(rContext,
+                                              GrMippedBitmap(bitmap, as_IB(img)->refMips()),
+                                              mipmapped,
+                                              SkBackingFit::kExact,
+                                              budgeted));
         if (view) {
             installKey(view);
             return view;
@@ -406,6 +411,7 @@ static std::tuple<GrSurfaceProxyView, GrColorType> lazy_as_view(GrRecordingConte
 std::tuple<GrSurfaceProxyView, GrColorType> AsView(GrRecordingContext* rContext,
                                                    const SkImage* img,
                                                    skgpu::Mipmapped mipmapped,
+                                                   GrRenderTargetProxy* targetSurface,
                                                    GrImageTexGenPolicy policy) {
     SkASSERT(img);
     if (!rContext) {
@@ -424,7 +430,7 @@ std::tuple<GrSurfaceProxyView, GrColorType> AsView(GrRecordingContext* rContext,
         return rp->asView(rContext, mipmapped, policy);
     } else if (ib->isGaneshBacked()) {
         auto gb = static_cast<const SkImage_GaneshBase*>(img);
-        return gb->asView(rContext, mipmapped, policy);
+        return gb->asView(rContext, mipmapped, policy, targetSurface);
     } else if (ib->isLazyGenerated()) {
         return lazy_as_view(rContext, static_cast<const SkImage_Lazy*>(ib), mipmapped, policy);
     }
@@ -515,7 +521,7 @@ std::unique_ptr<GrFragmentProcessor> raster_as_fp(GrRecordingContext* rContext,
     auto mm =
             sampling.mipmap == SkMipmapMode::kNone ? skgpu::Mipmapped::kNo : skgpu::Mipmapped::kYes;
     return make_fp_from_view(rContext,
-                             std::get<0>(AsView(rContext, img, mm)),
+                             std::get<0>(AsView(rContext, img, mm, /*targetSurface=*/nullptr)),
                              img->alphaType(),
                              sampling,
                              tileModes,
@@ -524,13 +530,17 @@ std::unique_ptr<GrFragmentProcessor> raster_as_fp(GrRecordingContext* rContext,
                              domain);
 }
 
-std::unique_ptr<GrFragmentProcessor> AsFragmentProcessor(GrRecordingContext* rContext,
+std::unique_ptr<GrFragmentProcessor> AsFragmentProcessor(SurfaceDrawContext* sdc,
                                                          const SkImage* img,
                                                          SkSamplingOptions sampling,
                                                          const SkTileMode tileModes[2],
                                                          const SkMatrix& m,
                                                          const SkRect* subset,
                                                          const SkRect* domain) {
+    if (!sdc) {
+        return {};
+    }
+    GrRecordingContext* rContext = sdc->recordingContext();
     if (!rContext) {
         return {};
     }
@@ -553,13 +563,15 @@ std::unique_ptr<GrFragmentProcessor> AsFragmentProcessor(GrRecordingContext* rCo
                             domain);
     } else if (ib->isGaneshBacked()) {
         auto gb = static_cast<const SkImage_GaneshBase*>(img);
-        return gb->asFragmentProcessor(rContext, sampling, tileModes, m, subset, domain);
+        return gb->asFragmentProcessor(sdc, sampling, tileModes, m, subset, domain);
     } else if (ib->isLazyGenerated()) {
         // TODO: If the CPU data is extracted as planes return a FP that reconstructs the image from
         // the planes.
-        auto mm = sampling.mipmap == SkMipmapMode::kNone ? skgpu::Mipmapped::kNo : skgpu::Mipmapped::kYes;
+        auto mm = sampling.mipmap == SkMipmapMode::kNone ? skgpu::Mipmapped::kNo
+                                                         : skgpu::Mipmapped::kYes;
+        auto rtp = sdc->asRenderTargetProxy();
         return MakeFragmentProcessorFromView(rContext,
-                                             std::get<0>(AsView(rContext, img, mm)),
+                                             std::get<0>(AsView(rContext, img, mm, rtp)),
                                              img->alphaType(),
                                              sampling,
                                              tileModes,
@@ -671,8 +683,7 @@ GrSurfaceProxyView FindOrMakeCachedMipmappedView(GrRecordingContext* rContext,
     SkASSERT(baseKey.isValid());
     skgpu::UniqueKey mipmappedKey;
     static const skgpu::UniqueKey::Domain kMipmappedDomain = skgpu::UniqueKey::GenerateDomain();
-    {  // No extra values beyond the domain are required. Must name the var to please
-       // clang-tidy.
+    {  // No extra values beyond the domain are required. Must name the var to please clang-tidy.
         skgpu::UniqueKey::Builder b(&mipmappedKey, baseKey, kMipmappedDomain, 0);
     }
     SkASSERT(mipmappedKey.isValid());
@@ -723,11 +734,7 @@ namespace {
 
 class GaneshBackend :
         public Backend,
-#if defined(SK_USE_LEGACY_BLUR_GANESH)
-        private SkBlurEngine::Algorithm,
-#else
         private SkShaderBlurAlgorithm,
-#endif
         private SkBlurEngine {
 public:
 
@@ -776,7 +783,8 @@ public:
 
         auto view = threadSafeCache->find(key);
         if (!view) {
-            view = std::get<0>(GrMakeUncachedBitmapProxyView(fContext.get(), data));
+            view = std::get<0>(GrMakeUncachedBitmapProxyView(
+                    fContext.get(), GrMippedBitmap(data)));
             if (!view) {
                 return nullptr;
             }
@@ -798,65 +806,6 @@ public:
         return this;
     }
 
-#if defined(SK_USE_LEGACY_BLUR_GANESH)
-    // NOTE: When SK_USE_LEGACY_BLUR_GANESH is defined, `useLegacyFilterResultBlur()` returns true,
-    // so FilterResult::blur() will resolve all tiling in the original image space before calling
-    // into this function that routes to GrBlurUtils::GaussianBlur to perform the rescaling and
-    // blurring. It is possible ot restore original GrBlurUtils performance by just having
-    // `useLegacyFilterResultBlur()` return false but still reporting a max sigma of infinity and
-    // advertising support for all tile modes.
-    //
-    // Since all clients are currently rebased on the intermediate "legacy" blur approach, the ideal
-    // step would be to just migrate them to the SkShaderBlurAlgorithm variant instead of first
-    // going back to pure GrBlurUtils. But if needed for cherry-picking to old releases, the
-    // original GrBlurUtils behavior can be achieved quikly.
-
-    // SkBlurEngine::Algorithm
-    float maxSigma() const override {
-        // GrBlurUtils handles resizing at the moment
-        return SK_ScalarInfinity;
-    }
-
-    bool supportsOnlyDecalTiling() const override { return false; }
-
-    sk_sp<SkSpecialImage> blur(SkSize sigma,
-                               sk_sp<SkSpecialImage> input,
-                               const SkIRect& srcRect,
-                               SkTileMode tileMode,
-                               const SkIRect& dstRect) const override {
-        GrSurfaceProxyView inputView = SkSpecialImages::AsView(fContext.get(), input);
-        if (!inputView.proxy()) {
-            return nullptr;
-        }
-        SkASSERT(inputView.asTextureProxy());
-
-        // Update srcRect and dstRect to be relative to the underlying texture proxy of 'input'.
-        auto proxyOffset = input->subset().topLeft() - srcRect.topLeft();
-        auto sdc = GrBlurUtils::GaussianBlur(
-                fContext.get(),
-                std::move(inputView),
-                SkColorTypeToGrColorType(input->colorType()),
-                input->alphaType(),
-                sk_ref_sp(input->getColorSpace()),
-                dstRect.makeOffset(proxyOffset),
-                srcRect.makeOffset(proxyOffset),
-                sigma.width(),
-                sigma.height(),
-                tileMode);
-        if (!sdc) {
-            return nullptr;
-        }
-
-        return SkSpecialImages::MakeDeferredFromGpu(fContext.get(),
-                                                    SkIRect::MakeSize(dstRect.size()),
-                                                    kNeedNewImageUniqueID_SpecialImage,
-                                                    sdc->readSurfaceView(),
-                                                    sdc->colorInfo(),
-                                                    this->surfaceProps());
-    }
-#else
-    bool useLegacyFilterResultBlur() const override { return false; }
-
     // SkShaderBlurAlgorithm
     sk_sp<SkDevice> makeDevice(const SkImageInfo& imageInfo) const override {
         return fContext->priv().createDevice(skgpu::Budgeted::kYes,
@@ -869,8 +818,6 @@ public:
                                              this->surfaceProps(),
                                              skgpu::ganesh::Device::InitContents::kUninit);
     }
-
-#endif
 
 private:
     sk_sp<GrRecordingContext> fContext;

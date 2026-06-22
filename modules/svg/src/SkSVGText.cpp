@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Google Inc.
+ * Copyright 2019 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -15,15 +15,36 @@
 #include "include/core/SkFont.h"
 #include "include/core/SkFontMgr.h"
 #include "include/core/SkFontStyle.h"
+#include "include/core/SkFontTypes.h"
+#include "include/core/SkMatrix.h"
+#include "include/core/SkPaint.h"
 #include "include/core/SkPathBuilder.h"
+#include "include/core/SkPoint.h"
 #include "include/core/SkRSXform.h"
+#include "include/core/SkScalar.h"
 #include "include/core/SkString.h"
+#include "include/core/SkTextBlob.h"
+#include "include/core/SkTypeface.h"
+#include "include/core/SkTypes.h"
+#include "include/private/SkTArray.h"
+#include "include/private/SkTemplates.h"
+#include "include/private/SkTo.h"
 #include "modules/skshaper/include/SkShaper.h"
+#include "modules/svg/include/SkSVGAttribute.h"
+#include "modules/svg/include/SkSVGAttributeParser.h"
 #include "modules/svg/include/SkSVGRenderContext.h"
-#include "modules/svg/include/SkSVGValue.h"
 #include "modules/svg/src/SkSVGTextPriv.h"
-#include "src/base/SkUTF.h"
 #include "src/core/SkTextBlobPriv.h"
+#include "src/core/SkUTF.h"
+
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <functional>
+#include <limits>
+#include <memory>
+#include <tuple>
+#include <utility>
 
 using namespace skia_private;
 
@@ -495,8 +516,7 @@ SkRSXform SkSVGTextContext::computeGlyphXform(SkGlyphID glyph, const SkFont& fon
     // (https://www.w3.org/TR/SVG11/text.html#TextpathLayoutRules)
 
     // Path positioning is based on the glyph center (horizontal component).
-    float glyph_width;
-    font.getWidths(&glyph, 1, &glyph_width);
+    float glyph_width = font.getWidth(glyph);
     auto path_offset = pos.fX + glyph_width * .5f;
 
     // In addition to the path matrix, the final glyph matrix also includes:
@@ -539,8 +559,8 @@ SkShaper::RunHandler::Buffer SkSVGTextContext::runBuffer(const RunInfo& ri) {
 
     fRuns.push_back({
         ri.fFont,
-        fCurrentFill.isValid()   ? std::make_unique<SkPaint>(*fCurrentFill)   : nullptr,
-        fCurrentStroke.isValid() ? std::make_unique<SkPaint>(*fCurrentStroke) : nullptr,
+        fCurrentFill.has_value()   ? std::make_unique<SkPaint>(*fCurrentFill)   : nullptr,
+        fCurrentStroke.has_value() ? std::make_unique<SkPaint>(*fCurrentStroke) : nullptr,
         std::make_unique<SkGlyphID[]         >(ri.glyphCount),
         std::make_unique<SkPoint[]           >(ri.glyphCount),
         std::make_unique<PositionAdjustment[]>(ri.glyphCount),
@@ -670,7 +690,7 @@ void SkSVGText::onRender(const SkSVGRenderContext& ctx) const {
     this->onShapeText(ctx, &tctx, this->getXmlSpace());
 }
 
-SkRect SkSVGText::onObjectBoundingBox(const SkSVGRenderContext& ctx) const {
+SkRect SkSVGText::onTransformableObjectBoundingBox(const SkSVGRenderContext& ctx) const {
     SkRect bounds = SkRect::MakeEmpty();
 
     SkSVGRenderContext localContext(ctx);
@@ -686,8 +706,9 @@ SkRect SkSVGText::onObjectBoundingBox(const SkSVGRenderContext& ctx) const {
             AutoSTArray<64, SkRect> glyphBounds;
 
             for (SkTextBlobRunIterator it(blob.get()); !it.done(); it.next()) {
-                glyphBounds.reset(SkToInt(it.glyphCount()));
-                it.font().getBounds(it.glyphs(), it.glyphCount(), glyphBounds.get(), nullptr);
+                const auto nglyphs = it.glyphCount();
+                glyphBounds.reset(SkToInt(nglyphs));
+                it.font().getBounds({it.glyphs(), nglyphs}, {glyphBounds.get(), nglyphs}, nullptr);
 
                 SkASSERT(it.positioning() == SkTextBlobRunIterator::kRSXform_Positioning);
                 SkMatrix m;
@@ -722,9 +743,9 @@ SkPath SkSVGText::onAsPath(const SkSVGRenderContext& ctx) const {
                     const SkRSXform* xform;
                 } get_paths_ctx {builder, it.xforms()};
 
-                it.font().getPaths(it.glyphs(), it.glyphCount(), [](const SkPath* path,
-                                                                    const SkMatrix& matrix,
-                                                                    void* raw_ctx) {
+                it.font().getPaths({it.glyphs(), it.glyphCount()}, [](const SkPath* path,
+                                                                      const SkMatrix& matrix,
+                                                                      void* raw_ctx) {
                     auto* get_paths_ctx = static_cast<GetPathsCtx*>(raw_ctx);
                     const auto& glyph_rsx = *get_paths_ctx->xform++;
 
@@ -746,10 +767,7 @@ SkPath SkSVGText::onAsPath(const SkSVGRenderContext& ctx) const {
         this->onShapeText(ctx, &tctx, this->getXmlSpace());
     }
 
-    auto path = builder.detach();
-    this->mapToParent(&path);
-
-    return path;
+    return this->mapToParent(builder.detach());
 }
 
 void SkSVGTextPath::onShapeText(const SkSVGRenderContext& ctx, SkSVGTextContext* parent_tctx,

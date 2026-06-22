@@ -7,12 +7,8 @@
 #pragma once
 
 #include "include/core/SkString.h"
-#include "include/private/base/SkTArray.h"
+#include "include/private/SkTArray.h"
 #include "tools/flags/CommandLineFlags.h"
-
-namespace skgpu::graphite {
-struct ContextOptions;
-};
 
 namespace CommonFlags {
 /**
@@ -29,20 +25,5 @@ namespace CommonFlags {
  */
 bool CollectImages(const CommandLineFlags::StringArray& dir,
                    skia_private::TArray<SkString>* output);
-/**
- *  Helper to set GrContextOptions from common GPU flags, including
- *     --gpuThreads
- *     --cachePathMasks
- *     --allPathsVolatile
- *     --(no)gs
- *     --(no)ts
- *     --pr
- *     --internalSamples
- *     --disableDriverCorrectnessWorkarounds
- *     --reduceOpsTaskSplitting
- *     --dontReduceOpsTaskSplitting
- *     --allowMSAAOnNewIntel
- */
-void SetCtxOptions(struct GrContextOptions*);
 
 }  // namespace CommonFlags

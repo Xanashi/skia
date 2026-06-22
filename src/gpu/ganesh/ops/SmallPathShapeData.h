@@ -1,19 +1,27 @@
 /*
- * Copyright 2020 Google Inc.
+ * Copyright 2020 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
-
 #ifndef SmallPathShapeData_DEFINED
 #define SmallPathShapeData_DEFINED
 
+#include "include/core/SkTypes.h"
+
 #if !defined(SK_ENABLE_OPTIMIZE_SIZE)
 
+#include "include/core/SkRect.h"
+#include "include/private/SkTemplates.h"
 #include "src/core/SkChecksum.h"
-#include "src/gpu/ganesh/GrDrawOpAtlas.h"
+#include "src/core/SkTInternalLList.h"
+#include "src/gpu/ganesh/GrAtlasTypes.h"
+
+#include <cstdint>
+#include <cstring>
 
 class GrStyledShape;
+class SkMatrix;
 
 namespace skgpu::ganesh {
 
@@ -54,7 +62,7 @@ public:
 
     const SmallPathShapeDataKey fKey;
     SkRect                      fBounds;
-    skgpu::AtlasLocator         fAtlasLocator;
+    GrAtlasLocator              fAtlasLocator;
 
     SK_DECLARE_INTERNAL_LLIST_INTERFACE(SmallPathShapeData);
 

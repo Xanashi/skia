@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 Google Inc.
+ * Copyright 2017 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -10,11 +10,12 @@
 
 #include "include/core/SkTextureCompressionType.h"
 #include "include/gpu/GpuTypes.h"
-#include "include/gpu/GrBackendSurface.h"
-#include "include/gpu/GrTypes.h"
-#include "include/gpu/mock/GrMockTypes.h"
-#include "include/private/base/SkAssert.h"
-#include "include/private/base/SkMath.h"
+#include "include/gpu/ganesh/GrBackendSurface.h"
+#include "include/gpu/ganesh/GrTypes.h"
+#include "include/gpu/ganesh/mock/GrMockBackendSurface.h"
+#include "include/gpu/ganesh/mock/GrMockTypes.h"
+#include "include/private/SkAssert.h"
+#include "include/private/SkMath.h"
 #include "include/private/gpu/ganesh/GrTypesPriv.h"
 #include "src/gpu/Swizzle.h"
 #include "src/gpu/ganesh/GrCaps.h"
@@ -63,22 +64,22 @@ public:
     }
 
     bool isFormatSRGB(const GrBackendFormat& format) const override {
-        SkTextureCompressionType compression = format.asMockCompressionType();
+        SkTextureCompressionType compression = GrBackendFormats::AsMockCompressionType(format);
         if (compression != SkTextureCompressionType::kNone) {
             return false;
         }
 
-        auto ct = format.asMockColorType();
+        auto ct = GrBackendFormats::AsMockColorType(format);
         return GrGetColorTypeDesc(ct).encoding() == GrColorTypeEncoding::kSRGBUnorm;
     }
 
     bool isFormatTexturable(const GrBackendFormat& format, GrTextureType) const override {
-        SkTextureCompressionType compression = format.asMockCompressionType();
+        SkTextureCompressionType compression = GrBackendFormats::AsMockCompressionType(format);
         if (compression != SkTextureCompressionType::kNone) {
             return fOptions.fCompressedOptions[(int)compression].fTexturable;
         }
 
-        auto index = static_cast<int>(format.asMockColorType());
+        auto index = static_cast<int>(GrBackendFormats::AsMockColorType(format));
         return fOptions.fConfigOptions[index].fTexturable;
     }
 
@@ -88,33 +89,37 @@ public:
 
     bool isFormatAsColorTypeRenderable(GrColorType ct, const GrBackendFormat& format,
                                        int sampleCount = 1) const override {
-        // Currently we don't allow RGB_888X to be renderable because we don't have a way to
-        // handle blends that reference dst alpha when the values in the dst alpha channel are
-        // uninitialized.
-        if (ct == GrColorType::kRGB_888x) {
+        // Currently we don't allow RGB_888X, RGB_F16F16F16x, or RGB_101010x to
+        // be renderable because we don't have a way to handle blends that
+        // reference dst alpha when the values in the dst alpha channel are uninitialized.
+        if (ct == GrColorType::kRGB_888x ||
+            ct == GrColorType::kRGB_F16F16F16x ||
+            ct == GrColorType::kRGB_101010x) {
             return false;
         }
         return this->isFormatRenderable(format, sampleCount);
     }
 
     bool isFormatRenderable(const GrBackendFormat& format, int sampleCount) const override {
-        if (format.asMockCompressionType() != SkTextureCompressionType::kNone) {
+        if (GrBackendFormats::AsMockCompressionType(format) != SkTextureCompressionType::kNone) {
             return false;  // compressed formats are never renderable
         }
 
-        return sampleCount <= this->maxRenderTargetSampleCount(format.asMockColorType());
+        return sampleCount <=
+               this->maxRenderTargetSampleCount(GrBackendFormats::AsMockColorType(format));
     }
 
     int getRenderTargetSampleCount(int requestCount, GrColorType) const;
 
     int getRenderTargetSampleCount(int requestCount,
                                    const GrBackendFormat& format) const override {
-        SkTextureCompressionType compression = format.asMockCompressionType();
+        SkTextureCompressionType compression = GrBackendFormats::AsMockCompressionType(format);
         if (compression != SkTextureCompressionType::kNone) {
             return 0; // no compressed format is renderable
         }
 
-        return this->getRenderTargetSampleCount(requestCount, format.asMockColorType());
+        return this->getRenderTargetSampleCount(requestCount,
+                                                GrBackendFormats::AsMockColorType(format));
     }
 
     int maxRenderTargetSampleCount(GrColorType ct) const {
@@ -130,12 +135,12 @@ public:
     }
 
     int maxRenderTargetSampleCount(const GrBackendFormat& format) const override {
-        SkTextureCompressionType compression = format.asMockCompressionType();
+        SkTextureCompressionType compression = GrBackendFormats::AsMockCompressionType(format);
         if (compression != SkTextureCompressionType::kNone) {
             return 0; // no compressed format is renderable
         }
 
-        return this->maxRenderTargetSampleCount(format.asMockColorType());
+        return this->maxRenderTargetSampleCount(GrBackendFormats::AsMockColorType(format));
     }
 
     SupportedWrite supportedWritePixelsColorType(GrColorType surfaceColorType,
@@ -164,7 +169,7 @@ public:
                            const GrProgramInfo&,
                            ProgramDescOverrideFlags) const override;
 
-#if defined(GR_TEST_UTILS)
+#if defined(GPU_TEST_UTILS)
     std::vector<GrTest::TestFormatColorTypeCombination> getTestingCombinations() const override;
 #endif
 
@@ -178,7 +183,7 @@ private:
         return true;
     }
     GrBackendFormat onGetDefaultBackendFormat(GrColorType ct) const override {
-        return GrBackendFormat::MakeMock(ct, SkTextureCompressionType::kNone);
+        return GrBackendFormats::MakeMockColorType(ct);
     }
 
     bool onAreColorTypeAndFormatCompatible(GrColorType ct,
@@ -187,7 +192,7 @@ private:
             return false;
         }
 
-        SkTextureCompressionType compression = format.asMockCompressionType();
+        SkTextureCompressionType compression = GrBackendFormats::AsMockCompressionType(format);
         if (compression == SkTextureCompressionType::kETC2_RGB8_UNORM ||
             compression == SkTextureCompressionType::kBC1_RGB8_UNORM) {
             return ct == GrColorType::kRGB_888x; // TODO: this may be too restrictive
@@ -196,7 +201,7 @@ private:
             return ct == GrColorType::kRGBA_8888;
         }
 
-        return ct == format.asMockColorType();
+        return ct == GrBackendFormats::AsMockColorType(format);
     }
 
     SupportedRead onSupportedReadPixelsColorType(GrColorType srcColorType, const GrBackendFormat&,

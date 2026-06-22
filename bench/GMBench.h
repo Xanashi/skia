@@ -16,11 +16,17 @@
  */
 class GMBench : public Benchmark {
 public:
-    GMBench(std::unique_ptr<skiagm::GM> gm);
+    explicit GMBench(std::unique_ptr<skiagm::GM> gm);
 
     void modifyGrContextOptions(GrContextOptions* options) override {
         return fGM->modifyGrContextOptions(options);
     }
+
+#if defined(SK_GRAPHITE)
+    void modifyGraphiteContextOptions(skgpu::graphite::ContextOptions* options) override {
+        fGM->modifyGraphiteContextOptions(options);
+    }
+#endif
 
 protected:
     const char* onGetName() override;

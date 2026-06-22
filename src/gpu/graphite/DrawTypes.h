@@ -8,15 +8,13 @@
 #ifndef skgpu_graphite_DrawTypes_DEFINED
 #define skgpu_graphite_DrawTypes_DEFINED
 
-#include "include/gpu/graphite/GraphiteTypes.h"
+#include "include/private/SkAssert.h"
+#include "src/core/SkEnumBitMask.h"
 
-#include "src/gpu/graphite/ResourceTypes.h"
-
-#include <array>
+#include <cstddef>
+#include <cstdint>
 
 namespace skgpu::graphite {
-
-class Buffer;
 
 /**
  * Geometric primitives used for drawing.
@@ -42,6 +40,7 @@ enum class VertexAttribType : uint8_t {
     kInt2,   // vector of 2 32-bit ints
     kInt3,   // vector of 3 32-bit ints
     kInt4,   // vector of 4 32-bit ints
+    kUInt2,  // vector of 2 32-bit unsigned ints
 
     kByte,  // signed byte
     kByte2, // vector of 2 8-bit signed bytes
@@ -70,7 +69,6 @@ enum class VertexAttribType : uint8_t {
 };
 static const int kVertexAttribTypeCount = (int)(VertexAttribType::kLast) + 1;
 
-
 /**
  * Returns the size of the attrib type in bytes.
  */
@@ -96,6 +94,8 @@ static constexpr inline size_t VertexAttribTypeSize(VertexAttribType type) {
             return 3 * sizeof(int32_t);
         case VertexAttribType::kInt4:
             return 4 * sizeof(int32_t);
+        case VertexAttribType::kUInt2:
+            return 2 * sizeof(uint32_t);
         case VertexAttribType::kByte:
             return 1 * sizeof(char);
         case VertexAttribType::kByte2:
@@ -132,13 +132,8 @@ static constexpr inline size_t VertexAttribTypeSize(VertexAttribType type) {
 }
 
 enum class UniformSlot {
-    // TODO: Want this?
-    // Meant for uniforms that change rarely to never over the course of a render pass
-    // kStatic,
-    // Meant for uniforms that are defined and used by the RenderStep portion of the pipeline shader
-    kRenderStep,
-    // Meant for uniforms that are defined and used by the paint parameters (ie SkPaint subset)
-    kPaint,
+    // Slot for paints and render step uniforms
+    kCombinedUniforms,
     // Meant for gradient storage buffer.
     kGradient
 };
@@ -171,6 +166,39 @@ enum class StencilOp : uint8_t {
     kDecClamp
 };
 static constexpr int kStencilOpCount = 1 + (int)StencilOp::kDecClamp;
+
+// These barrier types are not utilized by all backends, but we define them at this level anyhow
+// since it impacts the logic used to group & sort draws.
+enum class BarrierType : uint8_t {
+    kNone,
+    kAdvancedNoncoherentBlend,
+    kReadDstFromInput,
+};
+
+enum class DstUsage : uint8_t {
+    // Prior values of dst pixels will have no effect on final written color for all uses of the
+    // pipeline (e.g. not just specific to the current draw's alpha value).
+    kNone                  = 0,
+    // Prior values of dst pixels can have an effect on the final written color
+    kDependsOnDst          = 0b0001,
+    // The prior values of dst pixels must be available in the fragment shader
+    kDstReadRequired       = 0b0010,
+    // The final written color uses an advanced blend function, which may require barriers for HW
+    kAdvancedBlend         = 0b0100,
+    // The only reason for kDependsOnDst is because the Renderer has analytic coverage. Switching
+    // to a Coverage::kNone Renderer would result in DstUsage::kNone for the same paint.
+    kDstOnlyUsedByRenderer = 0b1000,
+};
+SK_MAKE_BITMASK_OPS(DstUsage)
+
+enum class RenderStateFlags : uint8_t {
+    kNone                   = 0b0000,
+    kFixed                  = 0b0001,   // Uses explicit DrawWriter::draw functions
+    kAppendVertices         = 0b0010,   // Appends vertices
+    kAppendInstances        = 0b0100,   // Appends instances with static vertex count
+    kAppendDynamicInstances = 0b1000,   // Appends instances with a flexible vertex count
+};
+SK_MAKE_BITMASK_OPS(RenderStateFlags)
 
 struct DepthStencilSettings {
     // Per-face settings for stencil
@@ -241,6 +269,6 @@ struct DepthStencilSettings {
     bool fDepthWriteEnabled = false;
 };
 
-};  // namespace skgpu::graphite
+}  // namespace skgpu::graphite
 
 #endif // skgpu_graphite_DrawTypes_DEFINED

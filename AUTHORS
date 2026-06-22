@@ -19,7 +19,9 @@ ACCESS CO., LTD. <*@access-company.com>
 ARM <*@arm.com>
 Aaron O'Mullan <aaron.omullan@gmail.com>
 Adobe Systems Incorporated <*@adobe.com>
+Adrian E <aehkn@xenhub.one>
 Alexander Khovansky <alx.khovansky@gmail.com>
+Alexandre Mutel <alexandre_mutel@live.com>
 Amazon, Inc <*@amazon.com>
 Anthony Catel <paraboul@gmail.com>
 Andrew Kurushin <ajax16384@gmail.com>
@@ -27,11 +29,16 @@ Bharat Ahuja <ahujabharat93@gmail.com>
 Biswapriyo Nath <nathbappai@gmail.com>
 Brian Salomon <briansalomon@gmail.com>
 Callum Moffat <smartercallum@gmail.com>
+Carmelo Ventimiglia <car.ventimiglia@gmail.com>
 Cary Clark <cclark2@gmail.com>
 Casey Banner <kcbanner@gmail.com>
+Chad Brokaw <cbrokaw@gmail.com>
 ChengYang <chengyangyang-hf@loongson.cn>
+Christian Swinehart <drafting@samizdat.co>
 Christian Plesner Hansen <plesner@t.undra.org>
 ColdPaleLight <coldpalelight@gmail.com>
+Collabora Ltd <*@collabora.com>
+David Bebawy <dbebawy@gmail.com>
 Dawson Coleman <dawsonmcoleman@gmail.com>
 Deepak Mohan <hop2deep@gmail.com>
 Ehsan Akhgari <ehsan.akhgari@gmail.com>
@@ -41,7 +48,8 @@ Facebook, Inc. <*fb.com>
 François Beaufort <beaufort.francois@gmail.com>
 George Wright <george@mozilla.com>
 GiWan Go <gogil@stealien.com>
-Google Inc. <*@google.com>
+Google LLC <*@google.com>
+Helmut Januschka <helmut@januschka.com>
 Herb Derby <herbderby@gmail.com>
 Ho Cheung <uioptt24@gmail.com>
 Igalia <*@igalia.com>
@@ -52,11 +60,13 @@ James Clarke <james@clarkezone.io>
 Jeff Muizelaar <jmuizelaar@mozilla.com>
 JetBrains <*@jetbrains.com>
 Joey Bevilacqua <bevilacquajoey@gmail.com>
+John Armstrong <jlarmstrongiv@gmail.com>
 Jongdeok Kim <jongdeok.kim@navercorp.com>
 Jordan Williams <jordan@jwillikers.com>
 Jose Mayol <jei.mayol@gmail.com>
 Kai Zou <double1kai@gmail.com>
 Kaloyan Donev <kdonev@gmail.com>
+Kaylee Lubick <kaylee.lubick@gmail.com>
 LG Electronics <*@lge.com>
 Lee Salzman <lsalzman@mozilla.com>
 Linaro <*@linaro.org>
@@ -65,6 +75,7 @@ MIPS <*@imgtec.com>
 Mainframe North <*@mainframe.co.uk>
 Marcin Kazmierczak <mar.kazmierczak@gmail.com>
 Marco Alesiani <marco.diiga@gmail.com>
+Matěj Smyčka <matejsmycka@gmail.com>
 Matthew Blanchard <matthewrblanchard@gmail.com>
 Matthew Leibowitz <mattleibow@live.com>
 Microsoft <*@microsoft.com>
@@ -83,6 +94,7 @@ Ping Wang <ping.wang@amd.com>
 Raul Tambre <raul@tambre.ee>
 Roman Petrenko <roman@canva.com>
 Safa Sofuoglu <safasofuoglu@gmail.com>
+Sam James <sam@gentoo.org>
 Samsung <*@samsung.com>
 Samsung Open Source Group <*@osg.samsung.com>
 Scene Group Ltd. <*@scenegroup.co>
@@ -101,6 +113,8 @@ Steve Singer <steve@ssinger.info>
 Sylvestre Ledru <sylvestre.ledru@gmail.com>
 The Chromium Authors <*@chromium.org>
 Thiago Fransosi Farina <thiago.farina@gmail.com>
+Thirumurugan <thiruak1024@gmail.com>
+Tyler Denniston <denniston.t@gmail.com>
 Vibe Inc <*@vibe.us>
 William Candillon <wcandillon@gmail.com>
 Wonmin Park <satcom1600@hanmail.net>
@@ -108,13 +122,18 @@ Yandex LLC <*@yandex-team.ru>
 Yang Guang <yangguang@jwzg.com>
 Yong-Hwan Baek <meisterdevhwan@gmail.com>
 Yorkie Makoto <yorkiefixer@gmail.com>
+Zeng Yong <zengyonghust@gmail.com>
 Zhuo Qingliang <zhuo.dev@gmail.com>
 Zoho Corporation Private Limited <*@zohocorp.com>
 Danil Bulanov <blnvdanil@gmail.com>
 Wey <w2284938880@gmail.com>
+LinXunFeng <linxunfeng@yeah.net>
+Xiaohan Wang <wxh158849067@gmail.com>
+Faijur Rahman <faijur.rahman@imagination.corp-partner.google.com>
 
 # Trusted service accounts.
 GitHub Dependabot <(\d+)\+dependabot\[bot\]@users.noreply.github.com>
 Recipe roller SA <recipe-mega-autoroller@chops-service-accounts.iam.gserviceaccount.com>
 Recreate SKPs Bot SA <skia-recreate-skps@skia-swarming-bots.iam.gserviceaccount.com>
 Skia Autorollers SA <skia-autoroll@skia-public.iam.gserviceaccount.com>
+Louhi SA <louhi-prod-1-6316342352543744@louhi-prod-1.iam.gserviceaccount.com>

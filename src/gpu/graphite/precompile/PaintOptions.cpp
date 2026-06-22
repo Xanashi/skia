@@ -16,7 +16,9 @@
 #include "src/gpu/graphite/ContextUtils.h"
 #include "src/gpu/graphite/KeyContext.h"
 #include "src/gpu/graphite/PaintParamsKey.h"
+#include "src/gpu/graphite/PipelineData.h"
 #include "src/gpu/graphite/PrecompileInternal.h"
+#include "src/gpu/graphite/RenderPassDesc.h"
 #include "src/gpu/graphite/Renderer.h"
 #include "src/gpu/graphite/ShaderCodeDictionary.h"
 #include "src/gpu/graphite/precompile/PaintOption.h"
@@ -78,7 +80,7 @@ void PaintOptions::setClipShaders(SkSpan<const sk_sp<PrecompileShader>> clipShad
     fClipShaderOptions.reserve(2 * clipShaders.size());
     for (const sk_sp<PrecompileShader>& cs : clipShaders) {
         // All clipShaders get wrapped in a CTMShader ...
-        sk_sp<PrecompileShader> withCTM = cs ? PrecompileShadersPriv::CTM({ cs }) : nullptr;
+        sk_sp<PrecompileShader> withCTM = cs ? PrecompileShadersPriv::CTM({{ cs }}) : nullptr;
         // and, if it is a SkClipOp::kDifference clip, an additional ColorFilterShader
         sk_sp<PrecompileShader> inverted =
                 withCTM ? withCTM->makeWithColorFilter(PrecompileColorFilters::Blend())
@@ -149,26 +151,12 @@ int PaintOptions::numCombinations() const {
            this->numClipShaderCombinations();
 }
 
-namespace {
-
-DstReadRequirement get_dst_read_req(const Caps* caps,
-                                    Coverage coverage,
-                                    PrecompileBlender* blender) {
-    if (blender) {
-        return GetDstReadRequirement(caps, blender->priv().asBlendMode(), coverage);
-    }
-    return GetDstReadRequirement(caps, SkBlendMode::kSrcOver, coverage);
-}
-
-} // anonymous namespace
-
 void PaintOptions::createKey(const KeyContext& keyContext,
-                             PaintParamsKeyBuilder* keyBuilder,
-                             PipelineDataGatherer* gatherer,
+                             TextureFormat targetFormat,
                              int desiredCombination,
                              bool addPrimitiveBlender,
+                             bool addAnalyticClip,
                              Coverage coverage) const {
-    SkDEBUGCODE(keyBuilder->checkReset();)
     SkASSERT(desiredCombination < this->numCombinations());
 
     const int numClipShaderCombos = this->numClipShaderCombinations();
@@ -187,9 +175,6 @@ void PaintOptions::createKey(const KeyContext& keyContext,
     const int desiredShaderCombination = remainingCombinations;
     SkASSERT(desiredShaderCombination < this->numShaderCombinations());
 
-    // TODO: this probably needs to be passed in just like addPrimitiveBlender
-    const bool kOpaquePaintColor = true;
-
     auto clipShader = PrecompileBase::SelectOption(SkSpan(fClipShaderOptions),
                                                    desiredClipShaderCombination);
 
@@ -204,46 +189,48 @@ void PaintOptions::createKey(const KeyContext& keyContext,
     if (!finalBlender.first) {
         finalBlender = { PrecompileBlenders::Mode(SkBlendMode::kSrcOver), 0 };
     }
-    DstReadRequirement dstReadReq = get_dst_read_req(keyContext.caps(), coverage,
-                                                     finalBlender.first.get());
 
-    PaintOption option(kOpaquePaintColor,
+    PaintOption option(fPaintColorIsOpaque,
                        finalBlender,
                        PrecompileBase::SelectOption(SkSpan(fShaderOptions),
                                                     desiredShaderCombination),
                        PrecompileBase::SelectOption(SkSpan(fColorFilterOptions),
                                                     desiredColorFilterCombination),
                        addPrimitiveBlender,
+                       fPrimitiveBlendMode,
+                       fSkipColorXform,
                        clipShader,
-                       dstReadReq,
-                       fDither);
+                       coverage,
+                       targetFormat,
+                       fDither,
+                       addAnalyticClip);
 
-    option.toKey(keyContext, keyBuilder, gatherer);
+    option.toKey(keyContext);
 }
 
 namespace {
 
 void create_image_drawing_pipelines(const KeyContext& keyContext,
-                                    PipelineDataGatherer* gatherer,
-                                    const PaintOptionsPriv::ProcessCombination& processCombination,
-                                    const PaintOptions& orig) {
+                                    const PaintOptions& orig,
+                                    const RenderPassDesc& renderPassDesc,
+                                    const PaintOptionsPriv::ProcessCombination& processCombination) {
     PaintOptions imagePaintOptions;
 
     // For imagefilters we know we don't have alpha-only textures and don't need cubic filtering.
-    sk_sp<PrecompileShader> imageShader = PrecompileShadersPriv::Image(
-            PrecompileImageShaderFlags::kExcludeAlpha | PrecompileImageShaderFlags::kExcludeCubic);
+    sk_sp<PrecompileShader> imageShader = PrecompileShaders::Image(
+            PrecompileShaders::ImageShaderFlags::kNoAlphaNoCubic);
 
-    imagePaintOptions.setShaders({ imageShader });
+    imagePaintOptions.setShaders({{ imageShader }});
     imagePaintOptions.setBlendModes(orig.getBlendModes());
     imagePaintOptions.setBlenders(orig.getBlenders());
     imagePaintOptions.setColorFilters(orig.getColorFilters());
     imagePaintOptions.priv().addColorFilter(nullptr);
 
     imagePaintOptions.priv().buildCombinations(keyContext,
-                                               gatherer,
                                                DrawTypeFlags::kSimpleShape,
                                                /* withPrimitiveBlender= */ false,
                                                Coverage::kSingleChannel,
+                                               renderPassDesc,
                                                processCombination);
 }
 
@@ -251,14 +238,11 @@ void create_image_drawing_pipelines(const KeyContext& keyContext,
 
 void PaintOptions::buildCombinations(
         const KeyContext& keyContext,
-        PipelineDataGatherer* gatherer,
         DrawTypeFlags drawTypes,
         bool withPrimitiveBlender,
         Coverage coverage,
+        const RenderPassDesc& renderPassDesc,
         const ProcessCombination& processCombination) const {
-
-    PaintParamsKeyBuilder builder(keyContext.dict());
-
     if (!fImageFilterOptions.empty() || !fMaskFilterOptions.empty()) {
         // TODO: split this out into a create_restore_draw_pipelines method
         PaintOptions tmp = *this;
@@ -300,31 +284,44 @@ void PaintOptions::buildCombinations(
             tmp.setColorFilters(newCFs);
         }
 
-        tmp.buildCombinations(keyContext, gatherer, drawTypes, withPrimitiveBlender, coverage,
+        tmp.buildCombinations(keyContext, drawTypes, withPrimitiveBlender, coverage, renderPassDesc,
                               processCombination);
 
-        create_image_drawing_pipelines(keyContext, gatherer, processCombination, *this);
+        create_image_drawing_pipelines(keyContext, *this, renderPassDesc, processCombination);
 
         for (const sk_sp<PrecompileImageFilter>& o : fImageFilterOptions) {
-            o->createPipelines(keyContext, gatherer, processCombination);
+            o->createPipelines(keyContext, renderPassDesc, processCombination);
         }
         for (const sk_sp<PrecompileMaskFilter>& o : fMaskFilterOptions) {
-            o->createPipelines(keyContext, gatherer, processCombination);
+            o->createPipelines(keyContext, *this, renderPassDesc, processCombination);
         }
     } else {
         int numCombinations = this->numCombinations();
+
+        // This matches the logic in Device::drawGeometry() that optimizes inner-fill capable and
+        // non-AA draws to disable HW blending when possible.
+        KeyContext finalContext = keyContext;
+        if (drawTypes & kSimpleShape || coverage == Coverage::kNone) {
+            finalContext = keyContext.withExtraFlags(KeyGenFlags::kPreferFixedSrcBlend);
+        }
+
         for (int i = 0; i < numCombinations; ++i) {
             // Since the precompilation path's uniforms aren't used and don't change the key,
             // the exact layout doesn't matter
-            gatherer->resetWithNewLayout(Layout::kMetal);
 
-            this->createKey(keyContext, &builder, gatherer, i, withPrimitiveBlender, coverage);
+            keyContext.pipelineDataGatherer()->resetForDraw();
+            keyContext.paintParamsKeyBuilder()->resetForDraw();
 
-            // The 'findOrCreate' calls lockAsKey on builder and then destroys the returned
-            // PaintParamsKey. This serves to reset the builder.
-            UniquePaintParamsID paintID = keyContext.dict()->findOrCreate(&builder);
+            this->createKey(finalContext, renderPassDesc.fColorAttachment.fFormat,
+                            i, withPrimitiveBlender,
+                            SkToBool(drawTypes & DrawTypeFlags::kAnalyticClip), coverage);
 
-            processCombination(paintID, drawTypes, withPrimitiveBlender, coverage);
+            // Reset the builder after we get the paintID, we don't need the key anymore
+            // for precompilation.
+            UniquePaintParamsID paintID = finalContext.dict()->findOrCreate(
+                    finalContext.paintParamsKeyBuilder());
+
+            processCombination(paintID, drawTypes, withPrimitiveBlender, coverage, renderPassDesc);
         }
     }
 }

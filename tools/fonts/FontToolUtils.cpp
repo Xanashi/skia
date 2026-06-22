@@ -11,6 +11,7 @@
 #include "include/core/SkCanvas.h"
 #include "include/core/SkFont.h"
 #include "include/core/SkFontMgr.h"
+#include "include/core/SkFontScanner.h"
 #include "include/core/SkFontStyle.h"
 #include "include/core/SkFontTypes.h"
 #include "include/core/SkImage.h"
@@ -18,10 +19,16 @@
 #include "include/core/SkPixelRef.h"  // IWYU pragma: keep
 #include "include/core/SkStream.h"
 #include "include/core/SkTypeface.h"
-#include "include/private/base/SkMutex.h"
+#if defined(SK_TYPEFACE_FACTORY_FONTATIONS)
+#include "include/ports/SkFontScanner_Fontations.h"
+#endif
+#if defined(SK_TYPEFACE_FACTORY_FREETYPE)
+#include "include/ports/SkFontScanner_FreeType.h"
+#endif
+#include "include/private/SkMutex.h"
 #include "include/utils/SkCustomTypeface.h"
-#include "src/base/SkUTF.h"
 #include "src/core/SkOSFile.h"
+#include "src/core/SkUTF.h"
 #include "tools/Resources.h"
 #include "tools/flags/CommandLineFlags.h"
 #include "tools/fonts/TestFontMgr.h"
@@ -33,7 +40,12 @@
 
 #if defined(SK_BUILD_FOR_ANDROID) && defined(SK_FONTMGR_ANDROID_AVAILABLE)
 #include "include/ports/SkFontMgr_android.h"
-#include "src/ports/SkTypeface_FreeType.h"
+#include "include/ports/SkFontScanner_FreeType.h"
+#endif
+
+#if defined(SK_BUILD_FOR_ANDROID) && defined(SK_FONTMGR_ANDROID_NDK_AVAILABLE)
+#include "include/ports/SkFontMgr_android_ndk.h"
+#include "include/ports/SkFontScanner_FreeType.h"
 #endif
 
 #if defined(SK_FONTMGR_CORETEXT_AVAILABLE) && (defined(SK_BUILD_FOR_IOS) || \
@@ -45,8 +57,9 @@
 #include "include/ports/SkFontMgr_Fontations.h"
 #endif
 
-#if defined(SK_FONTMGR_FONTCONFIG_AVAILABLE)
+#if defined(SK_BUILD_FOR_UNIX) && defined(SK_FONTMGR_FONTCONFIG_AVAILABLE)
 #include "include/ports/SkFontMgr_fontconfig.h"
+#include "include/ports/SkFontScanner_FreeType.h"
 #endif
 
 #if defined(SK_FONTMGR_FREETYPE_DIRECTORY_AVAILABLE)
@@ -55,6 +68,23 @@
 
 #if defined(SK_FONTMGR_FREETYPE_EMPTY_AVAILABLE)
 #include "include/ports/SkFontMgr_empty.h"
+#endif
+
+#if defined(SK_TYPEFACE_FACTORY_FREETYPE)
+#include "src/ports/SkTypeface_FreeType.h"
+#endif
+
+#if defined(SK_TYPEFACE_FACTORY_CORETEXT)
+#include "src/ports/SkTypeface_mac_ct.h"
+#endif
+
+#if defined(SK_TYPEFACE_FACTORY_DIRECTWRITE)
+#include "src/ports/SkTypeface_win_dw.h"
+#endif
+
+#if defined(SK_TYPEFACE_FACTORY_FONTATIONS)
+#include "include/ports/SkTypeface_fontations.h"
+#include "src/ports/SkTypeface_fontations_factory.h"
 #endif
 
 namespace ToolUtils {
@@ -66,8 +96,11 @@ static DEFINE_bool(nativeFonts,
 #if defined(SK_BUILD_FOR_WIN)
 static DEFINE_bool(gdi, false, "Use GDI instead of DirectWrite for font rendering.");
 #endif
-#if defined(SK_FONTMGR_FONTATIONS_AVAILABLE)
+#if defined(SK_FONTMGR_FONTATIONS_AVAILABLE) || defined(SK_TYPEFACE_FACTORY_FONTATIONS)
 static DEFINE_bool(fontations, false, "Use Fontations for native font rendering.");
+#endif
+#if defined(SK_FONTMGR_ANDROID_NDK_AVAILABLE)
+static DEFINE_bool(androidndkfonts, false, "Use AndroidNDK for native font rendering.");
 #endif
 
 sk_sp<SkTypeface> PlanetTypeface() {
@@ -236,13 +269,33 @@ sk_sp<SkImage> CreateStringImage(int w, int h, SkColor c, int x, int y, int text
     return CreateStringBitmap(w, h, c, x, y, textSize, str).asImage();
 }
 
-#ifndef SK_FONT_FILE_PREFIX
-#  if defined(SK_BUILD_FOR_MAC) || defined(SK_BUILD_FOR_IOS)
-#    define SK_FONT_FILE_PREFIX "/System/Library/Fonts/"
-#  else
-#    define SK_FONT_FILE_PREFIX "/usr/share/fonts/"
-#  endif
+#if defined(SK_TYPEFACE_FACTORY_FONTATIONS) || defined(SK_TYPEFACE_FACTORY_FREETYPE)
+#define SK_TYPEFACE_SCANNER_AVAILABLE
 #endif
+
+std::unique_ptr<SkFontScanner> TestFontScanner() {
+#if defined(SK_TYPEFACE_FACTORY_FONTATIONS)
+// If both are compiled in, use the flag to point to fontations or not.
+#if defined(SK_TYPEFACE_FACTORY_FONTATIONS) && defined(SK_TYPEFACE_FACTORY_FREETYPE)
+    const bool useFontations = FLAGS_fontations;
+#else
+    const bool useFontations = true;
+#endif
+    if (useFontations) {
+        auto result = SkFontScanner_Make_Fontations();
+        if (result) {
+            return result;
+        }
+    }
+#endif  // defined(SK_TYPEFACE_FACTORY_FONTATIONS)
+
+#if defined(SK_TYPEFACE_FACTORY_FREETYPE)
+    return SkFontScanner_Make_FreeType();
+#else
+    SkDEBUGFAIL("No font scanner created - this may cause failures down the line.");
+    return nullptr;
+#endif
+}
 
 sk_sp<SkFontMgr> TestFontMgr() {
     static sk_sp<SkFontMgr> mgr;
@@ -256,25 +309,30 @@ sk_sp<SkFontMgr> TestFontMgr() {
             mgr = SkFontMgr_New_GDI();
         }
 #endif
-#if defined(SK_FONTMGR_FONTATIONS_AVAILABLE)
-        else if (FLAGS_fontations) {
-            mgr = SkFontMgr_New_Fontations_Empty();
+#if defined(SK_BUILD_FOR_ANDROID) && defined(SK_FONTMGR_ANDROID_NDK_AVAILABLE) && defined(SK_TYPEFACE_SCANNER_AVAILABLE)
+        else if (FLAGS_androidndkfonts) {
+            mgr = SkFontMgr_New_AndroidNDK(false, TestFontScanner());
         }
 #endif
         else {
-#if defined(SK_BUILD_FOR_ANDROID) && defined(SK_FONTMGR_ANDROID_AVAILABLE)
-            mgr = SkFontMgr_New_Android(nullptr, std::make_unique<SkFontScanner_FreeType>());
+#if defined(SK_BUILD_FOR_ANDROID) && defined(SK_FONTMGR_ANDROID_AVAILABLE) && defined(SK_TYPEFACE_SCANNER_AVAILABLE)
+            mgr = SkFontMgr_New_Android(nullptr, TestFontScanner());
 #elif defined(SK_BUILD_FOR_WIN) && defined(SK_FONTMGR_DIRECTWRITE_AVAILABLE)
             mgr = SkFontMgr_New_DirectWrite();
 #elif defined(SK_FONTMGR_CORETEXT_AVAILABLE) && (defined(SK_BUILD_FOR_IOS) || \
                                                 defined(SK_BUILD_FOR_MAC))
             mgr = SkFontMgr_New_CoreText(nullptr);
-#elif defined(SK_FONTMGR_FONTCONFIG_AVAILABLE)
-            mgr = SkFontMgr_New_FontConfig(nullptr);
+#elif defined(SK_FONTMGR_FONTCONFIG_AVAILABLE) && defined(SK_TYPEFACE_SCANNER_AVAILABLE)
+            mgr = SkFontMgr_New_FontConfig(nullptr, TestFontScanner());
 #elif defined(SK_FONTMGR_FREETYPE_DIRECTORY_AVAILABLE)
+#  if defined(SK_BUILD_FOR_MAC) || defined(SK_BUILD_FOR_IOS)
+            static constexpr char kFontFilePrefix[] = "/System/Library/Fonts/";
+#  else
+            static constexpr char kFontFilePrefix[] = "/usr/share/fonts/";
+#  endif
             // In particular, this is used on ChromeOS, which is Linux-like but doesn't have
             // FontConfig.
-            mgr = SkFontMgr_New_Custom_Directory(SK_FONT_FILE_PREFIX);
+            mgr = SkFontMgr_New_Custom_Directory(kFontFilePrefix);
 #elif defined(SK_FONTMGR_FREETYPE_EMPTY_AVAILABLE)
             mgr = SkFontMgr_New_Custom_Empty();
 #else
@@ -322,6 +380,21 @@ sk_sp<SkTypeface> CreateTypefaceFromResource(const char* resource, int ttcIndex)
 
 SkFont DefaultFont() {
     return SkFont(DefaultTypeface(), 12);
+}
+
+void RegisterAvailableTypefaceFactories() {
+#if defined(SK_TYPEFACE_FACTORY_CORETEXT)
+    SkTypeface::Register(SkTypeface_Mac::FactoryId, SkTypeface_Mac::MakeFromStream);
+#endif
+#if defined(SK_TYPEFACE_FACTORY_DIRECTWRITE)
+    SkTypeface::Register(DWriteFontTypeface::FactoryId, DWriteFontTypeface::MakeFromStream);
+#endif
+#if defined(SK_TYPEFACE_FACTORY_FREETYPE)
+    SkTypeface::Register(SkTypeface_FreeType::FactoryId, SkTypeface_FreeType::MakeFromStream);
+#endif
+#if defined(SK_TYPEFACE_FACTORY_FONTATIONS)
+    SkTypeface::Register(SkTypefaces::Fontations::FactoryId, SkTypeface_Make_Fontations);
+#endif
 }
 
 }  // namespace ToolUtils

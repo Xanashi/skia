@@ -17,7 +17,7 @@
 #include "include/core/SkScalar.h"
 #include "include/core/SkSize.h"
 #include "include/core/SkTypes.h"
-#include "include/private/base/SkTDArray.h"
+#include "include/private/SkTDArray.h"
 #include "include/utils/SkNWayCanvas.h"
 
 #include <cstddef>
@@ -57,7 +57,7 @@ public:
      * The new SkPaintFilterCanvas is configured for forwarding to the
      * specified canvas.  Also copies the target canvas matrix and clip bounds.
      */
-    SkPaintFilterCanvas(SkCanvas* canvas);
+    explicit SkPaintFilterCanvas(SkCanvas* canvas);
 
     enum Type {
         kPicture_Type,

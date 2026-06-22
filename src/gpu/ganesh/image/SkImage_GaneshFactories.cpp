@@ -20,14 +20,14 @@
 #include "include/core/SkYUVAInfo.h"
 #include "include/core/SkYUVAPixmaps.h"
 #include "include/gpu/GpuTypes.h"
-#include "include/gpu/GrBackendSurface.h"
-#include "include/gpu/GrContextThreadSafeProxy.h"
-#include "include/gpu/GrDirectContext.h"
-#include "include/gpu/GrRecordingContext.h"
-#include "include/gpu/GrTypes.h"
-#include "include/gpu/GrYUVABackendTextures.h"
+#include "include/gpu/ganesh/GrBackendSurface.h"
+#include "include/gpu/ganesh/GrContextThreadSafeProxy.h"
+#include "include/gpu/ganesh/GrDirectContext.h"
 #include "include/gpu/ganesh/GrExternalTextureGenerator.h"
-#include "include/private/base/SkAssert.h"
+#include "include/gpu/ganesh/GrRecordingContext.h"
+#include "include/gpu/ganesh/GrTypes.h"
+#include "include/gpu/ganesh/GrYUVABackendTextures.h"
+#include "include/private/SkAssert.h"
 #include "include/private/chromium/SkImageChromium.h"
 #include "include/private/gpu/ganesh/GrImageContext.h"
 #include "include/private/gpu/ganesh/GrTextureGenerator.h"
@@ -55,6 +55,7 @@
 #include "src/gpu/ganesh/GrYUVATextureProxies.h"
 #include "src/gpu/ganesh/SkGr.h"
 #include "src/gpu/ganesh/image/GrImageUtils.h"
+#include "src/gpu/ganesh/image/GrMippedBitmap.h"
 #include "src/gpu/ganesh/image/SkImage_Ganesh.h"
 #include "src/gpu/ganesh/image/SkImage_GaneshBase.h"
 #include "src/gpu/ganesh/image/SkImage_GaneshYUVA.h"
@@ -78,7 +79,8 @@ bool MakeBackendTextureFromImage(GrDirectContext* direct,
         return false;
     }
 
-    auto [view, ct] = skgpu::ganesh::AsView(direct, image, skgpu::Mipmapped::kNo);
+    auto [view, ct] = skgpu::ganesh::AsView(direct, image, skgpu::Mipmapped::kNo,
+                                            /*targetSurface=*/nullptr);
     if (!view) {
         return false;
     }
@@ -94,7 +96,7 @@ bool MakeBackendTextureFromImage(GrDirectContext* direct,
     // image is not unique, or if the texture wraps an external object.
     if (!image->unique() || !texture->unique() || texture->resourcePriv().refsWrappedObjects()) {
         // onMakeSubset will always copy the image.
-        image = as_IB(image)->onMakeSubset(direct, image->bounds());
+        image = as_IB(image)->onMakeSubset(direct->asRecorder(), image->bounds(), {});
         if (!image) {
             return false;
         }
@@ -406,10 +408,13 @@ sk_sp<SkImage> CrossContextTextureFromPixmap(GrDirectContext* dContext,
         pixmap = &resized;
     }
     // Turn the pixmap into a GrTextureProxy
-    SkBitmap bmp;
-    bmp.installPixels(*pixmap);
+    std::optional<GrMippedBitmap> bitmap =
+            GrMippedBitmap::Make(pixmap->info(), pixmap->addr(), pixmap->rowBytes());
+    if (!bitmap) {
+        return nullptr;
+    }
     skgpu::Mipmapped mipmapped = buildMips ? skgpu::Mipmapped::kYes : skgpu::Mipmapped::kNo;
-    auto [view, ct] = GrMakeUncachedBitmapProxyView(dContext, bmp, mipmapped);
+    auto [view, ct] = GrMakeUncachedBitmapProxyView(dContext, bitmap.value(), mipmapped);
     if (!view) {
         return RasterFromPixmapCopy(*pixmap);
     }
@@ -457,7 +462,8 @@ sk_sp<SkImage> TextureFromImage(GrDirectContext* dContext,
                                          ? GrImageTexGenPolicy::kNew_Uncached_Budgeted
                                          : GrImageTexGenPolicy::kNew_Uncached_Unbudgeted;
     // TODO: Don't flatten YUVA images here. Add mips to the planes instead.
-    auto [view, ct] = skgpu::ganesh::AsView(dContext, ib, mipmapped, policy);
+    auto [view, ct] = skgpu::ganesh::AsView(dContext, ib, mipmapped, /*targetSurface=*/nullptr,
+                                            policy);
     if (!view) {
         return nullptr;
     }
@@ -565,13 +571,16 @@ sk_sp<SkImage> TextureFromYUVAPixmaps(GrRecordingContext* context,
     GrColorType pixmapColorTypes[SkYUVAInfo::kMaxPlanes];
     for (int i = 0; i < numPlanes; ++i) {
         // Turn the pixmap into a GrTextureProxy
-        SkBitmap bmp;
-        bmp.installPixels(pixmapsToUpload->plane(i));
-        std::tie(views[i], std::ignore) = GrMakeUncachedBitmapProxyView(context, bmp, buildMips);
+        std::optional<GrMippedBitmap> bitmap = GrMippedBitmap::Make(pixmapsToUpload->plane(i));
+        if (!bitmap) {
+            return nullptr;
+        }
+        pixmapColorTypes[i] = SkColorTypeToGrColorType(bitmap->colorType());
+        std::tie(views[i], std::ignore) =
+                GrMakeUncachedBitmapProxyView(context, bitmap.value(), buildMips);
         if (!views[i]) {
             return nullptr;
         }
-        pixmapColorTypes[i] = SkColorTypeToGrColorType(bmp.colorType());
     }
 
     GrYUVATextureProxies yuvaProxies(pixmapsToUpload->yuvaInfo(), views, pixmapColorTypes);

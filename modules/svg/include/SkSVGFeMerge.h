@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Google Inc.
+ * Copyright 2024 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -8,10 +8,17 @@
 #ifndef SkSVGFeMerge_DEFINED
 #define SkSVGFeMerge_DEFINED
 
+#include <vector>
+
+#include "include/core/SkRefCnt.h"
+#include "include/private/SkAPI.h"
 #include "modules/svg/include/SkSVGFe.h"
 #include "modules/svg/include/SkSVGTypes.h"
 
 class SkSVGFeMergeNode;
+class SkImageFilter;
+class SkSVGFilterContext;
+class SkSVGRenderContext;
 
 class SK_API SkSVGFeMerge final : public SkSVGFe {
 public:

@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Google Inc.
+ * Copyright 2018 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -14,13 +14,13 @@
 #include "include/core/SkSurfaceProps.h"
 #include "include/effects/SkOverdrawColorFilter.h"
 #include "include/effects/SkRuntimeEffect.h"
+#include "include/private/SkMalloc.h"
 #include "include/private/SkSLSampleUsage.h"
-#include "include/private/base/SkMalloc.h"
-#include "include/private/base/SkTo.h"
+#include "include/private/SkTo.h"
 #include "include/private/gpu/ganesh/GrTypesPriv.h"
-#include "src/base/SkArenaAlloc.h"
-#include "src/base/SkRandom.h"
+#include "src/core/SkArenaAlloc.h"
 #include "src/core/SkColorSpacePriv.h"
+#include "src/core/SkRandom.h"
 #include "src/core/SkRasterPipeline.h"
 #include "src/core/SkRasterPipelineOpContexts.h"
 #include "src/core/SkRasterPipelineOpList.h"
@@ -483,7 +483,7 @@ SkPMColor4f GrSkSLFP::constantOutputForConstantInput(const SkPMColor4f& inputCol
         ConstantOutputForConstantInput_SkRPCallbacks callbacks;
         if (program->appendStages(&pipeline, &alloc, &callbacks, uniforms)) {
             SkPMColor4f outputColor;
-            SkRasterPipeline_MemoryCtx outputCtx = {&outputColor, 0};
+            SkRasterPipelineContexts::MemoryCtx outputCtx = {&outputColor, 0};
             pipeline.append(SkRasterPipelineOp::store_f32, &outputCtx);
             pipeline.run(0, 0, 1, 1);
             return outputColor;
@@ -498,7 +498,7 @@ SkPMColor4f GrSkSLFP::constantOutputForConstantInput(const SkPMColor4f& inputCol
 
 GR_DEFINE_FRAGMENT_PROCESSOR_TEST(GrSkSLFP)
 
-#if defined(GR_TEST_UTILS)
+#if defined(GPU_TEST_UTILS)
 
 std::unique_ptr<GrFragmentProcessor> GrSkSLFP::TestCreate(GrProcessorTestData* d) {
     SkColor colors[SkOverdrawColorFilter::kNumColors];
@@ -508,7 +508,7 @@ std::unique_ptr<GrFragmentProcessor> GrSkSLFP::TestCreate(GrProcessorTestData* d
     auto filter = SkOverdrawColorFilter::MakeWithSkColors(colors);
     SkSurfaceProps props; // default props for testing
     auto [success, fp] = GrFragmentProcessors::Make(
-            d->context(), filter.get(), /*inputFP=*/nullptr, GrColorInfo{}, props);
+            d->surfaceDrawContext(), filter.get(), /*inputFP=*/nullptr, GrColorInfo{}, props);
     SkASSERT(success);
     return std::move(fp);
 }

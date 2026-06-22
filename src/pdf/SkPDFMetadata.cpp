@@ -10,12 +10,12 @@
 #include "include/core/SkStream.h"
 #include "include/core/SkString.h"
 #include "include/docs/SkPDFDocument.h"
-#include "include/private/base/SkAssert.h"
-#include "include/private/base/SkTemplates.h"
-#include "include/private/base/SkTo.h"
-#include "src/base/SkTime.h"
-#include "src/base/SkUtils.h"
+#include "include/private/SkAssert.h"
+#include "include/private/SkTemplates.h"
+#include "include/private/SkTo.h"
 #include "src/core/SkMD5.h"
+#include "src/core/SkTime.h"
+#include "src/core/SkUtils.h"
 #include "src/pdf/SkPDFTypes.h"
 #include "src/pdf/SkPDFUtils.h"
 
@@ -327,8 +327,3 @@ SkPDFIndirectReference SkPDFMetadata::MakeXMPObject(
                           SkMemoryStream::MakeCopy(value.c_str(), value.size()),
                           docPtr, SkPDFSteamCompressionEnabled::No);
 }
-
-#undef SKPDF_CUSTOM_PRODUCER_KEY
-#undef SKPDF_PRODUCER
-#undef SKPDF_STRING
-#undef SKPDF_STRING_IMPL

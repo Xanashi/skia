@@ -12,7 +12,7 @@
 #include "include/core/SkRect.h"
 #include "include/core/SkRefCnt.h"
 #include "include/core/SkSize.h"
-#include "include/private/base/SkDebug.h"
+#include "include/private/SkDebug.h"
 #include "src/gpu/Swizzle.h"
 #include "src/gpu/ganesh/GrColorInfo.h"
 #include "src/gpu/ganesh/GrGpuBuffer.h"
@@ -35,6 +35,7 @@ class GrDirectContext;
 class GrDrawingManager;
 class GrRecordingContext;
 class GrRecordingContextPriv;
+class GrTransferFromRenderTask;
 class SkColorSpace;
 enum GrSurfaceOrigin : int;
 enum SkColorType : int;
@@ -176,7 +177,7 @@ public:
                      SkImage::RescaleGamma,
                      SkImage::RescaleMode);
 
-#if defined(GR_TEST_UTILS)
+#if defined(GPU_TEST_UTILS)
     bool testCopy(sk_sp<GrSurfaceProxy> src, const SkIRect& srcRect, const SkIPoint& dstPoint) {
         return this->copy(std::move(src), srcRect, dstPoint) != nullptr;
     }
@@ -208,11 +209,15 @@ protected:
         sk_sp<GrGpuBuffer> fTransferBuffer;
         // RowBytes for transfer buffer data
         size_t fRowBytes;
+        // The task that is executed to perform the texture->buffer copy
+        sk_sp<GrTransferFromRenderTask> fTransferTask;
         // If this is null then the transfer buffer will contain the data in the requested
         // color type. Otherwise, when the transfer is done this must be called to convert
         // from the transfer buffer's color type to the requested color type.
         std::function<ConversionFn> fPixelConverter;
     };
+    struct AsyncReadPixelContext;
+
     PixelTransferResult transferPixels(GrColorType colorType, const SkIRect& rect);
 
     // The async read step of asyncRescaleAndReadPixels()

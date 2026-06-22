@@ -6,9 +6,9 @@
  */
 #include "include/gpu/ganesh/mtl/GrMtlBackendSurface.h"
 
-#include "include/gpu/GrTypes.h"
+#include "include/gpu/ganesh/GrTypes.h"
 #include "include/gpu/ganesh/mtl/GrMtlTypes.h"
-#include "include/private/base/SkAssert.h"
+#include "include/private/SkAssert.h"
 #include "src/gpu/ganesh/GrBackendSurfacePriv.h"
 #include "src/gpu/ganesh/mtl/GrMtlCppUtil.h"
 #include "src/gpu/ganesh/mtl/GrMtlUtil.h"
@@ -46,7 +46,7 @@ private:
     }
 
     std::string toString() const override {
-#if defined(SK_DEBUG) || GR_TEST_UTILS
+#if defined(SK_DEBUG) || GPU_TEST_UTILS
         return skgpu::MtlFormatToString(fFormat);
 #else
         return "";
@@ -102,9 +102,11 @@ private:
 
     bool isProtected() const override { return false; }
 
+#if defined(GPU_TEST_UTILS)
     bool equal(const GrBackendTextureData* that) const override {
         return this->isSameTexture(that);
     }
+#endif
 
     bool isSameTexture(const GrBackendTextureData* that) const override {
         SkASSERT(!that || that->type() == GrBackendApi::kMetal);
@@ -172,6 +174,7 @@ private:
 
     bool isProtected() const override { return false; }
 
+#if defined(GPU_TEST_UTILS)
     bool equal(const GrBackendRenderTargetData* that) const override {
         SkASSERT(!that || that->type() == GrBackendApi::kMetal);
         if (auto otherMtl = static_cast<const GrMtlBackendRenderTargetData*>(that)) {
@@ -179,6 +182,7 @@ private:
         }
         return false;
     }
+#endif
 
     void copyTo(AnyRenderTargetData& rtData) const override {
         rtData.emplace<GrMtlBackendRenderTargetData>(fTexInfo);

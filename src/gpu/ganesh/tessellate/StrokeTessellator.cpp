@@ -8,10 +8,10 @@
 #include "src/gpu/ganesh/tessellate/StrokeTessellator.h"
 
 #include "include/core/SkMatrix.h"
-#include "include/private/base/SkAlignedStorage.h"
-#include "include/private/base/SkAssert.h"
-#include "include/private/base/SkOnce.h"
-#include "include/private/base/SkPoint_impl.h"
+#include "include/core/SkPoint.h"
+#include "include/private/SkAlignedStorage.h"
+#include "include/private/SkAssert.h"
+#include "include/private/SkOnce.h"
 #include "include/private/gpu/ganesh/GrTypesPriv.h"
 #include "src/core/SkGeometry.h"
 #include "src/gpu/ResourceKey.h"
@@ -155,6 +155,9 @@ void write_fixed_count_patches(StrokeWriter&& patchWriter,
             }
         }
     }
+
+    // Flush any last recorded contour
+    patchWriter.writeDeferredStrokePatch();
 }
 
 }  // namespace

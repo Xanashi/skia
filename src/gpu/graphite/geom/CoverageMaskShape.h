@@ -8,13 +8,17 @@
 #ifndef skgpu_graphite_geom_CoverageMaskShape_DEFINED
 #define skgpu_graphite_geom_CoverageMaskShape_DEFINED
 
-#include "src/base/SkVx.h"
+#include "include/core/SkM44.h"
+#include "include/core/SkRefCnt.h"
+#include "include/private/SkAssert.h"
+#include "src/core/SkVx.h"
+#include "src/gpu/graphite/TextureProxy.h"
 #include "src/gpu/graphite/geom/Rect.h"
 #include "src/gpu/graphite/geom/Shape.h"
 
-namespace skgpu::graphite {
+#include <utility>
 
-class TextureProxy;
+namespace skgpu::graphite {
 
 /**
  * CoverageMaskShape represents a shape for which per-pixel coverage data comes from a
@@ -53,14 +57,14 @@ public:
 
     CoverageMaskShape() = default;
     CoverageMaskShape(const Shape& shape,
-                      const TextureProxy* proxy,
-                      const SkM44& deviceToLocal,
+                      sk_sp<TextureProxy> proxy,
+                      const SkM44& maskToDevice,
                       const MaskInfo& maskInfo)
-            : fTextureProxy(proxy)
-            , fDeviceToLocal(deviceToLocal)
+            : fTextureProxy(std::move(proxy))
+            , fMaskToDevice(maskToDevice)
             , fInverted(shape.inverted())
             , fMaskInfo(maskInfo) {
-        SkASSERT(proxy);
+        SkASSERT(fTextureProxy);
     }
     CoverageMaskShape(const CoverageMaskShape&) = default;
 
@@ -77,25 +81,28 @@ public:
         return Rect(0.f, 0.f, (float) this->maskSize().x(), (float) this->maskSize().y());
     }
 
-    // The inverse local-to-device matrix.
-    const SkM44& deviceToLocal() const { return fDeviceToLocal; }
+    // The transform from the mask's texture coordinate space to device coordinates, which may be
+    // different from the local-to-device transform used for shading coordinates.
+    const SkM44& maskToDevice() const { return fMaskToDevice; }
 
     // The texture-relative integer UV coordinates of the top-left corner of this shape's
     // coverage mask bounds.
     const half2& textureOrigin() const { return fMaskInfo.fTextureOrigin; }
 
-    // The width and height of the bounds of the coverage mask shape in device coordinates.
+    // The width and height of the bounds of the coverage mask shape in the texture.
     const half2& maskSize() const { return fMaskInfo.fMaskSize; }
 
     // The texture that the shape will be rendered to.
-    const TextureProxy* textureProxy() const { return fTextureProxy; }
+    const TextureProxy* textureProxy() const { return fTextureProxy.get(); }
 
     // Whether or not the shape will be painted according to an inverse fill rule.
     bool inverted() const { return fInverted; }
 
 private:
-    const TextureProxy* fTextureProxy;
-    SkM44 fDeviceToLocal;
+    // We store a ref to the texture proxy to keep it alive.
+    // TODO: switch to raw pointer once textures/uniforms are extracted in Device::drawGeometry.
+    sk_sp<TextureProxy> fTextureProxy;
+    SkM44 fMaskToDevice;
     bool fInverted;
     MaskInfo fMaskInfo;
 };

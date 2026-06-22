@@ -14,12 +14,13 @@
 #include "include/core/SkRefCnt.h"
 #include "include/core/SkTypes.h"
 #include "include/gpu/GpuTypes.h"
-#include "include/gpu/GrRecordingContext.h"
+#include "include/gpu/ganesh/GrRecordingContext.h"
 #include "src/core/SkImageInfoPriv.h"
 #include "src/gpu/ganesh/GrRecordingContextPriv.h"
 #include "src/gpu/ganesh/GrSurfaceProxyView.h"
 #include "src/gpu/ganesh/SkGr.h"
 #include "src/gpu/ganesh/image/GrImageUtils.h"
+#include "src/gpu/ganesh/image/GrMippedBitmap.h"
 #include "src/image/SkImage_Base.h"
 
 #include <memory>
@@ -33,7 +34,7 @@ std::tuple<GrSurfaceProxyView, GrColorType> SkImage_RasterPinnable::asView(
         // We ignore the mipmap request here. If the pinned view isn't mipmapped then we will
         // fallback to bilinear. The pin API is used by Android Framework which does not expose
         // mipmapping. Moreover, we're moving towards requiring that images be made with mip levels
-        // if mipmapping is desired (skbug.com/10411)
+        // if mipmapping is desired (skbug.com/40041743)
         mipmapped = skgpu::Mipmapped::kNo;
         if (policy != GrImageTexGenPolicy::kDraw) {
             return {skgpu::ganesh::CopyView(
@@ -65,6 +66,9 @@ namespace skgpu::ganesh {
 
 bool PinAsTexture(GrRecordingContext* rContext, SkImage* img) {
     auto ib = as_IB(img);
+    if (ib->type() == SkImage_Base::Type::kLazyTexture) {
+        return true;
+    }
     if (ib->type() != SkImage_Base::Type::kRasterPinnable) {
         // Cannot pin images which are not of subclass SkImage_RasterPinnable
         return false;
@@ -74,7 +78,7 @@ bool PinAsTexture(GrRecordingContext* rContext, SkImage* img) {
         auto data = std::make_unique<PinnedData>();
         std::tie(data->fPinnedView, data->fPinnedColorType) =
                 GrMakeCachedBitmapProxyView(rContext,
-                                            raster->bitmap(),
+                                            GrMippedBitmap(raster->bitmap(), raster->refMips()),
                                             /*label=*/"ganesh_PinAsTexture",
                                             skgpu::Mipmapped::kNo);
         if (!data->fPinnedView) {

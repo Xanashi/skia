@@ -5,12 +5,20 @@
  * found in the LICENSE file.
  */
 
-#include "modules/svg/include/SkSVGRenderContext.h"
 #include "modules/svg/include/SkSVGShape.h"
 #include "modules/svg/include/SkSVGMarker.h"
 #include "include/core/SkPath.h"
 #include "include/core/SkPathMeasure.h"
 #include "include/core/SkCanvas.h"
+
+#include "include/core/SkPaint.h"  // IWYU pragma: keep
+#include "include/private/SkDebug.h"
+#include "modules/svg/include/SkSVGAttribute.h"
+#include "modules/svg/include/SkSVGRenderContext.h"
+#include "modules/svg/include/SkSVGTypes.h"
+
+class SkSVGNode;
+enum class SkSVGTag;
 
 SkSVGShape::SkSVGShape(SkSVGTag t) : INHERITED(t) {}
 
@@ -50,11 +58,11 @@ void SkSVGShape::onRender(const SkSVGRenderContext& ctx) const {
     const auto fillPaint = ctx.fillPaint(),
              strokePaint = ctx.strokePaint();
 
-    if (fillPaint.isValid() && this->tag() != SkSVGTag::kLine) {
+    if (fillPaint.has_value() && this->tag() != SkSVGTag::kLine) {
         this->onDraw(ctx.canvas(), ctx.lengthContext(), *fillPaint, fillType);
     }
 
-    if (strokePaint.isValid()) {
+    if (strokePaint.has_value()) {
         this->onDraw(ctx.canvas(), ctx.lengthContext(), *strokePaint, fillType);
     }
 
@@ -190,7 +198,7 @@ std::vector<PathPoint> SkSVGShape::getPathPoints(const SkPath* markerPath) const
 
 bool SkSVGShape::resolveShorthandMarker(const char* n, const char* v) {
     auto iri = SkSVGAttributeParser::parse<SkSVGFuncIRI>("marker", n, v);
-    if (iri.isValid()) {
+    if (iri.has_value()) {
         if (fMarkerStart.type() != SkSVGFuncIRI::Type::kIRI) {
             this->setMarkerStart(iri);
         }

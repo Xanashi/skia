@@ -47,8 +47,20 @@ public:
         return fCodec->getAndroidGainmap(outInfo, outGainmapImageStream);
     }
 
+    bool getGainmapBitmapRegionDecoder(SkGainmapInfo* outInfo,
+                                       std::unique_ptr<BitmapRegionDecoder>* outDecoder) {
+        std::unique_ptr<SkAndroidCodec> codec;
+        if (!fCodec->getGainmapAndroidCodec(outInfo, &codec)) {
+            return false;
+        }
+
+        *outDecoder = std::unique_ptr<BitmapRegionDecoder>(
+                new BitmapRegionDecoder(std::move(codec)));
+        return true;
+    }
+
 private:
-    BitmapRegionDecoder(std::unique_ptr<SkAndroidCodec> codec);
+    explicit BitmapRegionDecoder(std::unique_ptr<SkAndroidCodec> codec);
 
     std::unique_ptr<SkAndroidCodec> fCodec;
 };

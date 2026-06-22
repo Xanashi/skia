@@ -15,6 +15,7 @@
 #include "src/core/SkLRUCache.h"
 #include "src/core/SkTHash.h"
 #include "src/gpu/graphite/DescriptorData.h"
+#include "src/gpu/graphite/vk/VulkanRenderPass.h"
 
 #ifdef  SK_BUILD_FOR_ANDROID
 extern "C" {
@@ -28,54 +29,64 @@ class VulkanCommandBuffer;
 class VulkanDescriptorSet;
 class VulkanFramebuffer;
 class VulkanGraphicsPipeline;
-class VulkanRenderPass;
 class VulkanSharedContext;
+class VulkanTexture;
 class VulkanYcbcrConversion;
 
 class VulkanResourceProvider final : public ResourceProvider {
 public:
-    static constexpr size_t kIntrinsicConstantSize = sizeof(float) * 4;
-    static constexpr size_t kLoadMSAAVertexBufferSize = sizeof(float) * 8; // 4 points of 2 floats
+    static constexpr size_t kIntrinsicConstantSize = sizeof(float) * 8; // float4 + 2xfloat2
+    // Intrinsic constant rtAdjust value is needed by the vertex shader. Dst copy bounds are needed
+    // in the frag shader.
+    static constexpr VkShaderStageFlagBits kIntrinsicConstantStageFlags =
+            VkShaderStageFlagBits(VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
 
-    using UniformBindGroupKey = FixedSizeKey<2 * VulkanGraphicsPipeline::kNumUniformBuffers>;
+    static constexpr size_t kLoadMSAAPushConstantSize = sizeof(float) * 4;
+    static constexpr VkShaderStageFlagBits kLoadMSAAPushConstantStageFlags =
+            VK_SHADER_STAGE_VERTEX_BIT;
 
     VulkanResourceProvider(SharedContext* sharedContext,
                            SingleOwner*,
                            uint32_t recorderID,
-                           size_t resourceBudget,
-                           sk_sp<Buffer> intrinsicConstantUniformBuffer,
-                           sk_sp<Buffer> loadMSAAVertexBuffer);
+                           size_t resourceBudget);
 
     ~VulkanResourceProvider() override;
-
-    sk_sp<Buffer> refIntrinsicConstantBuffer() const;
-
-    const Buffer* loadMSAAVertexBuffer() const;
 
     sk_sp<VulkanYcbcrConversion> findOrCreateCompatibleYcbcrConversion(
             const VulkanYcbcrConversionInfo& ycbcrInfo) const;
 
+    sk_sp<VulkanDescriptorSet> findOrCreateDescriptorSet(SkSpan<DescriptorData>);
+
+    sk_sp<VulkanGraphicsPipeline> findOrCreateLoadMSAAPipeline(const RenderPassDesc&);
+
+    // Find or create a compatible (needed when creating a framebuffer and graphics pipeline) or
+    // full (needed when beginning a render pass from the command buffer) RenderPass.
+    sk_sp<VulkanRenderPass> findOrCreateRenderPass(const RenderPassDesc&, bool compatibleOnly);
+
+    VkPipelineLayout mockPipelineLayout() const { return fMockPipelineLayout; }
+
+    sk_sp<VulkanFramebuffer> findOrCreateFramebuffer(const VulkanSharedContext*,
+                                                     VulkanTexture* colorTexture,
+                                                     VulkanTexture* resolveTexture,
+                                                     VulkanTexture* depthStencilTexture,
+                                                     const RenderPassDesc&,
+                                                     const VulkanRenderPass&,
+                                                     const int width,
+                                                     const int height);
+
 private:
     const VulkanSharedContext* vulkanSharedContext() const;
+    // VulkanSharedContext::pipelineCompileWasRequired() - which drives PipelineCache persistence
+    // - modifies the SharedContext so, when creating Pipelines, the ResourceProvider must
+    // provide a non-const SharedContext.
+    VulkanSharedContext* nonConstVulkanSharedContext();
 
-    sk_sp<GraphicsPipeline> createGraphicsPipeline(const RuntimeEffectDictionary*,
-                                                   const GraphicsPipelineDesc&,
-                                                   const RenderPassDesc&) override;
     sk_sp<ComputePipeline> createComputePipeline(const ComputePipelineDesc&) override;
 
-    sk_sp<Texture> createTexture(SkISize,
-                                 const TextureInfo&,
-                                 skgpu::Budgeted) override;
-    sk_sp<Texture> onCreateWrappedTexture(const BackendTexture&) override;
-    sk_sp<Buffer> createBuffer(size_t size, BufferType type, AccessPattern) override;
+    sk_sp<Texture> createTexture(SkISize, const TextureInfo&, std::string_view label) override;
+    sk_sp<Texture> onCreateWrappedTexture(const BackendTexture&, std::string_view label) override;
+    sk_sp<Buffer> createBuffer(size_t, BufferType, AccessPattern, std::string_view label) override;
     sk_sp<Sampler> createSampler(const SamplerDesc&) override;
-
-    sk_sp<VulkanFramebuffer> createFramebuffer(
-            const VulkanSharedContext*,
-            const skia_private::TArray<VkImageView>& attachmentViews,
-            const VulkanRenderPass&,
-            const int width,
-            const int height);
 
     BackendTexture onCreateBackendTexture(SkISize dimensions, const TextureInfo&) override;
 #ifdef SK_BUILD_FOR_ANDROID
@@ -87,50 +98,20 @@ private:
 #endif
     void onDeleteBackendTexture(const BackendTexture&) override;
 
-    sk_sp<VulkanDescriptorSet> findOrCreateDescriptorSet(SkSpan<DescriptorData>);
+    // Certain operations only need to occur once per renderpass (updating push constants and, if
+    // necessary, binding the dst texture as an input attachment). It is useful to have a
+    // mock pipeline layout that has compatible push constant parameters and input attachment
+    // descriptor set with all other real pipeline layouts such that it can be reused across command
+    // buffers to perform these operations even before we bind any pipelines.
+    VkPipelineLayout fMockPipelineLayout;
 
-    sk_sp<VulkanDescriptorSet> findOrCreateUniformBuffersDescriptorSet(
-            SkSpan<DescriptorData> requestedDescriptors,
-            SkSpan<BindUniformBufferInfo> bindUniformBufferInfo);
+    // The first value of the pair is a hash of the render pass excluding state that make the render
+    // pass compatible, as calcualted by VulkanCaps::GetRenderPassDescKeyForPipeline.
+    skia_private::TArray<std::pair<uint32_t, sk_sp<VulkanGraphicsPipeline>>> fLoadMSAAPipelines;
+    // The shader modules and pipeline layout can be shared for all loadMSAA pipelines.
+    std::unique_ptr<VulkanProgramInfo> fLoadMSAAProgram;
 
-    sk_sp<VulkanGraphicsPipeline> findOrCreateLoadMSAAPipeline(const RenderPassDesc&);
-
-    // Find or create a compatible (needed when creating a framebuffer and graphics pipeline) or
-    // full (needed when beginning a render pass from the command buffer) RenderPass.
-    sk_sp<VulkanRenderPass> findOrCreateRenderPass(const RenderPassDesc&, bool compatibleOnly);
-
-    // Use a predetermined RenderPass key for finding/creating a RenderPass to avoid recreating it
-    sk_sp<VulkanRenderPass> findOrCreateRenderPassWithKnownKey(
-            const RenderPassDesc&, bool compatibleOnly, const GraphiteResourceKey& rpKey);
-
-    VkPipelineCache pipelineCache();
-
-    friend class VulkanCommandBuffer;
-    friend class VulkanGraphicsPipeline;
-    VkPipelineCache fPipelineCache = VK_NULL_HANDLE;
-
-    // Each render pass will need buffer space to record rtAdjust information. To minimize costly
-    // allocation calls and searching of the resource cache, we find & store a uniform buffer upon
-    // resource provider creation. This way, render passes across all command buffers can simply
-    // update the value within this buffer as needed.
-    sk_sp<Buffer> fIntrinsicUniformBuffer;
-    // Similary, use a shared buffer b/w all renderpasses to store vertices for loading MSAA from
-    // resolve.
-    sk_sp<Buffer> fLoadMSAAVertexBuffer;
-
-    // The first value of the pair is a renderpass key. Graphics pipeline keys contain extra
-    // information that we do not need for identifying unique pipelines.
-    skia_private::TArray<std::pair<GraphiteResourceKey,
-                         sk_sp<VulkanGraphicsPipeline>>> fLoadMSAAPipelines;
-    // All of the following attributes are the same between all msaa load pipelines, so they only
-    // need to be created once and can then be stored.
-    VkShaderModule fMSAALoadVertShaderModule = VK_NULL_HANDLE;
-    VkShaderModule fMSAALoadFragShaderModule = VK_NULL_HANDLE;
-    VkPipelineShaderStageCreateInfo fMSAALoadShaderStageInfo[2];
-    VkPipelineLayout fMSAALoadPipelineLayout = VK_NULL_HANDLE;
-
-    SkLRUCache<UniformBindGroupKey, sk_sp<VulkanDescriptorSet>,
-               UniformBindGroupKey::Hash> fUniformBufferDescSetCache;
+    skia_private::TArray<std::pair<GraphiteResourceKey, uint32_t>> fCurrentPoolSizes;
 };
 
 } // namespace skgpu::graphite

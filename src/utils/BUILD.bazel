@@ -20,103 +20,6 @@ split_srcs_and_hdrs(
     files = CORE_SKSLC_FILES,
 )
 
-UTIL_FILES = [
-    "SkBitSet.h",
-    "SkCallableTraits.h",
-    "SkCamera.cpp",
-    "SkCanvasStack.cpp",
-    "SkCanvasStack.h",
-    "SkCanvasStateUtils.cpp",
-    "SkCharToGlyphCache.cpp",
-    "SkCharToGlyphCache.h",
-    "SkClipStackUtils.cpp",
-    "SkClipStackUtils.h",
-    "SkCustomTypeface.cpp",
-    "SkDashPath.cpp",
-    "SkDashPathPriv.h",
-    "SkEventTracer.cpp",
-    "SkFloatToDecimal.cpp",
-    "SkFloatToDecimal.h",
-    "SkFloatUtils.h",
-    "SkMatrix22.cpp",
-    "SkMatrix22.h",
-    "SkMultiPictureDocument.cpp",
-    "SkMultiPictureDocumentPriv.h",
-    "SkNWayCanvas.cpp",
-    "SkNullCanvas.cpp",
-    "SkOrderedFontMgr.cpp",
-    "SkPaintFilterCanvas.cpp",
-    "SkParseColor.cpp",
-    "SkParsePath.cpp",
-    "SkPatchUtils.cpp",
-    "SkPatchUtils.h",
-    "SkPolyUtils.cpp",
-    "SkPolyUtils.h",
-    "SkShaderUtils.cpp",
-    "SkShaderUtils.h",
-    "SkShadowTessellator.cpp",
-    "SkShadowTessellator.h",
-    "SkShadowUtils.cpp",
-    "SkTextUtils.cpp",
-]
-
-split_srcs_and_hdrs(
-    name = "utils",
-    files = UTIL_FILES,
-)
-
-GPU_ONLY_FILES = [
-    "SkTestCanvas.h",
-    "SkTestCanvas.cpp",
-]
-
-split_srcs_and_hdrs(
-    name = "gpu",
-    files = GPU_ONLY_FILES,
-)
-
-skia_filegroup(
-    name = "json_hdrs",
-    srcs = [
-        "SkJSON.h",
-        "SkJSONWriter.h",
-    ],
-)
-
-skia_filegroup(
-    name = "json_srcs",
-    srcs = [
-        "SkJSON.cpp",
-        "SkJSONWriter.cpp",
-    ],
-)
-
-skia_filegroup(
-    name = "srcs",
-    srcs = [
-        ":json_srcs",
-        ":utils_skslc_srcs",
-        ":utils_srcs",
-    ] + select({
-        "//src/gpu:has_ganesh_backend": [":gpu_srcs"],
-        "//conditions:default": [],
-    }),
-    visibility = ["//src:__pkg__"],
-)
-
-skia_filegroup(
-    name = "private_hdrs",
-    srcs = [
-        ":json_hdrs",
-        ":utils_hdrs",
-        ":utils_skslc_hdrs",
-    ] + select({
-        "//src/gpu:has_ganesh_backend": [":gpu_hdrs"],
-        "//conditions:default": [],
-    }),
-    visibility = ["//src:__pkg__"],
-)
-
 skia_filegroup(
     name = "core_priv_hdrs",
     srcs = [
@@ -124,7 +27,6 @@ skia_filegroup(
         "SkCallableTraits.h",
         "SkCanvasStack.h",
         "SkDashPathPriv.h",
-        "SkJSON.h",
         "SkJSONWriter.h",
         "SkMatrix22.h",
         "SkOSPath.h",
@@ -137,14 +39,16 @@ skia_filegroup(
 skia_filegroup(
     name = "core_srcs",
     srcs = [
+        "SkCamera.cpp",
         "SkCanvasStack.cpp",
         "SkCustomTypeface.cpp",
         "SkDashPath.cpp",
         "SkEventTracer.cpp",
-        "SkJSON.cpp",
+        "SkFloatUtils.h",
         "SkJSONWriter.cpp",
         "SkMatrix22.cpp",
         "SkNWayCanvas.cpp",
+        "SkNullCanvas.cpp",
         "SkOSPath.cpp",
         "SkOrderedFontMgr.cpp",
         "SkPaintFilterCanvas.cpp",
@@ -162,28 +66,34 @@ skia_filegroup(
 )
 
 skia_filegroup(
-    name = "char_to_glyphcache",
+    name = "canvas_state_utils",
     srcs = [
-        "SkCharToGlyphCache.cpp",
-        "SkCharToGlyphCache.h",
+        "SkCanvasStateUtils.cpp",
     ],
-    visibility = ["//src/ports:__pkg__"],
 )
 
-skia_filegroup(
-    name = "shader_utils_hdrs",
-    srcs = [
-        "SkShaderUtils.h",
-    ],
-    visibility = ["//src/gpu:__subpackages__"],
-)
-
-skia_filegroup(
-    name = "shader_utils_srcs",
+skia_cc_library(
+    name = "shader_utils",
     srcs = [
         "SkShaderUtils.cpp",
     ],
-    visibility = ["//src/gpu:__subpackages__"],
+    hdrs = [
+        "SkShaderUtils.h",
+    ],
+    features = ["layering_check"],
+    visibility = [
+        "//src/gpu:__pkg__",
+        "//src/gpu/ganesh/gl:__pkg__",
+        "//src/gpu/ganesh/vk:__pkg__",
+        "//src/gpu/graphite:__pkg__",
+        "//src/gpu/graphite/dawn:__pkg__",
+        "//src/gpu/graphite/vk:__pkg__",
+        "//src/sksl/codegen:__pkg__",
+    ],
+    deps = [
+        "//:core",
+        "//src/core:core_priv",
+    ],
 )
 
 skia_cc_library(
@@ -195,12 +105,14 @@ skia_cc_library(
     hdrs = [
         "//include/docs:multi_picture_document_hdrs",
     ],
+    features = ["layering_check"],
     visibility = [
+        "//dm:__pkg__",
+        "//tools:__pkg__",
         "//tools/debugger:__pkg__",
     ],
     deps = [
         "//:core",
-        "//src/base",
     ],
 )
 
@@ -212,6 +124,7 @@ skia_cc_library(
     hdrs = [
         "SkFloatToDecimal.h",
     ],
+    features = ["layering_check"],
     visibility = [
         "//src/pdf:__pkg__",
     ],
@@ -228,12 +141,14 @@ skia_cc_library(
     hdrs = [
         "SkClipStackUtils.h",
     ],
+    features = ["layering_check"],
     visibility = [
         "//src/pdf:__pkg__",
     ],
     deps = [
-        "//:core",
         "//:pathops",
+        "//src/core",
+        "//src/core:core_priv",
     ],
 )
 
@@ -245,8 +160,22 @@ skia_cc_library(
         "@platforms//os:linux": ["SkGetExecutablePath_linux.cpp"],
     }),
     hdrs = ["SkGetExecutablePath.h"],
+    features = ["layering_check"],
     visibility = [
         "//src/core:__pkg__",
         "//tools/sksl-minify:__pkg__",
+    ],
+)
+
+skia_cc_library(
+    name = "char_to_glyphcache",
+    srcs = ["SkCharToGlyphCache.cpp"],
+    hdrs = ["SkCharToGlyphCache.h"],
+    features = ["layering_check"],
+    visibility = [
+        "//src/ports:__pkg__",
+    ],
+    deps = [
+        "//:core",
     ],
 )

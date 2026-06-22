@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Google Inc.
+ * Copyright 2021 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -16,10 +16,11 @@
 #include "include/core/SkStream.h"
 #include "include/core/SkTypes.h"
 #include "include/private/SkEncodedInfo.h"
-#include "include/private/base/SkTFitsIn.h"
-#include "include/private/base/SkTemplates.h"
-#include "include/private/base/SkTo.h"
+#include "include/private/SkTFitsIn.h"
+#include "include/private/SkTemplates.h"
+#include "include/private/SkTo.h"
 #include "modules/skcms/skcms.h"
+#include "src/codec/SkCodecPriv.h"
 #include "src/codec/SkFrameHolder.h"
 #include "src/core/SkStreamPriv.h"
 #include "src/core/SkSwizzlePriv.h"
@@ -68,9 +69,9 @@ public:
     bool fSeenAllFrames = false;
     std::vector<Frame> fFrames;
     int fLastProcessedFrame = SkCodec::kNoFrame;
-    void* fDst;
-    size_t fPixelShift;
-    size_t fRowBytes;
+    void* fDst = nullptr;
+    size_t fPixelShift = 0;
+    size_t fRowBytes = 0;
     SkColorType fDstColorType;
 
 protected:
@@ -83,7 +84,7 @@ protected:
 SkJpegxlCodec::SkJpegxlCodec(std::unique_ptr<SkJpegxlCodecPriv> codec,
                              SkEncodedInfo&& info,
                              std::unique_ptr<SkStream> stream,
-                             sk_sp<SkData> data)
+                             sk_sp<const SkData> data)
         : INHERITED(std::move(info), skcms_PixelFormat_RGBA_16161616LE, std::move(stream))
         , fCodec(std::move(codec))
         , fData(std::move(data)) {}
@@ -97,11 +98,11 @@ std::unique_ptr<SkCodec> SkJpegxlCodec::MakeFromStream(std::unique_ptr<SkStream>
     }
     *result = kInternalError;
     // Either wrap or copy stream data.
-    sk_sp<SkData> data = nullptr;
+    sk_sp<const SkData> data = nullptr;
     if (stream->getMemoryBase()) {
         data = SkData::MakeWithoutCopy(stream->getMemoryBase(), stream->getLength());
     } else {
-        data = SkCopyStreamToData(stream.get());
+        data = SkStreamPriv::CopyStreamToData(stream.get());
         // Data is copied; stream can be released now.
         stream.reset(nullptr);
     }
@@ -135,7 +136,7 @@ std::unique_ptr<SkCodec> SkJpegxlCodec::MakeFromStream(std::unique_ptr<SkStream>
     int32_t width = 0, height = 0;
     SkEncodedInfo::Alpha alpha = SkEncodedInfo::kUnpremul_Alpha;
     SkEncodedInfo::Color color = SkEncodedInfo::kRGBA_Color;
-    std::unique_ptr<SkEncodedInfo::ICCProfile> profile = nullptr;
+    std::unique_ptr<SkCodecs::ColorProfile> profile = nullptr;
 
     while (true) {
         JxlDecoderStatus status = JxlDecoderProcessInput(dec);
@@ -202,7 +203,7 @@ std::unique_ptr<SkCodec> SkJpegxlCodec::MakeFromStream(std::unique_ptr<SkStream>
                     SkDEBUGFAIL("libjxl returned unexpected status");
                     return nullptr;
                 }
-                profile = SkEncodedInfo::ICCProfile::Make(std::move(icc));
+                profile = SkCodecs::ColorProfile::MakeICCProfile(std::move(icc));
             }
         } 
         else if (status == JXL_DEC_SUCCESS) {
@@ -241,7 +242,7 @@ SkCodec::Result SkJpegxlCodec::onGetPixels(const SkImageInfo& dstInfo,
     SkASSERT(0 == index || static_cast<size_t>(index) < codec.fFrames.size());
     auto* dec = codec.fDecoder.get();
 
-    if ((codec.fLastProcessedFrame >= index) || (codec.fLastProcessedFrame = SkCodec::kNoFrame)) {
+    if ((codec.fLastProcessedFrame >= index) || (codec.fLastProcessedFrame == SkCodec::kNoFrame)) {
         codec.fLastProcessedFrame = SkCodec::kNoFrame;
         JxlDecoderRewind(dec);
 
@@ -321,6 +322,9 @@ SkCodec::Result SkJpegxlCodec::onGetPixels(const SkImageInfo& dstInfo,
 }
 
 bool SkJpegxlCodec::onRewind() {
+    if (!this->rewindStream()) {
+        return false;
+    }
     JxlDecoderRewind(fCodec->fDecoder.get());
     return true;
 }
@@ -482,6 +486,11 @@ int SkJpegxlCodec::onGetRepetitionCount() {
     return std::numeric_limits<int>::max();
 }
 
+SkCodec::IsAnimated SkJpegxlCodec::onIsAnimated() {
+    JxlBasicInfo& info = fCodec->fInfo;
+    return info.have_animation ? IsAnimated::kYes : IsAnimated::kNo;
+}
+
 const SkFrameHolder* SkJpegxlCodec::getFrameHolder() const {
     return fCodec.get();
 }
@@ -522,7 +531,7 @@ std::unique_ptr<SkCodec> Decode(std::unique_ptr<SkStream> stream,
     return SkJpegxlCodec::MakeFromStream(std::move(stream), outResult);
 }
 
-std::unique_ptr<SkCodec> Decode(sk_sp<SkData> data,
+std::unique_ptr<SkCodec> Decode(sk_sp<const SkData> data,
                                 SkCodec::Result* outResult,
                                 SkCodecs::DecodeContext) {
     if (!data) {

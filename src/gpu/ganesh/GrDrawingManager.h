@@ -10,9 +10,9 @@
 
 #include "include/core/SkRefCnt.h"
 #include "include/core/SkSpan.h"
-#include "include/private/base/SkDebug.h"
-#include "include/private/base/SkTArray.h"
-#include "src/gpu/AtlasTypes.h"
+#include "include/private/SkDebug.h"
+#include "include/private/SkTArray.h"
+#include "src/gpu/ganesh/GrAtlasTypes.h"
 #include "src/gpu/ganesh/GrBufferAllocPool.h"
 #include "src/gpu/ganesh/GrCaps.h"
 #include "src/gpu/ganesh/GrHashMapWithCache.h"
@@ -42,11 +42,11 @@ class GrResourceAllocator;
 class GrSemaphore;
 class GrSurfaceProxyView;
 class GrTextureResolveRenderTask;
+class GrTransferFromRenderTask;
 class SkData;
 enum GrSurfaceOrigin : int;
 enum class GrColorType;
 enum class GrSemaphoresSubmitted : bool;
-enum class GrSyncCpu : bool;
 struct GrFlushInfo;
 struct GrMipLevel;
 struct SkIRect;
@@ -103,9 +103,13 @@ public:
     // to be copied. The surfaceColorType says how we should interpret the data when reading back
     // from the source. DstColorType describes how the data should be stored in the dstBuffer.
     // DstOffset is the offset into the dstBuffer where we will start writing data.
-    void newTransferFromRenderTask(const sk_sp<GrSurfaceProxy>& srcProxy, const SkIRect& srcRect,
-                                   GrColorType surfaceColorType, GrColorType dstColorType,
-                                   sk_sp<GrGpuBuffer> dstBuffer, size_t dstOffset);
+    sk_sp<GrTransferFromRenderTask> newTransferFromRenderTask(
+            const sk_sp<GrSurfaceProxy>& srcProxy,
+            const SkIRect& srcRect,
+            GrColorType surfaceColorType,
+            GrColorType dstColorType,
+            sk_sp<GrGpuBuffer> dstBuffer,
+            size_t dstOffset);
 
     // Creates a new render task which copies a pixel rectangle from srcView into dstView. The src
     // pixels copied are specified by srcRect. They are copied to the dstRect in dstProxy. Some
@@ -172,8 +176,6 @@ public:
     // and turned on.
     PathRenderer* getTessellationPathRenderer();
 
-    void flushIfNecessary();
-
     static bool ProgramUnitTest(GrDirectContext*, int maxStages, int maxLevels);
 
     GrSemaphoresSubmitted flushSurfaces(SkSpan<GrSurfaceProxy*>,
@@ -183,7 +185,7 @@ public:
 
     void addOnFlushCallbackObject(GrOnFlushCallbackObject*);
 
-#if defined(GR_TEST_UTILS)
+#if defined(GPU_TEST_UTILS)
     void testingOnly_removeOnFlushCallbackObject(GrOnFlushCallbackObject*);
     PathRendererChain::Options testingOnly_getOptionsForPathRendererChain() {
         return fOptionsForPathRendererChain;
@@ -231,7 +233,7 @@ private:
     GrRenderTask* appendTask(sk_sp<GrRenderTask>);
     GrRenderTask* insertTaskBeforeLast(sk_sp<GrRenderTask>);
 
-    bool submitToGpu(GrSyncCpu sync);
+    bool submitToGpu();
 
     SkDEBUGCODE(void validate() const;)
 

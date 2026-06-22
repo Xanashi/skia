@@ -7,8 +7,8 @@
 
 #include "src/gpu/ganesh/d3d/GrD3DResourceProvider.h"
 
-#include "include/gpu/GrContextOptions.h"
-#include "include/gpu/GrDirectContext.h"
+#include "include/gpu/ganesh/GrContextOptions.h"
+#include "include/gpu/ganesh/GrDirectContext.h"
 #include "src/gpu/ganesh/GrDirectContextPriv.h"
 #include "src/gpu/ganesh/d3d/GrD3DBuffer.h"
 #include "src/gpu/ganesh/d3d/GrD3DCommandList.h"
@@ -269,7 +269,7 @@ sk_sp<GrD3DPipeline> GrD3DResourceProvider::findOrCreateMipmapPipeline() {
 
 D3D12_GPU_VIRTUAL_ADDRESS GrD3DResourceProvider::uploadConstantData(void* data, size_t size) {
     // constant size has to be aligned to 256
-    constexpr int kConstantAlignment = 256;
+    constexpr size_t kConstantAlignment = 256;
 
     // upload the data
     size_t paddedSize = SkAlignTo(size, kConstantAlignment);

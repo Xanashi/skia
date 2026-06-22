@@ -13,20 +13,20 @@
 #include "include/core/SkColor.h"
 #include "include/core/SkColorFilter.h"
 #include "include/core/SkData.h"
-#include "include/private/base/SkAlign.h"
-#include "include/private/base/SkDebug.h"
-#include "include/private/base/SkMutex.h"
-#include "include/private/base/SkOnce.h"
-#include "include/private/base/SkTArray.h"
-#include "src/base/SkArenaAlloc.h"
-#include "src/base/SkEnumBitMask.h"
-#include "src/base/SkNoDestructor.h"
+#include "include/private/SkAlign.h"
+#include "include/private/SkDebug.h"
+#include "include/private/SkMutex.h"
+#include "include/private/SkOnce.h"
+#include "include/private/SkTArray.h"
+#include "src/core/SkArenaAlloc.h"
 #include "src/core/SkBlenderBase.h"
 #include "src/core/SkChecksum.h"
 #include "src/core/SkColorSpacePriv.h"
 #include "src/core/SkColorSpaceXformSteps.h"
 #include "src/core/SkEffectPriv.h"
+#include "src/core/SkEnumBitMask.h"
 #include "src/core/SkLRUCache.h"
+#include "src/core/SkNoDestructor.h"
 #include "src/core/SkRasterPipeline.h"
 #include "src/core/SkRasterPipelineOpList.h"
 #include "src/core/SkReadBuffer.h"
@@ -59,6 +59,7 @@
 #include "src/sksl/ir/SkSLVarDeclarations.h"
 #include "src/sksl/ir/SkSLVariable.h"
 #include "src/sksl/tracing/SkSLDebugTracePriv.h"
+#include "src/sksl/transform/SkSLTransform.h"
 
 #include <algorithm>
 
@@ -187,7 +188,7 @@ sk_sp<const SkData> SkRuntimeEffectPriv::TransformUniforms(
     for (const auto& u : uniforms) {
         if (u.flags & Flags::kColor_Flag) {
             SkASSERT(u.type == Type::kFloat3 || u.type == Type::kFloat4);
-            if (steps.flags.mask()) {
+            if (steps.fFlags.mask()) {
                 float* color = SkTAddOffset<float>(writableData(), u.offset);
                 if (u.type == Type::kFloat4) {
                     // RGBA, easy case
@@ -221,31 +222,56 @@ const SkSL::RP::Program* SkRuntimeEffect::getRPProgram(SkSL::DebugTracePriv* deb
     fCompileRPProgramOnce([&] {
         // We generally do not run the inliner when an SkRuntimeEffect program is initially created,
         // because the final compile to native shader code will do this. However, in SkRP, there's
-        // no additional compilation occurring, so we need to manually inline here if we want the
-        // performance boost of inlining.
-        if (!(fFlags & kDisableOptimization_Flag)) {
+        // no additional compilation occurring, so we need to optimize/inline here if we want the
+        // performance boost of inlining. Since fBaseProgram is a shared (const) object, we can't
+        // mutate it in-place (e.g. calling compiler.runInliner). If optimization is neccesary,
+        // we re-compile the program from source with inlining and optimization enabled to get a
+        // freshly optimized copy (it's pretty cheap to re-compile and there's no easy way to copy
+        // an SkSL::Program).
+        const SkSL::Program* programToUse = fBaseProgram.get();
+        const SkSL::FunctionDefinition* mainToUse = &fMain;
+
+        std::unique_ptr<SkSL::Program> optimizedCopy;
+        bool shouldOptimize = !(fFlags & kDisableOptimization_Flag);
+        SkSL::ProgramSettings settings = fBaseProgram->fConfig->fSettings;
+        bool needsOptimization = !settings.fOptimize ||
+                                  settings.fInlineThreshold < SkSL::kDefaultInlineThreshold;
+        if (shouldOptimize && needsOptimization) {
             SkSL::Compiler compiler;
-            fBaseProgram->fConfig->fSettings.fInlineThreshold = SkSL::kDefaultInlineThreshold;
-            compiler.runInliner(*fBaseProgram);
+            settings.fOptimize = true;
+            settings.fInlineThreshold = SkSL::kDefaultInlineThreshold;
+            optimizedCopy = compiler.convertProgram(
+                    fBaseProgram->fConfig->fKind, *fBaseProgram->fSource, settings);
+            // We might fail to inline the sksl if there's symbol conflicts. In that
+            // case, we'll use the unoptimized version which may or may not produce
+            // what the user wanted.
+            if (optimizedCopy) {
+                const auto* mainDecl = optimizedCopy->getFunction("main");
+                SkASSERT(mainDecl);
+                if (mainDecl) {
+                    programToUse = optimizedCopy.get();
+                    mainToUse = mainDecl->definition();
+                }
+            }
         }
 
         SkSL::DebugTracePriv tempDebugTrace;
         if (debugTrace) {
             const_cast<SkRuntimeEffect*>(this)->fRPProgram = MakeRasterPipelineProgram(
-                    *fBaseProgram, fMain, debugTrace, /*writeTraceOps=*/true);
+                    *programToUse, *mainToUse, debugTrace, /*writeTraceOps=*/true);
         } else if (kRPEnableLiveTrace) {
             debugTrace = &tempDebugTrace;
             const_cast<SkRuntimeEffect*>(this)->fRPProgram = MakeRasterPipelineProgram(
-                    *fBaseProgram, fMain, debugTrace, /*writeTraceOps=*/false);
+                    *programToUse, *mainToUse, debugTrace, /*writeTraceOps=*/false);
         } else {
             const_cast<SkRuntimeEffect*>(this)->fRPProgram = MakeRasterPipelineProgram(
-                    *fBaseProgram, fMain, /*debugTrace=*/nullptr, /*writeTraceOps=*/false);
+                    *programToUse, *mainToUse, /*debugTrace=*/nullptr, /*writeTraceOps=*/false);
         }
 
         if (kRPEnableLiveTrace) {
             if (fRPProgram) {
                 SkDebugf("-----\n\n");
-                SkDebugfStream stream;
+                SkStreamPriv::DebugfStream stream;
                 fRPProgram->dump(&stream, /*writeInstructionCount=*/true);
                 SkDebugf("\n-----\n\n");
             } else {
@@ -270,11 +296,11 @@ SkSpan<const float> SkRuntimeEffectPriv::UniformsAsSpan(
     if (alwaysCopyIntoAlloc || originalData != transformedData) {
         // The transformed uniform data's lifetime is not long enough to reuse; instead, we copy the
         // uniform data directly into the alloc.
-        int numBytes = transformedData->size();
-        int numFloats = numBytes / sizeof(float);
+        size_t numBytes = transformedData->size();
+        size_t numFloats = numBytes / sizeof(float);
         float* uniformsInAlloc = alloc->makeArrayDefault<float>(numFloats);
         memcpy(uniformsInAlloc, transformedData->data(), numBytes);
-        return SkSpan{uniformsInAlloc, numFloats};
+        return {uniformsInAlloc, numFloats};
     }
     // It's safe to return a pointer into existing data.
     return SkSpan{static_cast<const float*>(originalData->data()),
@@ -318,7 +344,7 @@ void RuntimeEffectRPCallbacks::toLinearSrgb(const void* color) {
     if (fStage.fDstCS) {
         SkColorSpaceXformSteps xform{fStage.fDstCS,              kUnpremul_SkAlphaType,
                                      sk_srgb_linear_singleton(), kUnpremul_SkAlphaType};
-        if (xform.flags.mask()) {
+        if (xform.fFlags.mask()) {
             // We have a non-identity colorspace transform; apply it.
             this->applyColorSpaceXform(xform, color);
         }
@@ -329,7 +355,7 @@ void RuntimeEffectRPCallbacks::fromLinearSrgb(const void* color) {
     if (fStage.fDstCS) {
         SkColorSpaceXformSteps xform{sk_srgb_linear_singleton(), kUnpremul_SkAlphaType,
                                      fStage.fDstCS,              kUnpremul_SkAlphaType};
-        if (xform.flags.mask()) {
+        if (xform.fFlags.mask()) {
             // We have a non-identity colorspace transform; apply it.
             this->applyColorSpaceXform(xform, color);
         }
@@ -444,8 +470,9 @@ void SkRuntimeEffectPriv::WriteChildEffects(
 }
 
 SkSL::ProgramSettings SkRuntimeEffect::MakeSettings(const Options& options) {
+    constexpr int kDisableSKSLInlining = 0;
     SkSL::ProgramSettings settings;
-    settings.fInlineThreshold = 0;
+    settings.fInlineThreshold = kDisableSKSLInlining;
     settings.fForceNoInline = options.forceUnoptimized;
     settings.fOptimize = !options.forceUnoptimized;
     settings.fMaxVersionAllowed = options.maxVersionAllowed;
@@ -488,7 +515,7 @@ SkRuntimeEffect::Result SkRuntimeEffect::MakeInternal(std::unique_ptr<SkSL::Prog
     switch (kind) {
         case SkSL::ProgramKind::kPrivateRuntimeColorFilter:
         case SkSL::ProgramKind::kRuntimeColorFilter:
-            // TODO(skia:11209): Figure out a way to run ES3+ color filters on the CPU. This doesn't
+            // TODO(skbug.com/40042585): Figure out a way to run ES3+ color filters on the CPU. This doesn't
             // need to be fast - it could just be direct IR evaluation. But without it, there's no
             // way for us to fully implement the SkColorFilter API (eg, `filterColor4f`)
             if (!SkRuntimeEffectPriv::CanDraw(SkCapabilities::RasterBackend().get(),
@@ -583,7 +610,7 @@ SkRuntimeEffect::Result SkRuntimeEffect::MakeInternal(std::unique_ptr<SkSL::Prog
                 // If the child is never sampled, we pretend that it's actually in PassThrough mode.
                 // Otherwise, the GP code for collecting transforms and emitting transform code gets
                 // very confused, leading to asserts and bad (backend) shaders. There's an implicit
-                // assumption that every FP is used by its parent. (skbug.com/12429)
+                // assumption that every FP is used by its parent. (skbug.com/40043510)
                 sampleUsages.push_back(usage.isSampled() ? usage
                                                          : SkSL::SampleUsage::PassThrough());
             }
@@ -741,6 +768,7 @@ SkRuntimeEffect::SkRuntimeEffect(std::unique_ptr<SkSL::Program> baseProgram,
                                  uint32_t flags)
         : fHash(SkChecksum::Hash32(baseProgram->fSource->c_str(), baseProgram->fSource->size()))
         , fStableKey(options.fStableKey)
+        , fName(options.fName)
         , fBaseProgram(std::move(baseProgram))
         , fMain(main)
         , fUniforms(std::move(uniforms))
@@ -755,7 +783,9 @@ SkRuntimeEffect::SkRuntimeEffect(std::unique_ptr<SkSL::Program> baseProgram,
     // assert below to trigger, please incorporate your field into `fHash` and update KnownOptions
     // to match the layout of Options.
     struct KnownOptions {
-        bool forceUnoptimized, allowPrivateAccess;
+        bool forceUnoptimized;
+        std::string_view fName;
+        bool allowPrivateAccess;
         uint32_t fStableKey;
         SkSL::Version maxVersionAllowed;
     };
@@ -959,29 +989,14 @@ void SkRuntimeEffect::RegisterFlattenables() {
     SkFlattenable::Register("SkRTShader", SkRuntimeShader::CreateProc);
 }
 
-SkRuntimeShaderBuilder::SkRuntimeShaderBuilder(sk_sp<SkRuntimeEffect> effect)
-        : SkRuntimeEffectBuilder(std::move(effect)) {}
-
-SkRuntimeShaderBuilder::~SkRuntimeShaderBuilder() = default;
-
-sk_sp<SkShader> SkRuntimeShaderBuilder::makeShader(const SkMatrix* localMatrix) const {
+sk_sp<SkShader> SkRuntimeEffectBuilder::makeShader(const SkMatrix* localMatrix) const {
     return this->effect()->makeShader(this->uniforms(), this->children(), localMatrix);
 }
 
-SkRuntimeBlendBuilder::SkRuntimeBlendBuilder(sk_sp<SkRuntimeEffect> effect)
-        : SkRuntimeEffectBuilder(std::move(effect)) {}
-
-SkRuntimeBlendBuilder::~SkRuntimeBlendBuilder() = default;
-
-sk_sp<SkBlender> SkRuntimeBlendBuilder::makeBlender() const {
+sk_sp<SkBlender> SkRuntimeEffectBuilder::makeBlender() const {
     return this->effect()->makeBlender(this->uniforms(), this->children());
 }
 
-SkRuntimeColorFilterBuilder::SkRuntimeColorFilterBuilder(sk_sp<SkRuntimeEffect> effect)
-        : SkRuntimeEffectBuilder(std::move(effect)) {}
-
-SkRuntimeColorFilterBuilder::~SkRuntimeColorFilterBuilder() = default;
-
-sk_sp<SkColorFilter> SkRuntimeColorFilterBuilder::makeColorFilter() const {
+sk_sp<SkColorFilter> SkRuntimeEffectBuilder::makeColorFilter() const {
     return this->effect()->makeColorFilter(this->uniforms(), this->children());
 }

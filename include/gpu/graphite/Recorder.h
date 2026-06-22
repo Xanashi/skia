@@ -8,22 +8,34 @@
 #ifndef skgpu_graphite_Recorder_DEFINED
 #define skgpu_graphite_Recorder_DEFINED
 
+#include "include/core/SkCPURecorder.h"
+#include "include/core/SkRecorder.h"
 #include "include/core/SkRefCnt.h"
-#include "include/core/SkSize.h"
+#include "include/core/SkSurface.h"
 #include "include/gpu/graphite/GraphiteTypes.h"
 #include "include/gpu/graphite/Recording.h"
-#include "include/private/base/SingleOwner.h"
-#include "include/private/base/SkTArray.h"
+#include "include/private/SingleOwner.h"
+#include "include/private/SkAPI.h"
+#include "include/private/SkTArray.h"
 
 #include <chrono>
+#include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <optional>
 
-struct AHardwareBuffer;
 class SkCanvas;
-struct SkImageInfo;
 class SkPixmap;
 class SkTraceMemoryDump;
+struct SkISize;
+struct SkImageInfo;
+
+#if defined(SK_BUILD_FOR_ANDROID)
+struct AHardwareBuffer;
+#endif
 
 namespace skgpu {
+enum class BackendApi : unsigned int;
 class RefCntedCallback;
 class TokenTracker;
 }
@@ -37,28 +49,26 @@ namespace skgpu::graphite {
 
 class AtlasProvider;
 class BackendTexture;
-class Caps;
 class Context;
 class Device;
 class DrawBufferManager;
-class GlobalCache;
+class FloatStorageManager;
 class ImageProvider;
-class ProxyCache;
+class PaintParamsKeyBuilder;
+class PipelineDataGatherer;
 class ProxyReadCountMap;
 class RecorderPriv;
 class ResourceProvider;
 class RuntimeEffectDictionary;
 class SharedContext;
-class Task;
 class TaskList;
-class TextureDataBlock;
 class TextureInfo;
-class UniformDataBlock;
 class UploadBufferManager;
+class UploadList;
 
-template<typename T> class PipelineDataCache;
-using UniformDataCache = PipelineDataCache<UniformDataBlock>;
-using TextureDataCache = PipelineDataCache<TextureDataBlock>;
+struct RecorderOptionsPriv;
+
+using KeyAndDataBuilder = std::pair<PipelineDataGatherer, PaintParamsKeyBuilder>;
 
 struct SK_API RecorderOptions final {
     RecorderOptions();
@@ -70,18 +80,28 @@ struct SK_API RecorderOptions final {
     static constexpr size_t kDefaultRecorderBudget = 256 * (1 << 20);
     // What is the budget for GPU resources allocated and held by this Recorder.
     size_t fGpuBudgetInBytes = kDefaultRecorderBudget;
+    // If Recordings are known to be played back in the order they are recorded, then Graphite
+    // may be able to make certain assumptions that improve performance. This is often the case
+    // if the content being drawn triggers the use of internal atlasing in Graphite (e.g. text).
+    std::optional<bool> fRequireOrderedRecordings;
+
+    // Private options that are only meant for testing within Skia's tools.
+    RecorderOptionsPriv* fRecorderOptionsPriv = nullptr;
 };
 
-class SK_API Recorder final {
+class SK_API Recorder final : public SkRecorder {
 public:
     Recorder(const Recorder&) = delete;
     Recorder(Recorder&&) = delete;
     Recorder& operator=(const Recorder&) = delete;
     Recorder& operator=(Recorder&&) = delete;
 
-    ~Recorder();
+    ~Recorder() override;
 
     BackendApi backend() const;
+
+    Type type() const override { return SkRecorder::Type::kGraphite; }
+    skcpu::Recorder* cpuRecorder() override;
 
     std::unique_ptr<Recording> snap();
 
@@ -120,7 +140,9 @@ public:
      * to insert a Recording into the Context and call `submit` to send the upload work to the gpu.
      * The backend texture must be compatible with the provided pixmap(s). Compatible, in this case,
      * means that the backend format is compatible with the base pixmap's colortype. The src data
-     * can be deleted when this call returns.
+     * can be deleted when this call returns. When the BackendTexture is safe to be destroyed by the
+     * client, Skia will call the passed in GpuFinishedProc. The BackendTexture should not be
+     * destroyed before that.
      * If the backend texture is mip mapped, the data for all the mipmap levels must be provided.
      * In the mipmapped case all the colortypes of the provided pixmaps must be the same.
      * Additionally, all the miplevels must be sized correctly (please see
@@ -131,13 +153,16 @@ public:
      */
     bool updateBackendTexture(const BackendTexture&,
                               const SkPixmap srcData[],
-                              int numLevels);
+                              int numLevels,
+                              GpuFinishedProc = nullptr,
+                              GpuFinishedContext = nullptr);
 
     /**
      * If possible, updates a compressed backend texture filled with the provided raw data. The
      * client should check the return value to see if the update was successful. The client is
      * required to insert a Recording into the Context and call `submit` to send the upload work to
-     * the gpu.
+     * the gpu. When the BackendTexture is safe to be destroyed by the client, Skia will call the
+     * passed in GpuFinishedProc. The BackendTexture should not be destroyed before that.
      * If the backend texture is mip mapped, the data for all the mipmap levels must be provided.
      * Additionally, all the miplevels must be sized correctly (please see
      * SkMipMap::ComputeLevelSize and ComputeLevelCount).
@@ -146,7 +171,9 @@ public:
      */
     bool updateCompressedBackendTexture(const BackendTexture&,
                                         const void* data,
-                                        size_t dataSize);
+                                        size_t dataSize,
+                                        GpuFinishedProc = nullptr,
+                                        GpuFinishedContext = nullptr);
 
     /**
      * Called to delete the passed in BackendTexture. This should only be called if the
@@ -182,9 +209,12 @@ public:
     /**
      * Purge GPU resources on the Recorder that haven't been used in the past 'msNotUsed'
      * milliseconds or are otherwise marked for deletion, regardless of whether the context is under
-     * budget.
+     * budget. Optionally provide a `microsMaxPurgingDur` after which Skia should stop purging
+     * resources.
      */
-    void performDeferredCleanup(std::chrono::milliseconds msNotUsed);
+    void performDeferredCleanup(
+            std::chrono::milliseconds msNotUsed,
+            std::optional<std::chrono::microseconds> microsMaxPurgingDur = std::nullopt);
 
     /**
      * Returns the number of bytes of the Recorder's gpu memory cache budget that are currently in
@@ -193,9 +223,20 @@ public:
     size_t currentBudgetedBytes() const;
 
     /**
+     * Returns the number of bytes of the Recorder's resource cache that are currently purgeable.
+     */
+    size_t currentPurgeableBytes() const;
+
+    /**
      * Returns the size of Recorder's gpu memory cache budget in bytes.
      */
     size_t maxBudgetedBytes() const;
+
+    /**
+     * Sets the size of Recorders's gpu memory cache budget in bytes. If the new budget is lower
+     * than the current budget, the cache will try to free resources to get under the new budget.
+     */
+    void setMaxBudgetedBytes(size_t bytes);
 
     /**
      * Enumerates all cached GPU resources owned by the Recorder and dumps their memory to
@@ -208,6 +249,8 @@ public:
     const RecorderPriv priv() const;  // NOLINT(readability-const-return-type)
 
 private:
+    static constexpr int kMaxKeyAndDataBuilders = 2;
+
     friend class Context; // For ctor
     friend class Device; // For registering and deregistering Devices;
     friend class RecorderPriv; // for ctor and hidden methods
@@ -239,18 +282,27 @@ private:
     void registerDevice(sk_sp<Device>);
     void deregisterDevice(const Device*);
 
+    SkCanvas* makeCaptureCanvas(SkCanvas*) override;
+    void createCaptureBreakpoint(SkSurface*) override;
+
     sk_sp<SharedContext> fSharedContext;
     ResourceProvider* fResourceProvider; // May point to the Context's resource provider
     std::unique_ptr<ResourceProvider> fOwnedResourceProvider; // May be null
-    std::unique_ptr<RuntimeEffectDictionary> fRuntimeEffectDict;
+
+    sk_sp<RuntimeEffectDictionary> fRuntimeEffectDict;
 
     // NOTE: These are stored by pointer to allow them to be forward declared.
     std::unique_ptr<TaskList> fRootTaskList;
-    std::unique_ptr<UniformDataCache> fUniformDataCache;
-    std::unique_ptr<TextureDataCache> fTextureDataCache;
+    // Aggregated one-time uploads that precede all tasks in the root task list.
+    std::unique_ptr<UploadList> fRootUploads;
+
     std::unique_ptr<DrawBufferManager> fDrawBufferManager;
     std::unique_ptr<UploadBufferManager> fUploadBufferManager;
+    sk_sp<FloatStorageManager> fFloatStorageManager;
     std::unique_ptr<ProxyReadCountMap> fProxyReadCounts;
+
+    skia_private::STArray<kMaxKeyAndDataBuilders, std::unique_ptr<KeyAndDataBuilder>>
+        fKeyAndDataBuilders;
 
     // Iterating over tracked devices in flushTrackedDevices() needs to be re-entrant and support
     // additions to fTrackedDevices if registerDevice() is triggered by a temporary device during
@@ -261,6 +313,8 @@ private:
 
     uint32_t fUniqueID;  // Needed for MessageBox handling for text
     uint32_t fNextRecordingID = 1;
+    const bool fRequireOrderedRecordings;
+
     std::unique_ptr<AtlasProvider> fAtlasProvider;
     std::unique_ptr<TokenTracker> fTokenTracker;
     std::unique_ptr<sktext::gpu::StrikeCache> fStrikeCache;
@@ -278,9 +332,20 @@ private:
 
     skia_private::TArray<sk_sp<RefCntedCallback>> fFinishedProcs;
 
-#if defined(GRAPHITE_TEST_UTILS)
+    // Tracks the flushing state to ensure recursive flushing does not occur.
+    SkDEBUGCODE(bool fIsFlushingTrackedDevices = false;)
+
+#if defined(GPU_TEST_UTILS)
     // For testing use only -- the Context used to create this Recorder
     Context* fContext = nullptr;
+#endif
+
+#if defined(SK_DUMP_TASKS)
+    // Traverses and dumps the task list at Recorder::snap()
+    void dumpTasks(TaskList*) const;
+
+    // Log of all callers of RecorderPriv::flushTrackedDevices
+    SkTDArray<const char*> fFlushSources;
 #endif
 };
 

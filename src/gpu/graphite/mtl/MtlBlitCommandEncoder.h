@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Google Inc.
+ * Copyright 2021 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -123,7 +123,6 @@ private:
                           sk_cfp<id<MTLBlitCommandEncoder>> encoder)
             : Resource(sharedContext,
                        Ownership::kOwned,
-                       skgpu::Budgeted::kYes,
                        /*gpuMemorySize=*/0)
             , fCommandEncoder(std::move(encoder)) {}
 

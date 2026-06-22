@@ -9,11 +9,11 @@
 #include "include/core/SkRRect.h"
 #include "include/core/SkRect.h"
 #include "include/core/SkScalar.h"
-#include "src/base/SkTLazy.h"
 #include "src/core/SkCachedData.h"
 #include "src/core/SkMask.h"
 #include "src/core/SkMaskCache.h"
 #include "src/core/SkResourceCache.h"
+#include "src/core/SkTLazy.h"
 #include "tests/Test.h"
 
 #include <cstring>
@@ -82,7 +82,7 @@ DEF_TEST(RectsMaskCache, reporter) {
     SkBlurStyle style = kNormal_SkBlurStyle;
     SkTLazy<SkMask> lazyMask;
 
-    SkCachedData* data = SkMaskCache::FindAndRef(sigma, style, rects, 1, &lazyMask, &cache);
+    SkCachedData* data = SkMaskCache::FindAndRef(sigma, style, SkSpan(rects, 1), &lazyMask, &cache);
     REPORTER_ASSERT(reporter, nullptr == data);
     REPORTER_ASSERT(reporter, !lazyMask.isValid());
 
@@ -90,14 +90,14 @@ DEF_TEST(RectsMaskCache, reporter) {
     data = cache.newCachedData(size);
     memset(data->writable_data(), 0xff, size);
     SkMask mask(nullptr, SkIRect::MakeXYWH(0, 0, 100, 100), 100, SkMask::kBW_Format);
-    SkMaskCache::Add(sigma, style, rects, 1, mask, data, &cache);
+    SkMaskCache::Add(sigma, style, SkSpan(rects, 1), mask, data, &cache);
     check_data(reporter, data, 2, kInCache, kLocked);
 
     data->unref();
     check_data(reporter, data, 1, kInCache, kUnlocked);
 
     lazyMask.reset();
-    data = SkMaskCache::FindAndRef(sigma, style, rects, 1, &lazyMask, &cache);
+    data = SkMaskCache::FindAndRef(sigma, style, SkSpan(rects, 1), &lazyMask, &cache);
     REPORTER_ASSERT(reporter, data);
     REPORTER_ASSERT(reporter, data->size() == size);
     REPORTER_ASSERT(reporter, lazyMask->fBounds.top() == 0 && lazyMask->fBounds.bottom() == 100);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Google Inc.
+ * Copyright 2020 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -7,13 +7,13 @@
 
 #include "src/gpu/ganesh/ops/DrawAtlasPathOp.h"
 
+#include "include/core/SkPoint.h"
 #include "include/core/SkSamplingOptions.h"
-#include "include/gpu/GrRecordingContext.h"
-#include "include/private/base/SkAlignedStorage.h"
-#include "include/private/base/SkAssert.h"
-#include "include/private/base/SkOnce.h"
-#include "include/private/base/SkPoint_impl.h"
-#include "include/private/base/SkTArray.h"
+#include "include/gpu/ganesh/GrRecordingContext.h"
+#include "include/private/SkAlignedStorage.h"
+#include "include/private/SkAssert.h"
+#include "include/private/SkOnce.h"
+#include "include/private/SkTArray.h"
 #include "src/core/SkSLTypeShared.h"
 #include "src/gpu/BufferWriter.h"
 #include "src/gpu/KeyBuilder.h"
@@ -116,18 +116,18 @@ private:
         if (args.fShaderCaps->fVertexIDSupport) {
             // If we don't have sk_VertexID support then "unitCoord" already came in as a vertex
             // attrib.
-            args.fVertBuilder->codeAppendf(R"(
-            float2 unitCoord = float2(sk_VertexID & 1, sk_VertexID >> 1);)");
+            args.fVertBuilder->codeAppendf(
+                "float2 unitCoord = float2(sk_VertexID & 1, sk_VertexID >> 1);");
         }
 
-        args.fVertBuilder->codeAppendf(R"(
-        float2 devCoord = mix(fillBounds.xy, fillBounds.zw, unitCoord);)");
+        args.fVertBuilder->codeAppendf(
+            "float2 devCoord = mix(fillBounds.xy, fillBounds.zw, unitCoord);");
         gpArgs->fPositionVar.set(SkSLType::kFloat2, "devCoord");
 
         if (shader.fUsesLocalCoords) {
-            args.fVertBuilder->codeAppendf(R"(
-            float2x2 M = float2x2(affineMatrix.xy, affineMatrix.zw);
-            float2 localCoord = inverse(M) * (devCoord - translate);)");
+            args.fVertBuilder->codeAppendf(
+            "float2x2 M = float2x2(affineMatrix.xy, affineMatrix.zw);"
+            "float2 localCoord = inverse(M) * (devCoord - translate);");
             gpArgs->fLocalCoordVar.set(SkSLType::kFloat2, "localCoord");
         }
 
@@ -225,7 +225,7 @@ void DrawAtlasPathOp::onPrepare(GrOpFlushState* flushState) {
 
     if (VertexWriter instanceWriter = flushState->makeVertexWriter(
                 fProgram->geomProc().instanceStride(), fInstanceCount, &fInstanceBuffer,
-                &fBaseInstance)) {
+                &fBaseInstance)) SK_LIKELY {
         for (const Instance* i = fHeadInstance; i; i = i->fNext) {
             instanceWriter << SkRect::Make(i->fFillBounds)
                            << VertexWriter::If(fUsesLocalCoords,

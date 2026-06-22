@@ -7,12 +7,14 @@
 
 #include "modules/svg/include/SkSVGDOM.h"
 
-#include "include/core/SkCanvas.h"
+#include "include/core/SkData.h"
 #include "include/core/SkFontMgr.h"
 #include "include/core/SkString.h"
-#include "include/private/base/SkTo.h"
+#include "include/private/SkAssert.h"
+#include "include/private/SkTo.h"
 #include "modules/skshaper/include/SkShaper_factory.h"
 #include "modules/svg/include/SkSVGAnimate.h"
+#include "modules/svg/include/SkSVGAttribute.h"
 #include "modules/svg/include/SkSVGAttributeParser.h"
 #include "modules/svg/include/SkSVGCircle.h"
 #include "modules/svg/include/SkSVGClipPath.h"
@@ -56,10 +58,16 @@
 #include "modules/svg/include/SkSVGTypes.h"
 #include "modules/svg/include/SkSVGUse.h"
 #include "modules/svg/include/SkSVGValue.h"
-#include "src/base/SkTSearch.h"
+#include "src/core/SkTSearch.h"
 #include "src/core/SkTraceEvent.h"
 #include "src/core/SkStringUtils.h"
 #include "src/xml/SkDOM.h"
+
+#include <stdint.h>
+#include <array>
+#include <cstring>
+#include <tuple>
+#include <utility>
 
 namespace {
 
@@ -84,7 +92,7 @@ struct ConstructionContext {
 bool SetIRIAttribute(const sk_sp<SkSVGNode>& node, SkSVGAttribute attr,
                       const char* stringValue) {
     auto parseResult = SkSVGAttributeParser::parse<SkSVGIRI>(stringValue);
-    if (!parseResult.isValid()) {
+    if (!parseResult.has_value()) {
         return false;
     }
 
@@ -103,7 +111,7 @@ bool SetStringAttribute(const sk_sp<SkSVGNode>& node, SkSVGAttribute attr,
 bool SetTransformAttribute(const sk_sp<SkSVGNode>& node, SkSVGAttribute attr,
                            const char* stringValue) {
     auto parseResult = SkSVGAttributeParser::parse<SkSVGTransformType>(stringValue);
-    if (!parseResult.isValid()) {
+    if (!parseResult.has_value()) {
         return false;
     }
 
@@ -114,7 +122,7 @@ bool SetTransformAttribute(const sk_sp<SkSVGNode>& node, SkSVGAttribute attr,
 bool SetLengthAttribute(const sk_sp<SkSVGNode>& node, SkSVGAttribute attr,
                         const char* stringValue) {
     auto parseResult = SkSVGAttributeParser::parse<SkSVGLength>(stringValue);
-    if (!parseResult.isValid()) {
+    if (!parseResult.has_value()) {
         return false;
     }
 
@@ -138,7 +146,7 @@ bool SetObjectBoundingBoxUnitsAttribute(const sk_sp<SkSVGNode>& node,
                                         SkSVGAttribute attr,
                                         const char* stringValue) {
     auto parseResult = SkSVGAttributeParser::parse<SkSVGObjectBoundingBoxUnits>(stringValue);
-    if (!parseResult.isValid()) {
+    if (!parseResult.has_value()) {
         return false;
     }
 
@@ -438,6 +446,8 @@ SkSVGDOM::SkSVGDOM(sk_sp<SkSVGSVG> root,
     SkASSERT(fTextShapingFactory);
 }
 
+sk_sp<SkSVGDOM> SkSVGDOM::MakeFromStream(SkStream& str) { return Builder().make(str); }
+
 void SkSVGDOM::render(SkCanvas* canvas) const {
     TRACE_EVENT0("skia", TRACE_FUNC);
     if (fRoot) {
@@ -485,7 +495,7 @@ SkRect SkSVGDOM::getRootBoundingBox() const {
         SkSVGLengthContext lctx(fContainerSize);
         SkSVGPresentationContext pctx;
         return fRoot->objectBoundingBox(SkSVGRenderContext(nullptr, fFontMgr,
-            fResourceProvider, fIDMapper, lctx, pctx, {nullptr, nullptr}));
+            fResourceProvider, fIDMapper, lctx, pctx, {nullptr, nullptr}, fTextShapingFactory));
     }
 
     return SkRect::MakeEmpty();

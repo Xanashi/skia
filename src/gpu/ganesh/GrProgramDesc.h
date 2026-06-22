@@ -9,10 +9,10 @@
 #define GrProgramDesc_DEFINED
 
 #include "include/core/SkString.h"
-#include "include/private/base/SkAlign.h"
-#include "include/private/base/SkTArray.h"
-#include "include/private/base/SkTFitsIn.h"
-#include "include/private/base/SkTo.h"
+#include "include/private/SkAlign.h"
+#include "include/private/SkTArray.h"
+#include "include/private/SkTFitsIn.h"
+#include "include/private/SkTo.h"
 
 #include <cstdint>
 #include <cstring>
@@ -51,7 +51,7 @@ public:
 
     uint32_t initialKeyLength() const { return fInitialKeyLength; }
 
-    // TODO(skia:11372): Incorporate this into caps interface (part of makeDesc, or a parallel
+    // TODO(skbug.com/40042745): Incorporate this into caps interface (part of makeDesc, or a parallel
     // function), so other backends can include their information in the description.
     static SkString Describe(const GrProgramInfo&, const GrCaps&);
 

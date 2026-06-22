@@ -4,29 +4,32 @@
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
+#include "tools/window/win/WindowContextFactory_win.h"
 
 #include "include/core/SkSurface.h"
-#include "include/gpu/GrBackendSurface.h"
-#include "include/gpu/GrDirectContext.h"
-#include "include/gpu/GrTypes.h"
-#include "include/gpu/d3d/GrD3DBackendContext.h"
+#include "include/gpu/ganesh/GrBackendSurface.h"
+#include "include/gpu/ganesh/GrDirectContext.h"
+#include "include/gpu/ganesh/GrTypes.h"
 #include "include/gpu/ganesh/SkSurfaceGanesh.h"
-#include "tools/gpu/d3d/D3DTestUtils.h"
+#include "include/gpu/ganesh/d3d/GrD3DBackendContext.h"
+#include "include/gpu/ganesh/d3d/GrD3DBackendSurface.h"
+#include "include/gpu/ganesh/d3d/GrD3DDirectContext.h"
+#include "include/private/SkLog.h"
+#include "tools/ganesh/d3d/D3DTestUtils.h"
 #include "tools/window/DisplayParams.h"
 #include "tools/window/WindowContext.h"
-#include "tools/window/win/WindowContextFactory_win.h"
 
 #include <d3d12.h>
 #include <dxgi1_4.h>
 #include <wrl/client.h>
 
-#define GR_D3D_CALL_ERRCHECK(X)                                         \
-    do {                                                                \
-        HRESULT result = X;                                             \
-        SkASSERT(SUCCEEDED(result));                                    \
-        if (!SUCCEEDED(result)) {                                       \
-            SkDebugf("Failed Direct3D call. Error: 0x%08lx\n", result); \
-        }                                                               \
+#define GR_D3D_CALL_ERRCHECK(X)                                                        \
+    do {                                                                               \
+        HRESULT result = X;                                                            \
+        SkASSERT(SUCCEEDED(result));                                                   \
+        if (!SUCCEEDED(result)) {                                                      \
+            SkDebugf("Failed Direct3D call. Error: 0x%08lx\n", (unsigned long)result); \
+        }                                                                              \
     } while (false)
 
 using namespace Microsoft::WRL;
@@ -38,7 +41,7 @@ namespace {
 
 class D3D12WindowContext : public WindowContext {
 public:
-    D3D12WindowContext(HWND hwnd, const DisplayParams& params);
+    D3D12WindowContext(HWND hwnd, std::unique_ptr<const DisplayParams> params);
     ~D3D12WindowContext() override;
     void initializeContext();
     void destroyContext();
@@ -51,7 +54,8 @@ public:
     sk_sp<SkSurface> getBackbufferSurface() override;
 
     void resize(int width, int height) override;
-    void setDisplayParams(const DisplayParams& params) override;
+    void setDisplayParams(std::unique_ptr<const DisplayParams> params) override;
+
 private:
     inline static constexpr int kNumFrames = 2;
 
@@ -71,10 +75,8 @@ private:
     uint64_t fFenceValues[kNumFrames];
 };
 
-D3D12WindowContext::D3D12WindowContext(HWND hwnd, const DisplayParams& params)
-    : WindowContext(params)
-    , fWindow(hwnd) {
-
+D3D12WindowContext::D3D12WindowContext(HWND hwnd, std::unique_ptr<const DisplayParams> params)
+        : WindowContext(std::move(params)), fWindow(hwnd) {
     this->initializeContext();
 }
 
@@ -88,7 +90,7 @@ void D3D12WindowContext::initializeContext() {
     fDevice = backendContext.fDevice;
     fQueue = backendContext.fQueue;
 
-    fContext = GrDirectContext::MakeDirect3D(backendContext, fDisplayParams.fGrContextOptions);
+    fContext = GrDirectContexts::MakeD3D(backendContext, fDisplayParams->grContextOptions());
     SkASSERT(fContext);
 
     // Make the swapchain
@@ -123,7 +125,7 @@ void D3D12WindowContext::initializeContext() {
 
     fBufferIndex = fSwapChain->GetCurrentBackBufferIndex();
 
-    fSampleCount = fDisplayParams.fMSAASampleCount;
+    fSampleCount = fDisplayParams->msaaSampleCount();
 
     this->setupSurfaces(width, height);
 
@@ -157,22 +159,22 @@ void D3D12WindowContext::setupSurfaces(int width, int height) {
 
         info.fResource = fBuffers[i];
         if (fSampleCount > 1) {
-            GrBackendTexture backendTexture(width, height, info);
+            auto backendTexture = GrBackendTextures::MakeD3D(width, height, info);
             fSurfaces[i] = SkSurfaces::WrapBackendTexture(fContext.get(),
                                                           backendTexture,
                                                           kTopLeft_GrSurfaceOrigin,
                                                           fSampleCount,
                                                           kRGBA_8888_SkColorType,
-                                                          fDisplayParams.fColorSpace,
-                                                          &fDisplayParams.fSurfaceProps);
+                                                          fDisplayParams->colorSpace(),
+                                                          &fDisplayParams->surfaceProps());
         } else {
-            GrBackendRenderTarget backendRT(width, height, info);
+            auto backendRT = GrBackendRenderTargets::MakeD3D(width, height, info);
             fSurfaces[i] = SkSurfaces::WrapBackendRenderTarget(fContext.get(),
                                                                backendRT,
                                                                kTopLeft_GrSurfaceOrigin,
                                                                kRGBA_8888_SkColorType,
-                                                               fDisplayParams.fColorSpace,
-                                                               &fDisplayParams.fSurfaceProps);
+                                                               fDisplayParams->colorSpace(),
+                                                               &fDisplayParams->surfaceProps());
         }
     }
 }
@@ -246,9 +248,9 @@ void D3D12WindowContext::resize(int width, int height) {
     fHeight = height;
 }
 
-void D3D12WindowContext::setDisplayParams(const DisplayParams& params) {
+void D3D12WindowContext::setDisplayParams(std::unique_ptr<const DisplayParams> params) {
     this->destroyContext();
-    fDisplayParams = params;
+    fDisplayParams = std::move(params);
     this->initializeContext();
 }
 
@@ -256,9 +258,11 @@ void D3D12WindowContext::setDisplayParams(const DisplayParams& params) {
 
 namespace skwindow {
 
-std::unique_ptr<WindowContext> MakeD3D12ForWin(HWND hwnd, const DisplayParams& params) {
-    std::unique_ptr<WindowContext> ctx(new D3D12WindowContext(hwnd, params));
+std::unique_ptr<WindowContext> MakeD3D12ForWin(HWND hwnd,
+                                               std::unique_ptr<const DisplayParams> params) {
+    std::unique_ptr<WindowContext> ctx(new D3D12WindowContext(hwnd, std::move(params)));
     if (!ctx->isValid()) {
+        SKIA_LOG_E("Invalid D3D context for Windows");
         return nullptr;
     }
     return ctx;

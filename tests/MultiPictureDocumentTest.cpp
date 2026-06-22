@@ -16,6 +16,7 @@
 #include "include/core/SkImageInfo.h"
 #include "include/core/SkPaint.h"
 #include "include/core/SkPath.h"
+#include "include/core/SkPathBuilder.h"
 #include "include/core/SkPicture.h"
 #include "include/core/SkPictureRecorder.h"
 #include "include/core/SkRRect.h"
@@ -30,12 +31,14 @@
 #include "include/core/SkTypeface.h"
 #include "include/docs/SkMultiPictureDocument.h"
 #include "tests/Test.h"
-#include "tools/SkSharingProc.h"
 #include "tools/ToolUtils.h"
 #include "tools/fonts/FontToolUtils.h"
 
 #include <memory>
 #include <vector>
+
+#if defined(SK_CODEC_DECODES_PNG_WITH_LIBPNG)
+#include "tools/SkSharingProc.h"
 
 // Covers rects, ovals, paths, images, text
 static void draw_basic(SkCanvas* canvas, int seed, sk_sp<SkImage> image) {
@@ -62,8 +65,9 @@ static void draw_basic(SkCanvas* canvas, int seed, sk_sp<SkImage> image) {
     paint.setColor(SK_ColorYELLOW);
     canvas->drawRoundRect(rect, 10, 10, paint);
 
-    SkPath path;
-    path.cubicTo(768, 0, -512, 256, 256, 256);
+    SkPath path = SkPathBuilder()
+                  .cubicTo(768, 0, -512, 256, 256, 256)
+                  .detach();
     paint.setColor(SK_ColorGREEN);
     canvas->drawPath(path, paint);
 
@@ -100,8 +104,9 @@ DEF_TEST(SkMultiPictureDocument_Serialize_and_deserialize, reporter) {
 
     // Create the image sharing proc.
     SkSharingSerialContext ctx;
+    ctx.setDirectContext(nullptr);
     SkSerialProcs procs;
-    procs.fImageProc = SkSharingSerialContext::serializeImage;
+    procs.fImageProc = SkSharingContext::serializeImage;
     procs.fImageCtx = &ctx;
 
     // Create the multi picture document used for recording frames.
@@ -147,7 +152,7 @@ DEF_TEST(SkMultiPictureDocument_Serialize_and_deserialize, reporter) {
     // Set up deserialization
     SkSharingDeserialContext deserialContext;
     SkDeserialProcs dprocs;
-    dprocs.fImageProc = SkSharingDeserialContext::deserializeImage;
+    dprocs.fImageDataProc = SkSharingContext::deserializeImage;
     dprocs.fImageCtx = &deserialContext;
 
     // Confirm data is a MultiPictureDocument
@@ -180,7 +185,7 @@ DEF_TEST(SkMultiPictureDocument_Serialize_and_deserialize, reporter) {
         i++;
     }
 }
-
+#endif
 
 #if defined(SK_GANESH) && defined(SK_BUILD_FOR_ANDROID) && __ANDROID_API__ >= 26
 
@@ -189,7 +194,7 @@ DEF_TEST(SkMultiPictureDocument_Serialize_and_deserialize, reporter) {
 #include "include/core/SkBitmap.h"
 #include "include/core/SkColorSpace.h"
 #include "include/core/SkColorType.h"
-#include "include/gpu/GrDirectContext.h"
+#include "include/gpu/ganesh/GrDirectContext.h"
 #include "include/gpu/ganesh/SkImageGanesh.h"
 #include "src/gpu/ganesh/GrCaps.h"
 #include "src/gpu/ganesh/GrDirectContextPriv.h"
@@ -345,8 +350,9 @@ DEF_GANESH_TEST_FOR_RENDERING_CONTEXTS(SkMultiPictureDocument_AHardwarebuffer,
 
     // Create the image sharing proc.
     SkSharingSerialContext ctx;
+    ctx.setDirectContext(context);
     SkSerialProcs procs;
-    procs.fImageProc = SkSharingSerialContext::serializeImage;
+    procs.fImageProc = SkSharingContext::serializeImage;
     procs.fImageCtx = &ctx;
 
     // Create the multi picture document used for recording frames.
@@ -392,7 +398,7 @@ DEF_GANESH_TEST_FOR_RENDERING_CONTEXTS(SkMultiPictureDocument_AHardwarebuffer,
     // Set up deserialization
     SkSharingDeserialContext deserialContext;
     SkDeserialProcs dprocs;
-    dprocs.fImageProc = SkSharingDeserialContext::deserializeImage;
+    dprocs.fImageDataProc = SkSharingContext::deserializeImage;
     dprocs.fImageCtx = &deserialContext;
 
     // Confirm data is a MultiPictureDocument

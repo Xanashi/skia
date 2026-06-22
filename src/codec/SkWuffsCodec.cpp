@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Google Inc.
+ * Copyright 2018 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -24,15 +24,17 @@
 #include "include/core/SkSize.h"
 #include "include/core/SkStream.h"
 #include "include/core/SkTypes.h"
+#include "include/private/SkAssert.h"
 #include "include/private/SkEncodedInfo.h"
-#include "include/private/base/SkMalloc.h"
-#include "include/private/base/SkTo.h"
+#include "include/private/SkMalloc.h"
+#include "include/private/SkTo.h"
 #include "modules/skcms/skcms.h"
 #include "src/codec/SkCodecPriv.h"
 #include "src/codec/SkFrameHolder.h"
 #include "src/codec/SkSampler.h"
 #include "src/codec/SkScalingCodec.h"
 #include "src/core/SkDraw.h"
+#include "src/core/SkMipmap.h"
 #include "src/core/SkRasterClip.h"
 #include "src/core/SkStreamPriv.h"
 
@@ -247,13 +249,12 @@ public:
 
     const SkWuffsFrame* frame(int i) const;
 
-    std::unique_ptr<SkStream> getEncodedData() const override;
-
 private:
     // SkCodec overrides.
     SkEncodedImageFormat onGetEncodedFormat() const override;
     Result onGetPixels(const SkImageInfo&, void*, size_t, const Options&, int*) override;
     const SkFrameHolder* getFrameHolder() const override;
+    bool                 onSupportsIncrementalDecode(const SkImageInfo&) override { return true; }
     Result               onStartIncrementalDecode(const SkImageInfo&      dstInfo,
                                                   void*                   dst,
                                                   size_t                  rowBytes,
@@ -262,6 +263,8 @@ private:
     int                  onGetFrameCount() override;
     bool                 onGetFrameInfo(int, FrameInfo*) const override;
     int                  onGetRepetitionCount() override;
+    IsAnimated           onIsAnimated() override;
+    sk_sp<const SkData>  getEncodedData() const override;
 
     // Two separate implementations of onStartIncrementalDecode and
     // onIncrementalDecode, named "one pass" and "two pass" decoding. One pass
@@ -377,41 +380,44 @@ const SkFrame* SkWuffsFrameHolder::onGetFrame(int i) const {
 
 // -------------------------------- SkWuffsCodec implementation
 
-SkWuffsCodec::SkWuffsCodec(SkEncodedInfo&&                                         encodedInfo,
-                           std::unique_ptr<SkStream>                               stream,
-                           bool                                                    canSeek,
+SkWuffsCodec::SkWuffsCodec(SkEncodedInfo&& encodedInfo,
+                           std::unique_ptr<SkStream> stream,
+                           bool canSeek,
                            std::unique_ptr<wuffs_gif__decoder, decltype(&sk_free)> dec,
-                           std::unique_ptr<uint8_t, decltype(&sk_free)>            workbuf_ptr,
-                           size_t                                                  workbuf_len,
-                           wuffs_base__image_config                                imgcfg,
-                           wuffs_base__io_buffer                                   iobuf)
-    : INHERITED(std::move(encodedInfo),
-                skcms_PixelFormat_RGBA_8888,
-                // Pass a nullptr SkStream to the SkCodec constructor. We
-                // manage the stream ourselves, as the default SkCodec behavior
-                // is too trigger-happy on rewinding the stream.
-                nullptr),
-      fFrameHolder(),
-      fPrivStream(std::move(stream)),
-      fWorkbufPtr(std::move(workbuf_ptr)),
-      fWorkbufLen(workbuf_len),
-      fDecoder(std::move(dec)),
-      fFirstFrameIOPosition(imgcfg.first_frame_io_position()),
-      fFrameConfig(wuffs_base__null_frame_config()),
-      fPixelConfig(imgcfg.pixcfg),
-      fPixelBuffer(wuffs_base__null_pixel_buffer()),
-      fIOBuffer(wuffs_base__empty_io_buffer()),
-      fIncrDecDst(nullptr),
-      fIncrDecRowBytes(0),
-      fIncrDecPixelBlend(WUFFS_BASE__PIXEL_BLEND__SRC),
-      fIncrDecOnePass(false),
-      fFirstCallToIncrementalDecode(false),
-      fTwoPassPixbufPtr(nullptr, &sk_free),
-      fTwoPassPixbufLen(0),
-      fNumFullyReceivedFrames(0),
-      fFramesComplete(false),
-      fDecoderIsSuspended(false),
-      fCanSeek(canSeek) {
+                           std::unique_ptr<uint8_t, decltype(&sk_free)> workbuf_ptr,
+                           size_t workbuf_len,
+                           wuffs_base__image_config imgcfg,
+                           wuffs_base__io_buffer iobuf)
+        : INHERITED(std::move(encodedInfo),
+                    skcms_PixelFormat_RGBA_8888,
+                    // Pass a nullptr SkStream to the SkCodec constructor. We
+                    // manage the stream ourselves, as the default SkCodec behavior
+                    // is too trigger-happy on rewinding the stream.
+                    //
+                    // TODO(https://crbug.com/370522089): See if `SkCodec` can be
+                    // tweaked to avoid the need to hide the stream from it.
+                    nullptr)
+        , fFrameHolder()
+        , fPrivStream(std::move(stream))
+        , fWorkbufPtr(std::move(workbuf_ptr))
+        , fWorkbufLen(workbuf_len)
+        , fDecoder(std::move(dec))
+        , fFirstFrameIOPosition(imgcfg.first_frame_io_position())
+        , fFrameConfig(wuffs_base__null_frame_config())
+        , fPixelConfig(imgcfg.pixcfg)
+        , fPixelBuffer(wuffs_base__null_pixel_buffer())
+        , fIOBuffer(wuffs_base__empty_io_buffer())
+        , fIncrDecDst(nullptr)
+        , fIncrDecRowBytes(0)
+        , fIncrDecPixelBlend(WUFFS_BASE__PIXEL_BLEND__SRC)
+        , fIncrDecOnePass(false)
+        , fFirstCallToIncrementalDecode(false)
+        , fTwoPassPixbufPtr(nullptr, &sk_free)
+        , fTwoPassPixbufLen(0)
+        , fNumFullyReceivedFrames(0)
+        , fFramesComplete(false)
+        , fDecoderIsSuspended(false)
+        , fCanSeek(canSeek) {
     fFrameHolder.init(this, imgcfg.pixcfg.width(), imgcfg.pixcfg.height());
 
     // Initialize fIOBuffer's fields, copying any outstanding data from iobuf to
@@ -497,7 +503,7 @@ SkCodec::Result SkWuffsCodec::onStartIncrementalDecode(const SkImageInfo&      d
     // supports...
     fIncrDecOnePass = (pixelFormat != WUFFS_BASE__PIXEL_FORMAT__INVALID) &&
                       // ...and no color profile (as Wuffs does not support them)...
-                      (!getEncodedInfo().profile()) &&
+                      (!getEncodedInfo().colorProfile()) &&
                       // ...and we use the identity transform (as Wuffs does
                       // not support scaling).
                       (this->dimensions() == dstInfo.dimensions());
@@ -586,6 +592,13 @@ SkCodec::Result SkWuffsCodec::onStartIncrementalDecodeTwoPass() {
 
         wuffs_base__rect_ie_u32 frame_rect = fFrameConfig.bounds();
         wuffs_base__table_u8    pixels = fPixelBuffer.plane(0);
+
+        const size_t pixels_w = pixels.width / src_bytes_per_pixel,
+                     pixels_h = pixels.height;
+        SkASSERT_RELEASE(frame_rect.min_incl_x <= pixels_w);
+        SkASSERT_RELEASE(frame_rect.min_incl_y <= pixels_h);
+        SkASSERT_RELEASE(frame_rect.max_excl_x <= pixels_w);
+        SkASSERT_RELEASE(frame_rect.max_excl_y <= pixels_h);
 
         uint8_t* ptr = pixels.ptr + (frame_rect.min_incl_y * pixels.stride) +
                        (frame_rect.min_incl_x * src_bytes_per_pixel);
@@ -707,6 +720,13 @@ SkCodec::Result SkWuffsCodec::onIncrementalDecodeTwoPass() {
     if (!dirty_rect.is_empty()) {
         wuffs_base__table_u8 pixels = fPixelBuffer.plane(0);
 
+        const size_t pixels_w = pixels.width / src_bytes_per_pixel,
+                     pixels_h = pixels.height;
+        SkASSERT_RELEASE(dirty_rect.min_incl_x <= pixels_w);
+        SkASSERT_RELEASE(dirty_rect.min_incl_y <= pixels_h);
+        SkASSERT_RELEASE(dirty_rect.max_excl_x <= pixels_w);
+        SkASSERT_RELEASE(dirty_rect.max_excl_y <= pixels_h);
+
         // The Wuffs model is that the dst buffer is the image, not the frame.
         // The expectation is that you allocate the buffer once, but re-use it
         // for the N frames, regardless of each frame's top-left co-ordinate.
@@ -719,7 +739,7 @@ SkCodec::Result SkWuffsCodec::onIncrementalDecodeTwoPass() {
         // Currently, this is only used for GIF, which will never have an ICC profile. When it is
         // used for other formats that might have one, we will need to transform from profiles that
         // do not have corresponding SkColorSpaces.
-        SkASSERT(!getEncodedInfo().profile());
+        SkASSERT(!getEncodedInfo().colorProfile());
 
         auto srcInfo =
             getInfo().makeWH(dirty_rect.width(), dirty_rect.height()).makeAlphaType(alphaType);
@@ -730,16 +750,16 @@ SkCodec::Result SkWuffsCodec::onIncrementalDecodeTwoPass() {
             paint.setBlendMode(SkBlendMode::kSrc);
         }
 
-        SkDraw draw;
+        skcpu::Draw draw;
         draw.fDst.reset(dstInfo(), fIncrDecDst, fIncrDecRowBytes);
-        SkMatrix matrix = SkMatrix::RectToRect(SkRect::Make(this->dimensions()),
-                                               SkRect::Make(this->dstInfo().dimensions()));
+        SkMatrix matrix = SkMatrix::RectToRectOrIdentity(SkRect::Make(this->dimensions()),
+                                                        SkRect::Make(this->dstInfo().dimensions()));
         draw.fCTM = &matrix;
         SkRasterClip rc(SkIRect::MakeSize(this->dstInfo().dimensions()));
         draw.fRC = &rc;
 
         SkMatrix translate = SkMatrix::Translate(dirty_rect.min_incl_x, dirty_rect.min_incl_y);
-        draw.drawBitmap(src, translate, nullptr, SkSamplingOptions(), paint);
+        draw.drawBitmap(src, translate, nullptr, SkSamplingOptions(), paint, nullptr);
     }
 
     if (result == SkCodec::kSuccess) {
@@ -878,6 +898,16 @@ int SkWuffsCodec::onGetRepetitionCount() {
     return n < INT_MAX ? n : INT_MAX;
 }
 
+SkCodec::IsAnimated SkWuffsCodec::onIsAnimated() {
+    if (fFrames.size() > 1) {
+        return IsAnimated::kYes;
+    }
+
+    // If we only have encounted a single image frame so far, then we have an
+    // ambiguous situation - maybe more frames will come, but maybe not.
+    return fFramesComplete ? IsAnimated::kNo : IsAnimated::kUnknown;
+}
+
 SkCodec::Result SkWuffsCodec::seekFrame(int frameIndex) {
     if (fDecoderIsSuspended) {
         SkCodec::Result res = this->resetDecoder();
@@ -967,9 +997,20 @@ void SkWuffsCodec::updateNumFullyReceivedFrames() {
 
 // We cannot use the SkCodec implementation since we pass nullptr to the superclass out of
 // an abundance of caution w/r to rewinding the stream.
-std::unique_ptr<SkStream> SkWuffsCodec::getEncodedData() const {
-    SkASSERT(fPrivStream);
-    return fPrivStream->duplicate();
+//
+// TODO(https://crbug.com/370522089): See if `SkCodec` can be tweaked to avoid
+// the need to hide the stream from it.
+sk_sp<const SkData> SkWuffsCodec::getEncodedData() const {
+    SkASSERT_RELEASE(fPrivStream);
+    sk_sp<const SkData> data = fPrivStream->getData();
+    if (data) {
+        return data;
+    }
+    auto dStream = fPrivStream->duplicate();
+    if (!dStream->hasLength()) {
+        return nullptr;
+    }
+    return SkData::MakeFromStream(dStream.get(), dStream->getLength());
 }
 
 namespace SkGifDecoder {
@@ -995,7 +1036,7 @@ std::unique_ptr<SkCodec> MakeFromStream(std::unique_ptr<SkStream> stream,
         // Some clients (e.g. Android) need to be able to seek the stream, but may
         // not provide a seekable stream. Copy the stream to one that can seek.
         if (!canSeek) {
-            auto data = SkCopyStreamToData(stream.get());
+            auto data = SkStreamPriv::CopyStreamToData(stream.get());
             stream = std::make_unique<SkMemoryStream>(std::move(data));
             canSeek = true;
         }
@@ -1093,7 +1134,7 @@ std::unique_ptr<SkCodec> Decode(std::unique_ptr<SkStream> stream,
     return MakeFromStream(std::move(stream), policy, outResult);
 }
 
-std::unique_ptr<SkCodec> Decode(sk_sp<SkData> data,
+std::unique_ptr<SkCodec> Decode(sk_sp<const SkData> data,
                                 SkCodec::Result* outResult,
                                 SkCodecs::DecodeContext ctx) {
     if (!data) {

@@ -1,89 +1,10 @@
-load("//bazel:skia_rules.bzl", "skia_cc_deps", "skia_cc_library", "skia_filegroup", "split_srcs_and_hdrs")
+load("//bazel:skia_rules.bzl", "skia_cc_library", "skia_filegroup")
 
 package(
     default_applicable_licenses = ["//:license"],
 )
 
 licenses(["notice"])
-
-skia_filegroup(
-    name = "core_srcs",
-    srcs = [
-        "SkSLRasterPipelineBuilder.cpp",
-        "SkSLRasterPipelineCodeGenerator.cpp",
-    ],
-)
-
-# TODO(kjlubick) Could this be split up so we don't need to compile the SkSLMetalCodeGenerator
-# on platforms that don't support metal (e.g. WebGL, Linux)?
-GPU_SRCS = [
-    "SkSLCodeGenTypes.h",
-    "SkSLCodeGenerator.h",
-    "SkSLGLSLCodeGenerator.cpp",
-    "SkSLGLSLCodeGenerator.h",
-    "SkSLHLSLCodeGenerator.cpp",
-    "SkSLHLSLCodeGenerator.h",
-    "SkSLMetalCodeGenerator.cpp",
-    "SkSLMetalCodeGenerator.h",
-    "SkSLPipelineStageCodeGenerator.cpp",
-    "SkSLPipelineStageCodeGenerator.h",
-    "SkSLSPIRVCodeGenerator.cpp",
-    "SkSLSPIRVCodeGenerator.h",
-    "SkSLSPIRVtoHLSL.cpp",
-    "SkSLSPIRVtoHLSL.h",
-    "SkSLWGSLCodeGenerator.cpp",
-    "SkSLWGSLCodeGenerator.h",
-]
-
-split_srcs_and_hdrs(
-    name = "legacy_gpu",
-    files = GPU_SRCS,
-)
-
-# TODO(kjlubick) delete after updating G3
-alias(
-    name = "gpu_hdrs",
-    actual = ":legacy_gpu_hdrs",
-    visibility = ["//:__pkg__"],
-)
-
-alias(
-    name = "gpu_srcs",
-    actual = ":legacy_gpu_srcs",
-    visibility = ["//:__pkg__"],
-)
-
-skia_filegroup(
-    name = "srcs",
-    srcs = [
-        ":core_srcs",
-    ] + select({
-        "//src/sksl:use_sksl_gpu_srcs": [":legacy_gpu_srcs"],
-        "//conditions:default": [],
-    }),
-    visibility = ["//src/sksl:__pkg__"],
-)
-
-skia_filegroup(
-    name = "private_hdrs",
-    srcs = [
-        "SkSLRasterPipelineBuilder.h",
-        "SkSLRasterPipelineCodeGenerator.h",
-    ] + select({
-        "//src/sksl:use_sksl_gpu_srcs": [":legacy_gpu_hdrs"],
-        "//conditions:default": [],
-    }),
-    visibility = ["//src/sksl:__pkg__"],
-)
-
-skia_cc_deps(
-    name = "deps",
-    visibility = ["//src/sksl:__pkg__"],
-    deps = select({
-        "//src/sksl:use_sksl_gpu_srcs": ["@spirv_cross"],
-        "//conditions:default": [],
-    }),
-)
 
 skia_filegroup(
     name = "rasterpipeline_hdrs",
@@ -103,6 +24,24 @@ skia_filegroup(
     visibility = ["//src/core:__pkg__"],
 )
 
+skia_filegroup(
+    name = "codegen_shared_priv",
+    srcs = [
+        "SkSLCodeGenerator.h",
+    ],
+)
+
+skia_filegroup(
+    name = "codegen_shared_exported",
+    srcs = [
+        "SkSLCodeGenTypes.h",
+        "SkSLNativeShader.h",
+    ],
+    visibility = [
+        "//src/gpu:__pkg__",
+    ],
+)
+
 skia_cc_library(
     name = "gpu",
     srcs = [
@@ -110,15 +49,16 @@ skia_cc_library(
     ],
     hdrs = [
         "SkSLPipelineStageCodeGenerator.h",
+        ":codegen_shared_exported",
     ],
     features = ["layering_check"],
     visibility = [
         "//src/gpu/ganesh:__pkg__",
+        "//src/gpu/graphite:__pkg__",
         "//tools/skslc:__pkg__",
     ],
     deps = [
         "//:core",
-        "//src/base",
         "//src/core:core_priv",
         "//src/gpu",
     ],
@@ -127,12 +67,12 @@ skia_cc_library(
 skia_cc_library(
     name = "glsl",
     srcs = [
-        "SkSLCodeGenerator.h",
         "SkSLGLSLCodeGenerator.cpp",
+        ":codegen_shared_priv",
     ],
     hdrs = [
-        "SkSLCodeGenTypes.h",
         "SkSLGLSLCodeGenerator.h",
+        ":codegen_shared_exported",
     ],
     features = ["layering_check"],
     visibility = [
@@ -141,7 +81,6 @@ skia_cc_library(
     ],
     deps = [
         "//:core",
-        "//src/base",
         "//src/core:core_priv",
     ],
 )
@@ -149,14 +88,14 @@ skia_cc_library(
 skia_cc_library(
     name = "hlsl",
     srcs = [
-        "SkSLCodeGenerator.h",
         "SkSLHLSLCodeGenerator.cpp",
         "SkSLSPIRVtoHLSL.cpp",
         "SkSLSPIRVtoHLSL.h",
+        ":codegen_shared_priv",
     ],
     hdrs = [
-        "SkSLCodeGenTypes.h",
         "SkSLHLSLCodeGenerator.h",
+        ":codegen_shared_exported",
     ],
     features = ["layering_check"],
     visibility = [
@@ -165,7 +104,6 @@ skia_cc_library(
     deps = [
         ":spirv",
         "//:core",
-        "//src/base",
         "//src/core:core_priv",
         "@spirv_cross",
     ],
@@ -174,12 +112,12 @@ skia_cc_library(
 skia_cc_library(
     name = "metal",
     srcs = [
-        "SkSLCodeGenerator.h",
         "SkSLMetalCodeGenerator.cpp",
+        ":codegen_shared_priv",
     ],
     hdrs = [
-        "SkSLCodeGenTypes.h",
         "SkSLMetalCodeGenerator.h",
+        ":codegen_shared_exported",
     ],
     features = ["layering_check"],
     visibility = [
@@ -189,7 +127,6 @@ skia_cc_library(
     ],
     deps = [
         "//:core",
-        "//src/base",
         "//src/core:core_priv",
     ],
 )
@@ -197,13 +134,13 @@ skia_cc_library(
 skia_cc_library(
     name = "spirv",
     srcs = [
-        "SkSLCodeGenerator.h",
         "SkSLSPIRVCodeGenerator.cpp",
+        ":codegen_shared_priv",
         "//src/sksl:gpu_hdrs",
     ],
     hdrs = [
-        "SkSLCodeGenTypes.h",
         "SkSLSPIRVCodeGenerator.h",
+        ":codegen_shared_exported",
     ],
     features = ["layering_check"],
     visibility = [
@@ -212,8 +149,8 @@ skia_cc_library(
     ],
     deps = [
         "//:core",
-        "//src/base",
         "//src/core:core_priv",
+        "//src/utils:shader_utils",
     ],
 )
 
@@ -227,6 +164,7 @@ skia_cc_library(
     ],
     features = ["layering_check"],
     visibility = [
+        "//src/gpu/graphite/vk:__pkg__",
         "//tools/skslc:__pkg__",
     ],
     deps = [
@@ -239,20 +177,20 @@ skia_cc_library(
 skia_cc_library(
     name = "wgsl",
     srcs = [
-        "SkSLCodeGenerator.h",
         "SkSLWGSLCodeGenerator.cpp",
+        ":codegen_shared_priv",
     ],
     hdrs = [
-        "SkSLCodeGenTypes.h",
         "SkSLWGSLCodeGenerator.h",
+        ":codegen_shared_exported",
     ],
     features = ["layering_check"],
     visibility = [
+        "//src/gpu/graphite/dawn:__pkg__",
         "//tools/skslc:__pkg__",
     ],
     deps = [
         "//:core",
-        "//src/base",
         "//src/core:core_priv",
     ],
 )

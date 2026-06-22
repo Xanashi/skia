@@ -7,7 +7,7 @@
 #include "src/gpu/ganesh/GrProgramInfo.h"
 
 #include "include/gpu/GpuTypes.h"
-#include "include/private/base/SkAssert.h"
+#include "include/private/SkAssert.h"
 #include "src/gpu/ganesh/GrCaps.h"
 #include "src/gpu/ganesh/GrRenderTargetProxy.h"
 #include "src/gpu/ganesh/GrSamplerState.h"
@@ -88,7 +88,7 @@ void GrProgramInfo::checkMSAAAndMIPSAreResolved() const {
         if (te.samplerState().mipmapped() == skgpu::Mipmapped::kYes &&
             (tex->width() != 1 || tex->height() != 1)) {
             // There are some cases where we might be given a non-mipmapped texture with a
-            // mipmap filter. See skbug.com/7094.
+            // mipmap filter. See skbug.com/40038328.
             SkASSERT(tex->mipmapped() != skgpu::Mipmapped::kYes || !tex->mipmapsAreDirty());
         }
     });

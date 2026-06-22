@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Google Inc.
+ * Copyright 2021 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -76,65 +76,25 @@ public:
     void setVertexBuffer(id<MTLBuffer> buffer, NSUInteger offset, NSUInteger index) {
         SkASSERT(buffer != nil);
         SkASSERT(index < kMaxExpectedBuffers);
-        if (@available(macOS 10.11, iOS 8.3, tvOS 9.0, *)) {
-            if (fCurrentVertexBuffer[index] == buffer) {
-                this->setVertexBufferOffset(offset, index);
-                return;
-            }
-        }
-        if (fCurrentVertexBuffer[index] != buffer || fCurrentVertexOffset[index] != offset) {
-            [(*fCommandEncoder) setVertexBuffer:buffer
-                                         offset:offset
-                                        atIndex:index];
-            fCurrentVertexBuffer[index] = buffer;
-            fCurrentVertexOffset[index] = offset;
-        }
-    }
-    void setVertexBufferOffset(NSUInteger offset, NSUInteger index)
-            SK_API_AVAILABLE(macos(10.11), ios(8.3), tvos(9.0)) {
-        SkASSERT(index < kMaxExpectedBuffers);
-        if (fCurrentVertexOffset[index] != offset) {
-            [(*fCommandEncoder) setVertexBufferOffset:offset
-                                              atIndex:index];
-            fCurrentVertexOffset[index] = offset;
-        }
+        [(*fCommandEncoder) setVertexBuffer:buffer
+                                     offset:offset
+                                    atIndex:index];
     }
 
     void setFragmentBuffer(id<MTLBuffer> buffer, NSUInteger offset, NSUInteger index) {
         SkASSERT(buffer != nil);
         SkASSERT(index < kMaxExpectedBuffers);
-        if (@available(macOS 10.11, iOS 8.3, tvOS 9.0, *)) {
-            if (fCurrentFragmentBuffer[index] == buffer) {
-                this->setFragmentBufferOffset(offset, index);
-                return;
-            }
-        }
-        if (fCurrentFragmentBuffer[index] != buffer || fCurrentFragmentOffset[index] != offset) {
-            [(*fCommandEncoder) setFragmentBuffer:buffer
-                                           offset:offset
-                                          atIndex:index];
-            fCurrentFragmentBuffer[index] = buffer;
-            fCurrentFragmentOffset[index] = offset;
-        }
-    }
-    void setFragmentBufferOffset(NSUInteger offset, NSUInteger index)
-            SK_API_AVAILABLE(macos(10.11), ios(8.3), tvos(9.0)) {
-        SkASSERT(index < kMaxExpectedBuffers);
-        if (fCurrentFragmentOffset[index] != offset) {
-            [(*fCommandEncoder) setFragmentBufferOffset:offset
-                                                atIndex:index];
-            fCurrentFragmentOffset[index] = offset;
-        }
+        [(*fCommandEncoder) setFragmentBuffer:buffer
+                                       offset:offset
+                                      atIndex:index];
     }
 
-    void setVertexBytes(const void* bytes, NSUInteger length, NSUInteger index)
-            SK_API_AVAILABLE(macos(10.11), ios(8.3), tvos(9.0)) {
+    void setVertexBytes(const void* bytes, NSUInteger length, NSUInteger index) {
         [(*fCommandEncoder) setVertexBytes:bytes
                                     length:length
                                    atIndex:index];
     }
-    void setFragmentBytes(const void* bytes, NSUInteger length, NSUInteger index)
-            SK_API_AVAILABLE(macos(10.11), ios(8.3), tvos(9.0)) {
+    void setFragmentBytes(const void* bytes, NSUInteger length, NSUInteger index) {
         [(*fCommandEncoder) setFragmentBytes:bytes
                                       length:length
                                      atIndex:index];
@@ -151,13 +111,13 @@ public:
     void setFragmentSamplerState(id<MTLSamplerState> sampler, NSUInteger index) {
         SkASSERT(index < kMaxExpectedTextures);
         if (fCurrentSampler[index] != sampler) {
-            [(*fCommandEncoder) setFragmentSamplerState: sampler
-                                                atIndex: index];
+            [(*fCommandEncoder) setFragmentSamplerState:sampler
+                                                atIndex:index];
             fCurrentSampler[index] = sampler;
         }
     }
 
-    void setBlendColor(float blendConst[4]) {
+    void setBlendColor(std::array<float, 4> blendConst) {
         [(*fCommandEncoder) setBlendColorRed: blendConst[0]
                                        green: blendConst[1]
                                         blue: blendConst[2]
@@ -195,8 +155,7 @@ public:
     }
     void drawPrimitives(MTLPrimitiveType primitiveType, NSUInteger vertexStart,
                         NSUInteger vertexCount, NSUInteger instanceCount,
-                        NSUInteger baseInstance)
-            SK_API_AVAILABLE(macos(10.11), ios(9.0), tvos(9.0)) {
+                        NSUInteger baseInstance) {
         [(*fCommandEncoder) drawPrimitives:primitiveType
                             vertexStart:vertexStart
                             vertexCount:vertexCount
@@ -204,8 +163,7 @@ public:
                            baseInstance:baseInstance];
     }
     void drawPrimitives(MTLPrimitiveType primitiveType, id<MTLBuffer> indirectBuffer,
-                        NSUInteger indirectBufferOffset)
-            SK_API_AVAILABLE(macos(10.11), ios(9.0), tvos(9.0)) {
+                        NSUInteger indirectBufferOffset) {
         [(*fCommandEncoder) drawPrimitives:primitiveType
                             indirectBuffer:indirectBuffer
                       indirectBufferOffset:indirectBufferOffset];
@@ -225,8 +183,7 @@ public:
                                NSUInteger indexBufferOffset,
                                NSUInteger instanceCount,
                                NSInteger baseVertex,
-                               NSUInteger baseInstance)
-            SK_API_AVAILABLE(macos(10.11), ios(9.0), tvos(9.0)) {
+                               NSUInteger baseInstance) {
         [(*fCommandEncoder) drawIndexedPrimitives:primitiveType
                                     indexCount:indexCount
                                      indexType:indexType
@@ -239,8 +196,7 @@ public:
     void drawIndexedPrimitives(MTLPrimitiveType primitiveType,
                                MTLIndexType indexType, id<MTLBuffer> indexBuffer,
                                NSUInteger indexBufferOffset, id<MTLBuffer> indirectBuffer,
-                               NSUInteger indirectBufferOffset)
-            SK_API_AVAILABLE(macos(10.11), ios(9.0), tvos(9.0)) {
+                               NSUInteger indirectBufferOffset) {
         [(*fCommandEncoder) drawIndexedPrimitives:primitiveType
                                         indexType:indexType
                                       indexBuffer:indexBuffer
@@ -261,18 +217,8 @@ private:
                             sk_cfp<id<MTLRenderCommandEncoder>> encoder)
             : Resource(sharedContext,
                        Ownership::kOwned,
-                       skgpu::Budgeted::kYes,
                        /*gpuMemorySize=*/0)
             , fCommandEncoder(std::move(encoder)) {
-        for (int i = 0; i < kMaxExpectedBuffers; i++) {
-            fCurrentVertexBuffer[i] = nil;
-            fCurrentFragmentBuffer[i] = nil;
-            // We don't initialize fCurrentVertexOffset or fCurrentFragmentOffset because neither
-            // of those should ever be read unless we've already confirmed the current buffer
-            // matches the new one. That would mean we would have initialized the offset when we
-            // set the current buffer.
-        }
-
         for (int i = 0; i < kMaxExpectedTextures; i++) {
             fCurrentTexture[i] = nil;
             fCurrentSampler[i] = nil;
@@ -288,11 +234,6 @@ private:
     id<MTLRenderPipelineState> fCurrentRenderPipelineState = nil;
     id<MTLDepthStencilState> fCurrentDepthStencilState = nil;
     uint32_t fCurrentStencilReferenceValue = 0; // Metal default value
-
-    id<MTLBuffer> fCurrentVertexBuffer[kMaxExpectedBuffers];
-    NSUInteger fCurrentVertexOffset[kMaxExpectedBuffers];
-    id<MTLBuffer> fCurrentFragmentBuffer[kMaxExpectedBuffers];
-    NSUInteger fCurrentFragmentOffset[kMaxExpectedBuffers];
 
     id<MTLTexture> fCurrentTexture[kMaxExpectedTextures];
     id<MTLSamplerState> fCurrentSampler[kMaxExpectedTextures];

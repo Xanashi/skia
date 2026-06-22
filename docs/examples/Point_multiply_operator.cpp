@@ -1,4 +1,4 @@
-// Copyright 2019 Google LLC.
+// Copyright 2019 Google LLC
 // Use of this source code is governed by a BSD-style license that can be found in the LICENSE file.
 #include "tools/fiddle/examples.h"
 REG_FIDDLE(Point_multiply_operator, 256, 128, false, 0) {
@@ -11,11 +11,11 @@ void draw(SkCanvas* canvas) {
                          { 2, 4 }, { 1, 3 }, { 3, 1 } };
     canvas->scale(15, 10);
     paint.setStyle(SkPaint::kStroke_Style);
-    canvas->drawPoints(SkCanvas::kPolygon_PointMode, std::size(points), points, paint);
+    canvas->drawPoints(SkCanvas::kPolygon_PointMode, points, paint);
     for (auto& point : points) {
         point = point * 1.5f;
     }
     paint.setColor(SK_ColorRED);
-    canvas->drawPoints(SkCanvas::kPolygon_PointMode, std::size(points), points, paint);
+    canvas->drawPoints(SkCanvas::kPolygon_PointMode, points, paint);
 }
 }  // END FIDDLE

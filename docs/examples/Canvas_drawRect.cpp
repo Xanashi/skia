@@ -1,4 +1,4 @@
-// Copyright 2019 Google LLC.
+// Copyright 2019 Google LLC
 // Use of this source code is governed by a BSD-style license that can be found in the LICENSE file.
 #include "tools/fiddle/examples.h"
 REG_FIDDLE(Canvas_drawRect, 256, 256, false, 0) {
@@ -16,7 +16,7 @@ void draw(SkCanvas* canvas) {
         SkRect rect;
         rect.set(rectPts[0], rectPts[1]);
         canvas->drawRect(rect, paint);
-        rotator.mapPoints(rectPts, 2);
+        rotator.mapPoints(rectPts);
     }
 }
 }  // END FIDDLE

@@ -19,9 +19,11 @@
 #include "include/core/SkSurface.h"
 #include "include/core/SkStream.h"
 #include "include/docs/SkPDFDocument.h"
+#include "include/docs/SkPDFJpegHelpers.h"
 
-#if defined(SK_FONTMGR_FONTCONFIG_AVAILABLE)
+#if defined(SK_FONTMGR_FONTCONFIG_AVAILABLE) && defined(SK_TYPEFACE_FACTORY_FREETYPE)
 #include "include/ports/SkFontMgr_fontconfig.h"
+#include "include/ports/SkFontScanner_FreeType.h"
 #endif
 
 #if defined(SK_FONTMGR_CORETEXT_AVAILABLE)
@@ -46,17 +48,22 @@ int main(int argc, char** argv) {
     metadata.fAuthor = "Skia Demo Writer";
     metadata.fLang = "eng";
     metadata.fEncodingQuality = 90;
+    metadata.jpegDecoder = SkPDF::JPEG::Decode;
+    metadata.jpegEncoder = SkPDF::JPEG::Encode;
 
     sk_sp<SkDocument> pdf = SkPDF::MakeDocument(&output, metadata);
     SkCanvas* canvas = pdf->beginPage(100, 50);
 
-#if defined(SK_FONTMGR_FONTCONFIG_AVAILABLE)
-    sk_sp<SkFontMgr> mgr = SkFontMgr_New_FontConfig(nullptr);
+    sk_sp<SkFontMgr> mgr;
+#if defined(SK_FONTMGR_FONTCONFIG_AVAILABLE) && defined(SK_TYPEFACE_FACTORY_FREETYPE)
+    mgr = SkFontMgr_New_FontConfig(nullptr, SkFontScanner_Make_FreeType());
+#elif defined(SK_FONTMGR_CORETEXT_AVAILABLE)
+    mgr = SkFontMgr_New_CoreText(nullptr);
 #endif
-#if defined(SK_FONTMGR_CORETEXT_AVAILABLE)
-    sk_sp<SkFontMgr> mgr = SkFontMgr_New_CoreText(nullptr);
-#endif
-
+    if (!mgr) {
+        printf("No Font Manager configured\n");
+        return 1;
+    }
     sk_sp<SkTypeface> face = mgr->matchFamilyStyle("Roboto", SkFontStyle());
     if (!face) {
       printf("Cannot open typeface\n");

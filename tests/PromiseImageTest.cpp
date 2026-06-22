@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Google Inc.
+ * Copyright 2018 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -21,11 +21,11 @@
 #include "include/core/SkSurface.h"
 #include "include/core/SkTypes.h"
 #include "include/gpu/GpuTypes.h"
-#include "include/gpu/GrBackendSurface.h"
-#include "include/gpu/GrDirectContext.h"
-#include "include/gpu/GrTypes.h"
+#include "include/gpu/ganesh/GrBackendSurface.h"
+#include "include/gpu/ganesh/GrDirectContext.h"
+#include "include/gpu/ganesh/GrTypes.h"
 #include "include/gpu/ganesh/SkSurfaceGanesh.h"
-#include "include/private/base/SkTArray.h"
+#include "include/private/SkTArray.h"
 #include "include/private/chromium/GrDeferredDisplayListRecorder.h"
 #include "include/private/chromium/GrPromiseImageTexture.h"
 #include "include/private/chromium/SkImageChromium.h"
@@ -37,7 +37,6 @@
 #include "tests/CtsEnforcement.h"
 #include "tests/Test.h"
 #include "tools/gpu/ContextType.h"
-#include "tools/gpu/FenceSync.h"
 #include "tools/gpu/ManagedBackendTexture.h"
 
 #include <cstddef>
@@ -244,8 +243,8 @@ DEF_GANESH_TEST(PromiseImageTextureShutdown, reporter, ctxInfo, CtsEnforcement::
 
     for (int type = 0; type < skgpu::kContextTypeCount; ++type) {
         auto contextType = static_cast<skgpu::ContextType>(type);
-        // These tests are difficult to get working with Vulkan. See http://skbug.com/8705
-        // and http://skbug.com/8275
+        // These tests are difficult to get working with Vulkan. See skbug.com/40039997
+        // and skbug.com/40039545
         // And Direct3D, for similar reasons.
         GrBackendApi api = skgpu::ganesh::ContextTypeBackend(contextType);
         if (api == GrBackendApi::kUnsupported || api == GrBackendApi::kVulkan ||

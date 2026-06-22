@@ -8,8 +8,8 @@
 #include "src/sksl/ir/SkSLVarDeclarations.h"
 
 #include "include/core/SkSpan.h"
-#include "include/private/base/SkTo.h"
-#include "src/base/SkEnumBitMask.h"
+#include "include/private/SkTo.h"
+#include "src/core/SkEnumBitMask.h"
 #include "src/sksl/SkSLAnalysis.h"
 #include "src/sksl/SkSLBuiltinTypes.h"
 #include "src/sksl/SkSLCompiler.h"
@@ -284,7 +284,7 @@ void VarDeclaration::ErrorCheck(const Context& context,
         permittedLayoutFlags &= ~LayoutFlag::kPushConstant;
     }
     // The `builtin` layout flag is only allowed in modules.
-    if (!context.fConfig->fIsBuiltinCode) {
+    if (!context.fConfig->isBuiltinCode()) {
         permittedLayoutFlags &= ~LayoutFlag::kBuiltin;
     }
 

@@ -5,11 +5,11 @@
  * found in the LICENSE file.
  */
 
-#define GETVAL(val, def) val.isValid() ? *val : def
+#define GETVAL(val, def) val.has_value() ? *val : def
 
 template <typename T> int 
-inherit_if_needed(const SkTLazy<T>& src, SkTLazy<T>& dst) {
-    if (!dst.isValid()) {
+inherit_if_needed(const std::optional<T>& src, std::optional<T>& dst) {
+    if (!dst.has_value()) {
         dst = src;
         return 1;
     }

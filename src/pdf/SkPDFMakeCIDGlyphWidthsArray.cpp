@@ -10,9 +10,10 @@
 #include "include/core/SkScalar.h"
 #include "include/core/SkSpan.h"
 #include "include/core/SkTypes.h"
-#include "include/private/base/SkTo.h"
+#include "include/private/SkTo.h"
 #include "src/core/SkGlyph.h"
 #include "src/core/SkStrikeSpec.h"
+#include "src/pdf/SkPDFFont.h"
 #include "src/pdf/SkPDFGlyphUse.h"
 #include "src/pdf/SkPDFTypes.h"
 
@@ -59,7 +60,7 @@ SkScalar find_mode_or_0(SkSpan<const SkScalar> advances) {
 
 } // namespace
 
-std::unique_ptr<SkPDFArray> SkPDFMakeCIDGlyphWidthsArray(const SkTypeface& typeface,
+std::unique_ptr<SkPDFArray> SkPDFMakeCIDGlyphWidthsArray(const SkPDFStrikeSpec& pdfStrikeSpec,
                                                          const SkPDFGlyphUse& subset,
                                                          int32_t* defaultAdvance) {
     // There are two ways of expressing advances
@@ -90,15 +91,14 @@ std::unique_ptr<SkPDFArray> SkPDFMakeCIDGlyphWidthsArray(const SkTypeface& typef
     //  f. Switching for 3+ repeats wins                      " adv.ances adv.ances adv.ances"
     //     rule: end range for 3+ repeats
 
-    int emSize;
-    SkStrikeSpec strikeSpec = SkStrikeSpec::MakePDFVector(typeface, &emSize);
-    SkBulkGlyphMetricsAndPaths paths{strikeSpec};
+    int emSize = pdfStrikeSpec.fUnitsPerEM;
+    SkBulkGlyphMetricsAndPaths paths{pdfStrikeSpec.fStrikeSpec};
 
     auto result = SkPDFMakeArray();
 
     std::vector<SkGlyphID> glyphIDs;
     subset.getSetValues([&](unsigned index) {
-        glyphIDs.push_back(SkToU16(index));
+        glyphIDs.push_back(SkTo<SkGlyphID>(index));
     });
     auto glyphs = paths.glyphs(SkSpan(glyphIDs));
 

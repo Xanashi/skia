@@ -1,4 +1,4 @@
-// Copyright 2019 Google LLC.
+// Copyright 2019 Google LLC
 // Use of this source code is governed by a BSD-style license that can be found in the LICENSE file.
 #include "tools/fiddle/examples.h"
 REG_FIDDLE(Point_subtract_operator, 256, 256, false, 0) {
@@ -11,10 +11,10 @@ void draw(SkCanvas* canvas) {
                          { 2, 4 }, { 1, 3 }, { 3, 1 } };
     canvas->scale(30, 15);
     paint.setStyle(SkPaint::kStroke_Style);
-    canvas->drawPoints(SkCanvas::kPolygon_PointMode, std::size(points), points, paint);
+    canvas->drawPoints(SkCanvas::kPolygon_PointMode, points, paint);
     points[1] += points[0] - points[2];
     points[2] -= points[3] - points[5];
     paint.setColor(SK_ColorRED);
-    canvas->drawPoints(SkCanvas::kPolygon_PointMode, std::size(points), points, paint);
+    canvas->drawPoints(SkCanvas::kPolygon_PointMode, points, paint);
 }
 }  // END FIDDLE

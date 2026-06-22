@@ -56,7 +56,9 @@ public:
                                             SkRect* outDstRect,
                                             SkMatrix* outSrcToDst);
 
-    static bool CanDisableMipmap(const SkMatrix& viewM, const SkMatrix& localM);
+    static bool CanDisableMipmap(const SkMatrix& viewM,
+                                 const SkMatrix& localM,
+                                 bool sharpenMipmappedTextures);
 
     static void ClampedOutsetWithOffset(SkIRect* iRect, int outset, SkPoint* offset,
                                         const SkIRect& clamp);
@@ -69,8 +71,10 @@ public:
                                                          const SkSamplingOptions&,
                                                          const SkPaint*,
                                                          SkCanvas::SrcRectConstraint,
+                                                         bool sharpenMM,
                                                          size_t cacheSize,
-                                                         size_t maxTextureSize);
+                                                         size_t maxTextureSize,
+                                                         bool renderLazyPictureTilesOnGPU = true);
 };
 
 } // namespace skgpu

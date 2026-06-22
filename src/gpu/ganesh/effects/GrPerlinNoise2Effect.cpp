@@ -12,7 +12,7 @@
 #include "include/core/SkSize.h"
 #include "include/effects/SkPerlinNoiseShader.h"
 #include "include/private/gpu/ganesh/GrTypesPriv.h"
-#include "src/base/SkRandom.h"
+#include "src/core/SkRandom.h"
 #include "src/core/SkSLTypeShared.h"
 #include "src/gpu/KeyBuilder.h"
 #include "src/gpu/ganesh/GrFragmentProcessor.h"
@@ -34,7 +34,7 @@ class SkShader;
 /////////////////////////////////////////////////////////////////////
 GR_DEFINE_FRAGMENT_PROCESSOR_TEST(GrPerlinNoise2Effect)
 
-#if defined(GR_TEST_UTILS)
+#if defined(GPU_TEST_UTILS)
 std::unique_ptr<GrFragmentProcessor> GrPerlinNoise2Effect::TestCreate(GrProcessorTestData* d) {
     int numOctaves = d->fRandom->nextRangeU(2, 10);
     bool stitchTiles = d->fRandom->nextBool();
@@ -94,7 +94,7 @@ SkString GrPerlinNoise2Effect::Impl::emitHelper(EmitArgs& args) {
     }
 
     // NOTE: We need to explicitly pass half4(1) as input color here, because the helper function
-    // can't see fInputColor (which is "_input" in the FP's outer function). skbug.com/10506
+    // can't see fInputColor (which is "_input" in the FP's outer function). skbug.com/40041839
     SkString sampleX = this->invokeChild(0, "half4(1)", args, "half2(floorVal.x + 0.5, 0.5)");
     SkString sampleY = this->invokeChild(0, "half4(1)", args, "half2(floorVal.z + 0.5, 0.5)");
     noiseCode.appendf("half2 latticeIdx = half2(%s.a, %s.a);", sampleX.c_str(), sampleY.c_str());

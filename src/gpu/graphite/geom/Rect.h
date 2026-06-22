@@ -9,7 +9,11 @@
 #define skgpu_graphite_geom_Rect_DEFINED
 
 #include "include/core/SkRect.h"
-#include "src/base/SkVx.h"
+#include "include/core/SkScalar.h"
+#include "include/private/SkAttributes.h"
+#include "include/private/SkFloatingPoint.h"
+#include "src/core/SkUtils.h"
+#include "src/core/SkVx.h"
 
 namespace skgpu::graphite {
 
@@ -32,6 +36,8 @@ public:
     AI Rect(float l, float t, float r, float b) : fVals(NegateBotRight({l,t,r,b})) {}
     AI Rect(float2 topLeft, float2 botRight) : fVals(topLeft, -botRight) {}
     AI Rect(const SkRect& r) : fVals(NegateBotRight(float4::Load(r.asScalars()))) {}
+    AI Rect(const SkIRect& r)
+            : fVals(NegateBotRight(skvx::cast<float>(skvx::int4::Load(r.asInt32s())))) {}
 
     AI static Rect LTRB(float4 ltrb) {
         return Rect(NegateBotRight(ltrb));

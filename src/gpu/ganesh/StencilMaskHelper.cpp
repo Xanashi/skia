@@ -11,10 +11,10 @@
 #include "include/core/SkPath.h"
 #include "include/core/SkRect.h"
 #include "include/core/SkRegion.h"
-#include "include/gpu/GrRecordingContext.h"
-#include "include/private/base/SkAssert.h"
+#include "include/gpu/ganesh/GrRecordingContext.h"
+#include "include/private/SkAssert.h"
 #include "include/private/gpu/ganesh/GrTypesPriv.h"
-#include "src/base/SkTLazy.h"
+#include "src/core/SkTLazy.h"
 #include "src/gpu/ganesh/GrClip.h"
 #include "src/gpu/ganesh/GrDrawingManager.h"
 #include "src/gpu/ganesh/GrFixedClip.h"
@@ -496,9 +496,7 @@ bool StencilMaskHelper::drawShape(const GrShape& shape,
         this->drawRect(shape.rect(), matrix, op, aa);
         return true;
     } else {
-        SkPath p;
-        shape.asPath(&p);
-        return this->drawPath(p, matrix, op, aa);
+        return this->drawPath(shape.asPath(), matrix, op, aa);
     }
 }
 

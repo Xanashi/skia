@@ -252,15 +252,6 @@ var Configs = map[string]Config{
 		},
 		GPU: "MaliT880",
 	},
-	"GalaxyS9": {
-		Name: "GalaxyS9",
-		Keys: map[string]string{
-			"arch":  "arm64",
-			"model": "GalaxyS9",
-			"os":    "Android",
-		},
-		GPU: "MaliG72",
-	},
 	"Golo_wasm_Ubuntu18": {
 		Name: "Golo_wasm_Ubuntu18",
 		Keys: map[string]string{
@@ -306,15 +297,6 @@ var Configs = map[string]Config{
 		},
 		CPU: "SnapdragonQM215",
 		GPU: "Adreno308",
-	},
-	"Kevin": {
-		Name: "Kevin",
-		Keys: map[string]string{
-			"arch":  "arm",
-			"model": "Kevin",
-			"os":    "ChromeOS",
-		},
-		GPU: "MaliT860",
 	},
 	"MacBook10.1": {
 		Name: "MacBook10.1",
@@ -453,16 +435,6 @@ var Configs = map[string]Config{
 		},
 		GPU: "IntelHD405",
 	},
-	"NUC5i7RYH": {
-		Name: "NUC5i7RYH",
-		Keys: map[string]string{
-			"arch":  "x86_64",
-			"model": "NUC5i7RYH",
-			"os":    "Win10",
-		},
-		CPU: "AVX2",
-		GPU: "IntelIris6100",
-	},
 	"NUC6i5SYK": {
 		Name: "NUC6i5SYK",
 		Keys: map[string]string{
@@ -542,24 +514,6 @@ var Configs = map[string]Config{
 			"os":    "Android",
 		},
 		GPU: "MaliG76",
-	},
-	"Pixel2XL": {
-		Name: "Pixel2XL",
-		Keys: map[string]string{
-			"arch":  "arm64",
-			"model": "Pixel2XL",
-			"os":    "Android",
-		},
-		GPU: "Adreno540",
-	},
-	"Pixel3": {
-		Name: "Pixel3",
-		Keys: map[string]string{
-			"arch":  "arm64",
-			"model": "Pixel3",
-			"os":    "Android",
-		},
-		GPU: "Adreno630",
 	},
 	"Pixel4": {
 		Name: "Pixel4",
@@ -648,96 +602,6 @@ var Configs = map[string]Config{
 		},
 		GPU: "RadeonVega6",
 	},
-	"ShuttleA_Debian10_GTX660": {
-		Name: "ShuttleA_Debian10_GTX660",
-		Keys: map[string]string{
-			"arch":  "x86_64",
-			"model": "ShuttleA",
-			"os":    "Debian10",
-		},
-		GPU: "GTX660",
-	},
-	"ShuttleA_Debian10_IntelHD2000": {
-		Name: "ShuttleA_Debian10_IntelHD2000",
-		Keys: map[string]string{
-			"arch":  "x86_64",
-			"model": "ShuttleA",
-			"os":    "Debian10",
-		},
-		GPU: "IntelHD2000",
-	},
-	"ShuttleA_Debian10_RadeonHD7770": {
-		Name: "ShuttleA_Debian10_RadeonHD7770",
-		Keys: map[string]string{
-			"arch":  "x86_64",
-			"model": "ShuttleA",
-			"os":    "Debian10",
-		},
-		GPU: "RadeonHD7770",
-	},
-	"ShuttleA_Win10_GTX660": {
-		Name: "ShuttleA_Win10_GTX660",
-		Keys: map[string]string{
-			"arch":  "x86_64",
-			"model": "ShuttleA",
-			"os":    "Win10",
-		},
-		GPU: "GTX660",
-	},
-	"ShuttleA_Win10_IntelHD2000": {
-		Name: "ShuttleA_Win10_IntelHD2000",
-		Keys: map[string]string{
-			"arch":  "x86_64",
-			"model": "ShuttleA",
-			"os":    "Win10",
-		},
-		GPU: "IntelHD2000",
-	},
-	"ShuttleA_Win10_RadeonHD7770": {
-		Name: "ShuttleA_Win10_RadeonHD7770",
-		Keys: map[string]string{
-			"arch":  "x86_64",
-			"model": "ShuttleA",
-			"os":    "Win10",
-		},
-		GPU: "RadeonHD7770",
-	},
-	"ShuttleC": {
-		Name: "ShuttleC",
-		Keys: map[string]string{
-			"arch":  "x86_64",
-			"model": "ShuttleC",
-			"os":    "Win10",
-		},
-		GPU: "GTX960",
-	},
-	"Sparky360": {
-		Name: "Sparky360",
-		Keys: map[string]string{
-			"arch":  "x86_64",
-			"model": "Sparky360",
-			"os":    "ChromeOS",
-		},
-		GPU: "IntelUHDGraphics605",
-	},
-	"Spin513": {
-		Name: "Spin513",
-		Keys: map[string]string{
-			"arch":  "arm",
-			"model": "Spin513",
-			"os":    "ChromeOS",
-		},
-		GPU: "Adreno618",
-	},
-	"Spin514": {
-		Name: "Spin514",
-		Keys: map[string]string{
-			"arch":  "x86_64",
-			"model": "Spin514",
-			"os":    "ChromeOS",
-		},
-		GPU: "RadeonVega3",
-	},
 	"VMware7.1_Mac10.13": {
 		Name: "VMware7.1_Mac10.13",
 		Keys: map[string]string{
@@ -782,15 +646,6 @@ var Configs = map[string]Config{
 			"os":    "iOS",
 		},
 		GPU: "PowerVRGT7800",
-	},
-	"iPhone11": {
-		Name: "iPhone11",
-		Keys: map[string]string{
-			"arch":  "arm64",
-			"model": "iPhone11",
-			"os":    "iOS",
-		},
-		GPU: "AppleA13",
 	},
 	"iPhone7": {
 		Name: "iPhone7",

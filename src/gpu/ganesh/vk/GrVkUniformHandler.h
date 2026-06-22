@@ -8,13 +8,24 @@
 #ifndef GrVkUniformHandler_DEFINED
 #define GrVkUniformHandler_DEFINED
 
-#include "include/gpu/vk/GrVkTypes.h"
-#include "src/base/SkTBlockList.h"
+#include "include/private/SkAssert.h"
+#include "include/private/SkTArray.h"
+#include "include/private/gpu/ganesh/GrTypesPriv.h"
+#include "src/core/SkTBlockList.h"
+#include "src/gpu/Swizzle.h"
 #include "src/gpu/ganesh/GrSamplerState.h"
 #include "src/gpu/ganesh/GrShaderVar.h"
-#include "src/gpu/ganesh/glsl/GrGLSLProgramBuilder.h"
 #include "src/gpu/ganesh/glsl/GrGLSLUniformHandler.h"
-#include "src/gpu/ganesh/vk/GrVkSampler.h"
+
+#include <cstdint>
+
+class GrBackendFormat;
+class GrGLSLProgramBuilder;
+class GrProcessor;
+class GrVkSampler;
+class SkString;
+enum class SkSLType : char;
+struct GrShaderCaps;
 
 class GrVkUniformHandler : public GrGLSLUniformHandler {
 public:

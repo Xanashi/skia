@@ -1,4 +1,4 @@
-load("//bazel:skia_rules.bzl", "skia_filegroup")
+load("//bazel:skia_rules.bzl", "generate_cpp_files_for_headers", "skia_filegroup")
 
 package(
     default_applicable_licenses = ["//:license"],
@@ -6,21 +6,20 @@ package(
 
 licenses(["notice"])
 
-skia_filegroup(
-    name = "public_hdrs",
-    srcs = [
-        "SkSLDebugTrace.h",
-        "SkSLVersion.h",
-    ],
-    visibility = [
-        "//include:__pkg__",
-    ],
-)
+PUBLIC_HEADERS = [
+    "SkSLDebugTrace.h",
+    "SkSLVersion.h",
+]
 
-alias(
+skia_filegroup(
     name = "core_hdrs",
-    actual = ":public_hdrs",
+    srcs = PUBLIC_HEADERS,
     visibility = [
         "//src/core:__pkg__",
     ],
+)
+
+generate_cpp_files_for_headers(
+    name = "headers_to_compile",
+    headers = PUBLIC_HEADERS,
 )

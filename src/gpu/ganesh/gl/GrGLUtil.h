@@ -9,11 +9,12 @@
 #define GrGLUtil_DEFINED
 
 #include "include/core/SkColor.h"
-#include "include/gpu/gl/GrGLConfig.h"
-#include "include/gpu/gl/GrGLInterface.h"
-#include "include/gpu/gl/GrGLTypes.h"
-#include "include/private/base/SkAssert.h"
-#include "include/private/base/SkDebug.h"
+#include "include/gpu/ganesh/gl/GrGLConfig.h"
+#include "include/gpu/ganesh/gl/GrGLInterface.h"
+#include "include/gpu/ganesh/gl/GrGLTypes.h"
+#include "include/private/SkAssert.h"
+#include "include/private/SkDebug.h"
+#include "include/private/SkMacros.h"
 #include "include/private/gpu/ganesh/GrTypesPriv.h"
 #include "src/gpu/ganesh/gl/GrGLDefines.h"
 
@@ -167,6 +168,7 @@ enum class GrGLRenderer {
     kAdreno5xx_other,
     kAdreno615,  // Pixel3a
     kAdreno620,  // Pixel5
+    kAdreno621,  // A650-class (A662 derivative)
     kAdreno630,  // Pixel3
     kAdreno640,  // Pixel4
     kAdreno6xx_other,
@@ -200,6 +202,8 @@ enum class GrGLRenderer {
     kIntelAlderLake,
 
     kGalliumLLVM,
+
+    kAndroidEmulator,
 
     kMali4xx,
     /** G-3x, G-5x, or G-7x */
@@ -238,7 +242,8 @@ enum class GrGLANGLEBackend {
     kD3D9,
     kD3D11,
     kMetal,
-    kOpenGL
+    kOpenGL,
+    kVulkan,
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -251,6 +256,12 @@ enum class GrGLANGLEBackend {
     do {                                                                       \
         *(p) = GR_GL_INIT_ZERO;                                                \
         GR_GL_CALL(gl, GetIntegerv(e, p));                                     \
+    } while (0)
+
+#define GR_GL_GetQueryObjectui64v(gl, id, pname, params)                       \
+    do {                                                                       \
+        *(params) = GR_GL_INIT_ZERO;                                           \
+        GR_GL_CALL(gl, GetQueryObjectui64v(id, pname, params));                \
     } while (0)
 
 #define GR_GL_GetFloatv(gl, e, p)                                              \
@@ -341,16 +352,9 @@ void GrGLCheckErr(const GrGLInterface* gl,
 ////////////////////////////////////////////////////////////////////////////////
 
 /**
- *  GR_STRING makes a string of X where X is expanded before conversion to a string
- *  if X itself contains macros.
- */
-#define GR_STRING(X) GR_STRING_IMPL(X)
-#define GR_STRING_IMPL(X) #X
-
-/**
  *  Creates a string of the form "<filename>(<linenumber>) : "
  */
-#define GR_FILE_AND_LINE_STR __FILE__ "(" GR_STRING(__LINE__) ") : "
+#define GR_FILE_AND_LINE_STR __FILE__ "(" SK_MACRO_STRINGIFY(__LINE__) ") : "
 
 /**
  * Macros for using GrGLInterface to make GL calls
@@ -626,7 +630,7 @@ static constexpr bool GrGLFormatIsSRGB(GrGLFormat format) {
     SkUNREACHABLE;
 }
 
-#if defined(SK_DEBUG) || defined(GR_TEST_UTILS)
+#if defined(SK_DEBUG) || defined(GPU_TEST_UTILS)
 static constexpr const char* GrGLFormatToStr(GrGLenum glFormat) {
     switch (glFormat) {
         case GR_GL_RGBA8:                return "RGBA8";

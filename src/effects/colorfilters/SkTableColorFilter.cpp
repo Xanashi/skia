@@ -12,7 +12,7 @@
 #include "include/core/SkFlattenable.h"
 #include "include/core/SkRefCnt.h"
 #include "include/core/SkTypes.h"
-#include "src/base/SkArenaAlloc.h"
+#include "src/core/SkArenaAlloc.h"
 #include "src/core/SkEffectPriv.h"
 #include "src/core/SkRasterPipeline.h"
 #include "src/core/SkRasterPipelineOpContexts.h"
@@ -28,7 +28,8 @@ bool SkTableColorFilter::appendStages(const SkStageRec& rec, bool shaderIsOpaque
         p->append(SkRasterPipelineOp::unpremul);
     }
 
-    SkRasterPipeline_TablesCtx* tables = rec.fAlloc->make<SkRasterPipeline_TablesCtx>();
+    SkRasterPipelineContexts::TablesCtx* tables =
+            rec.fAlloc->make<SkRasterPipelineContexts::TablesCtx>();
     tables->a = fTable->alphaTable();
     tables->r = fTable->redTable();
     tables->g = fTable->greenTable();

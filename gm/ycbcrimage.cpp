@@ -16,9 +16,12 @@
 #include "include/core/SkPaint.h"
 #include "include/core/SkSize.h"
 #include "include/core/SkString.h"
-#include "include/gpu/GrDirectContext.h"
-#include "include/gpu/ganesh/SkImageGanesh.h"
 #include "tools/gpu/vk/VkYcbcrSamplerHelper.h"
+
+#if defined(SK_GANESH)
+#include "include/gpu/ganesh/GrDirectContext.h"
+#include "include/gpu/ganesh/SkImageGanesh.h"
+#endif
 
 #if defined(SK_GRAPHITE)
 #include "include/gpu/graphite/Image.h"
@@ -56,9 +59,8 @@ protected:
 
 #if defined(SK_GRAPHITE)
     DrawResult createYCbCrImage(skgpu::graphite::Recorder* recorder,
-                                skiatest::graphite::GraphiteTestContext* graphiteTestContext,
                                 SkString* errorMsg) {
-        if (!graphiteTestContext || !recorder) {
+        if (!recorder) {
             *errorMsg = "Cannot generate a YCbCr image without a valid GraphiteTestContext and "
                         "recorder.";
             return skiagm::DrawResult::kSkip;
@@ -66,15 +68,11 @@ protected:
 
         SkASSERT_RELEASE(recorder->backend() == skgpu::BackendApi::kVulkan);
 
-        VulkanTestContext* vkTestCtxt = static_cast<VulkanTestContext*>(graphiteTestContext);
-
         const VulkanSharedContext* vulkanSharedCtxt =
                 static_cast<const VulkanSharedContext*>(recorder->priv().sharedContext());
         SkASSERT(vulkanSharedCtxt);
 
-        std::unique_ptr<VkYcbcrSamplerHelper> ycbcrHelper(
-                new VkYcbcrSamplerHelper(vulkanSharedCtxt,
-                                         vkTestCtxt->getBackendContext().fPhysicalDevice));
+        auto ycbcrHelper = std::make_unique<VkYcbcrSamplerHelper>(vulkanSharedCtxt);
         if (!ycbcrHelper) {
             *errorMsg = "Failed to create VkYcbcrSamplerHelper.";
             return skiagm::DrawResult::kFail;
@@ -92,8 +90,7 @@ protected:
 
         fYCbCrImage = SkImages::WrapTexture(recorder,
                                             ycbcrHelper->backendTexture(),
-                                            kRGB_888x_SkColorType,
-                                            kPremul_SkAlphaType,
+                                            kUnknown_SkAlphaType, // force alpha channel to 1
                                             /*colorSpace=*/nullptr,
                                             release_ycbcrhelper,
                                             ycbcrHelper.get());
@@ -107,8 +104,9 @@ protected:
     }
 #endif // SK_GRAPHITE
 
+#if defined(SK_GANESH)
     DrawResult createYCbCrImage(GrDirectContext* dContext, SkString* errorMsg) {
-        std::unique_ptr<VkYcbcrSamplerHelper> ycbcrHelper(new VkYcbcrSamplerHelper(dContext));
+        auto ycbcrHelper = std::make_unique<VkYcbcrSamplerHelper>(dContext);
 
         if (!ycbcrHelper->isYCbCrSupported()) {
             *errorMsg = "YCbCr sampling not supported.";
@@ -137,6 +135,7 @@ protected:
 
         return DrawResult::kOk;
     }
+#endif
 
     DrawResult onGpuSetup(SkCanvas* canvas,
                           SkString* errorMsg,
@@ -150,13 +149,12 @@ protected:
                 return DrawResult::kSkip;
             }
 
-            return this->createYCbCrImage(recorder, graphiteTestContext, errorMsg);
-        } else
+            return this->createYCbCrImage(recorder, errorMsg);
+        }
 #endif
-        {
-            GrDirectContext* dContext = GrAsDirectContext(canvas->recordingContext());
-
-            if (!dContext || dContext->abandoned()) {
+#if defined(SK_GANESH)
+        if (GrDirectContext* dContext = GrAsDirectContext(canvas->recordingContext())) {
+            if (dContext->abandoned()) {
                 return DrawResult::kSkip;
             }
 
@@ -172,6 +170,8 @@ protected:
 
             return DrawResult::kOk;
         }
+#endif
+        return DrawResult::kSkip;
     }
 
     void onGpuTeardown() override {
@@ -190,7 +190,7 @@ private:
 
     sk_sp<SkImage> fYCbCrImage;
 
-    using INHERITED = GpuGM;
+    using INHERITED = GM;
 };
 
 //////////////////////////////////////////////////////////////////////////////

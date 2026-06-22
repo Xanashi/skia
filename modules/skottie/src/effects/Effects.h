@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Google Inc.
+ * Copyright 2019 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -11,22 +11,19 @@
 #include "include/core/SkRefCnt.h"
 #include "include/core/SkShader.h"
 #include "include/core/SkSize.h"
-#include "include/private/base/SkNoncopyable.h"
-#include "modules/skottie/src/Composition.h"
+#include "include/private/SkNoncopyable.h"
+#include "modules/jsonreader/SkJSONReader.h"  // IWYU pragma: keep
 #include "modules/skottie/src/animator/Animator.h"
 #include "modules/sksg/include/SkSGRenderEffect.h"
-#include "src/utils/SkJSON.h"  // IWYU pragma: keep
+#include "modules/sksg/include/SkSGRenderNode.h"
 
 #include <cstddef>
 
-namespace sksg {
-class RenderNode;
-} // namespace sksg
-
 namespace skottie {
 namespace internal {
+
 class AnimationBuilder;
-class LayerBuilder;
+class CompositionBuilder;
 
 class EffectBuilder final : public SkNoncopyable {
 public:
@@ -40,9 +37,11 @@ public:
 
     static const skjson::Value& GetPropValue(const skjson::ArrayValue& jprops, size_t prop_index);
 
-    LayerBuilder* getLayerBuilder(int layer_index) const {
-        return fCompBuilder->layerBuilder(layer_index);
-    }
+    struct LayerContent {
+        sk_sp<sksg::RenderNode> fContent;
+        SkSize                  fSize;
+    };
+    LayerContent getLayerContent(int layer_index) const;
 
 private:
     using EffectBuilderT = sk_sp<sksg::RenderNode>(EffectBuilder::*)(const skjson::ArrayValue&,
@@ -158,7 +157,7 @@ protected:
 
     const SkSize& layerSize() const { return  fLayerSize; }
 
-    struct MaskInfo {
+struct MaskInfo {
         sk_sp<SkShader> fMaskShader;
         bool            fVisible;
     };

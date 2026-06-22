@@ -37,6 +37,7 @@ static sk_sp<SkImage> make_image(SkColorType colorType, SkAlphaType alphaType) {
         case kRGB_888x_SkColorType:
         case kRGB_101010x_SkColorType:
         case kBGR_101010x_SkColorType:
+        case kRGB_F16F16F16x_SkColorType:
             if (alphaType != kOpaque_SkAlphaType) {
                 return nullptr;
             }
@@ -104,9 +105,10 @@ protected:
                 }
                 break;
             case Variant::kOpaque:
-                if (colorType != kRGB_565_SkColorType     &&
-                    colorType != kRGB_888x_SkColorType    &&
-                    colorType != kRGB_101010x_SkColorType &&
+                if (colorType != kRGB_565_SkColorType         &&
+                    colorType != kRGB_888x_SkColorType        &&
+                    colorType != kRGB_101010x_SkColorType     &&
+                    colorType != kRGB_F16F16F16x_SkColorType  &&
                     colorType != kBGR_101010x_SkColorType)
                 {
                     return DrawResult::kSkip;
@@ -178,10 +180,10 @@ private:
                     return new EncodeColorTypesGM(format, quality, Variant::variant, name);\
                 }());});
 
-#define DEF_VARIANTS(format, quality, name)         \
-    DEF_ENCODE_GM(format, quality, kNormal, name);  \
-    DEF_ENCODE_GM(format, quality, kOpaque, name);  \
-    DEF_ENCODE_GM(format, quality, kGray, name);
+#define DEF_VARIANTS(format, quality, name)        \
+    DEF_ENCODE_GM(format, quality, kNormal, name)  \
+    DEF_ENCODE_GM(format, quality, kOpaque, name)  \
+    DEF_ENCODE_GM(format, quality, kGray, name)
 
 DEF_VARIANTS(SkEncodedImageFormat::kWEBP, 100, "webp-lossless")
 DEF_VARIANTS(SkEncodedImageFormat::kWEBP,  80, "webp-lossy")

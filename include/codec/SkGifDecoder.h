@@ -9,7 +9,7 @@
 
 #include "include/codec/SkCodec.h"
 #include "include/core/SkRefCnt.h"
-#include "include/private/base/SkAPI.h"
+#include "include/private/SkAPI.h"
 
 class SkData;
 class SkStream;
@@ -31,7 +31,7 @@ SK_API bool IsGif(const void*, size_t);
 SK_API std::unique_ptr<SkCodec> Decode(std::unique_ptr<SkStream>,
                                        SkCodec::Result*,
                                        SkCodecs::DecodeContext = nullptr);
-SK_API std::unique_ptr<SkCodec> Decode(sk_sp<SkData>,
+SK_API std::unique_ptr<SkCodec> Decode(sk_sp<const SkData>,
                                        SkCodec::Result*,
                                        SkCodecs::DecodeContext = nullptr);
 

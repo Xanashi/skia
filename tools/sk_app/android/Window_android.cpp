@@ -6,12 +6,16 @@
 */
 
 #include "tools/sk_app/android/Window_android.h"
+
+#include "tools/window/DisplayParams.h"
 #include "tools/window/WindowContext.h"
 #include "tools/window/android/WindowContextFactory_android.h"
 
+using skwindow::DisplayParams;
+
 namespace sk_app {
 
-Window* Window::CreateNativeWindow(void* platformData) {
+Window* Windows::CreateNativeWindow(void* platformData) {
     Window_android* window = new Window_android();
     if (!window->init((SkiaAndroidApp*)platformData)) {
         delete window;
@@ -47,27 +51,36 @@ bool Window_android::attach(BackendType attachType) {
 void Window_android::initDisplay(ANativeWindow* window) {
     SkASSERT(window);
     switch (fBackendType) {
-#ifdef SK_GL
-        case kNativeGL_BackendType:
+#if defined(SK_GL)
+        case BackendType::kNativeGL:
         default:
-            fWindowContext = skwindow::MakeGLForAndroid(window, fRequestedDisplayParams);
+            fWindowContext = skwindow::MakeGLForAndroid(window, fRequestedDisplayParams->clone());
             break;
 #else
         default:
 #endif
-        case kRaster_BackendType:
-            fWindowContext = skwindow::MakeRasterForAndroid(window, fRequestedDisplayParams);
+        case BackendType::kRaster:
+            fWindowContext =
+                    skwindow::MakeRasterForAndroid(window, fRequestedDisplayParams->clone());
             break;
-#ifdef SK_VULKAN
-        case kVulkan_BackendType:
-            fWindowContext = skwindow::MakeVulkanForAndroid(window, fRequestedDisplayParams);
+#if defined(SK_VULKAN)
+        case BackendType::kVulkan:
+            fWindowContext =
+                    skwindow::MakeVulkanForAndroid(window, fRequestedDisplayParams->clone());
             break;
 #if defined(SK_GRAPHITE)
-        case kGraphiteVulkan_BackendType:
-            fWindowContext = skwindow::MakeGraphiteVulkanForAndroid(window,
-                                                                    fRequestedDisplayParams);
+        case BackendType::kGraphiteVulkan:
+            fWindowContext = skwindow::MakeGraphiteVulkanForAndroid(
+                    window, fRequestedDisplayParams->clone());
             break;
 #endif
+#endif
+#if defined(SK_GRAPHITE) && defined(SK_DAWN)
+        case BackendType::kGraphiteDawnOpenGLES:
+        case BackendType::kGraphiteDawnVulkan:
+            fWindowContext = skwindow::MakeGraphiteDawnForAndroid(
+                    window, fRequestedDisplayParams->clone(), fBackendType);
+            break;
 #endif
     }
     this->onBackendCreated();

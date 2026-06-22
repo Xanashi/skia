@@ -1,15 +1,15 @@
-
 /*
  * Copyright 2015 Google Inc.
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
-
-#include "include/gpu/gl/GrGLInterface.h"
-#include "tools/gpu/gl/win/SkWGL.h"
-#include "tools/window/GLWindowContext.h"
 #include "tools/window/win/WindowContextFactory_win.h"
+
+#include "include/gpu/ganesh/gl/GrGLInterface.h"
+#include "include/private/SkLog.h"
+#include "tools/ganesh/gl/win/SkWGL.h"
+#include "tools/window/GLWindowContext.h"
 
 #include <Windows.h>
 #include <GL/gl.h>
@@ -21,7 +21,10 @@ using skwindow::internal::GLWindowContext;
 
 namespace skwindow {
 
-std::unique_ptr<WindowContext> MakeGLForWin(HWND, const DisplayParams&) { return nullptr; }
+std::unique_ptr<WindowContext> MakeGLForWin(HWND, std::unique_ptr<const DisplayParams>) {
+    SKIA_LOG_E("GL is not supported on Windows on ARM.");
+    return nullptr;
+}
 
 }  // namespace skwindow
 
@@ -31,7 +34,7 @@ namespace {
 
 class GLWindowContext_win : public GLWindowContext {
 public:
-    GLWindowContext_win(HWND, const DisplayParams&);
+    GLWindowContext_win(HWND, std::unique_ptr<const DisplayParams>);
     ~GLWindowContext_win() override;
 
 protected:
@@ -45,11 +48,8 @@ private:
     HGLRC             fHGLRC;
 };
 
-GLWindowContext_win::GLWindowContext_win(HWND wnd, const DisplayParams& params)
-        : GLWindowContext(params)
-        , fHWND(wnd)
-        , fHGLRC(nullptr) {
-
+GLWindowContext_win::GLWindowContext_win(HWND wnd, std::unique_ptr<const DisplayParams> params)
+        : GLWindowContext(std::move(params)), fHWND(wnd), fHGLRC(nullptr) {
     // any config code here (particularly for msaa)?
 
     this->initializeContext();
@@ -62,15 +62,18 @@ GLWindowContext_win::~GLWindowContext_win() {
 sk_sp<const GrGLInterface> GLWindowContext_win::onInitializeContext() {
     HDC dc = GetDC(fHWND);
 
-    fHGLRC = SkCreateWGLContext(dc, fDisplayParams.fMSAASampleCount, false /* deepColor */,
+    fHGLRC = SkCreateWGLContext(dc,
+                                fDisplayParams->msaaSampleCount(),
+                                false /* deepColor */,
                                 kGLPreferCompatibilityProfile_SkWGLContextRequest);
-    if (nullptr == fHGLRC) {
+    if (!fHGLRC) {
+        SKIA_LOG_E("SkCreateWGLContext 1 failed");
         return nullptr;
     }
 
     SkWGLExtensions extensions;
     if (extensions.hasExtension(dc, "WGL_EXT_swap_control")) {
-        extensions.swapInterval(fDisplayParams.fDisableVsync ? 0 : 1);
+        extensions.swapInterval(fDisplayParams->disableVsync() ? 0 : 1);
     }
 
     // Look to see if RenderDoc is attached. If so, re-create the context with a core profile
@@ -80,9 +83,12 @@ sk_sp<const GrGLInterface> GLWindowContext_win::onInitializeContext() {
         interface.reset(nullptr);
         if (renderDocAttached) {
             wglDeleteContext(fHGLRC);
-            fHGLRC = SkCreateWGLContext(dc, fDisplayParams.fMSAASampleCount, false /* deepColor */,
+            fHGLRC = SkCreateWGLContext(dc,
+                                        fDisplayParams->msaaSampleCount(),
+                                        false /* deepColor */,
                                         kGLPreferCoreProfile_SkWGLContextRequest);
-            if (nullptr == fHGLRC) {
+            if (!fHGLRC) {
+                SKIA_LOG_E("SkCreateWGLContext 2 failed");
                 return nullptr;
             }
         }
@@ -141,9 +147,10 @@ void GLWindowContext_win::onSwapBuffers() {
 
 namespace skwindow {
 
-std::unique_ptr<WindowContext> MakeGLForWin(HWND wnd, const DisplayParams& params) {
-    std::unique_ptr<WindowContext> ctx(new GLWindowContext_win(wnd, params));
+std::unique_ptr<WindowContext> MakeGLForWin(HWND wnd, std::unique_ptr<const DisplayParams> params) {
+    std::unique_ptr<WindowContext> ctx(new GLWindowContext_win(wnd, std::move(params)));
     if (!ctx->isValid()) {
+        SKIA_LOG_E("Invalid GL context for Windows. GL support on VMs is known to not work.");
         return nullptr;
     }
     return ctx;

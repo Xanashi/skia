@@ -8,17 +8,23 @@
 #ifndef GrVkSampler_DEFINED
 #define GrVkSampler_DEFINED
 
-#include "include/gpu/vk/GrVkTypes.h"
-#include "include/gpu/vk/VulkanTypes.h"
+#include "include/core/SkTypes.h"
+#include "include/private/SkDebug.h"
+#include "include/private/SkMacros.h"
+#include "include/private/gpu/vk/SkiaVulkan.h"
 #include "src/core/SkChecksum.h"
+#include "src/gpu/ganesh/GrManagedResource.h"
 #include "src/gpu/ganesh/vk/GrVkManagedResource.h"
 #include "src/gpu/ganesh/vk/GrVkSamplerYcbcrConversion.h"
 
-#include <atomic>
 #include <cinttypes>
+#include <cstdint>
 
 class GrSamplerState;
 class GrVkGpu;
+namespace skgpu {
+struct VulkanYcbcrConversionInfo;
+}
 
 class GrVkSampler : public GrVkManagedResource {
 public:
@@ -73,14 +79,7 @@ private:
 
     void freeGPUData() const override;
 
-    static uint32_t GenID() {
-        static std::atomic<uint32_t> nextID{1};
-        uint32_t id;
-        do {
-            id = nextID++;
-        } while (id == SK_InvalidUniqueID);
-        return id;
-    }
+    static uint32_t GenID();
 
     VkSampler                   fSampler;
     GrVkSamplerYcbcrConversion* fYcbcrConversion;

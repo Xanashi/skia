@@ -20,7 +20,9 @@ class SkImage;
 class SkMatrix;
 class SkPaint;
 class SkPicture;
+class SkRecorder;
 class SkSurfaceProps;
+struct SkIRect;
 struct SkISize;
 
 namespace SkImages { enum class BitDepth; }
@@ -32,7 +34,7 @@ public:
                                SkImages::BitDepth bitDepth, sk_sp<SkColorSpace> colorSpace,
                                SkSurfaceProps props);
 
-    SkImage_Picture(Validator* validator) : SkImage_Lazy(validator) {}
+    explicit SkImage_Picture(Validator* validator) : SkImage_Lazy(validator) {}
 
     SkImage_Base::Type type() const override { return SkImage_Base::Type::kLazyPicture; }
 
@@ -41,6 +43,8 @@ public:
 
     // Call drawPicture on the provided canvas taking care of any required mutex locking.
     void replay(SkCanvas*) const;
+
+    sk_sp<SkImage> onMakeSubset(SkRecorder*, const SkIRect&, RequiredProperties) const override;
 
     // If possible, extract key data based on the underlying drawPicture-call's parameters.
     // Takes care of any required mutex locking.

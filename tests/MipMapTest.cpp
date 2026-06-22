@@ -20,10 +20,10 @@
 #include "include/core/SkSize.h"
 #include "include/core/SkSurface.h"
 #include "include/core/SkTypes.h"
-#include "include/private/base/SkMalloc.h"
-#include "src/base/SkRandom.h"
+#include "include/private/SkMalloc.h"
 #include "src/core/SkMipmap.h"
 #include "src/core/SkMipmapBuilder.h"
+#include "src/core/SkRandom.h"
 #include "tests/Test.h"
 #include "tools/DecodeUtils.h"
 
@@ -247,7 +247,7 @@ static void fill_in_mips(SkMipmapBuilder* builder, sk_sp<SkImage> img) {
 
 DEF_TEST(image_mip_factory, reporter) {
     // TODO: what do to about lazy images and mipmaps?
-    auto img = ToolUtils::GetResourceAsImage("images/mandrill_128.png")->makeRasterImage();
+    auto img = ToolUtils::GetResourceAsImage("images/mandrill_128.png")->makeRasterImage(nullptr);
 
     REPORTER_ASSERT(reporter, !img->hasMipmaps());
     auto img1 = img->withDefaultMipmaps();
@@ -274,7 +274,7 @@ DEF_TEST(image_mip_mismatch, reporter) {
         REPORTER_ASSERT(reporter, img.get() == img2.get());
     };
 
-    auto img = ToolUtils::GetResourceAsImage("images/mandrill_128.png")->makeRasterImage();
+    auto img = ToolUtils::GetResourceAsImage("images/mandrill_128.png")->makeRasterImage(nullptr);
 
     // check size, colortype, and alphatype
 

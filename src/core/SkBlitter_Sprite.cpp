@@ -14,8 +14,8 @@
 #include "include/core/SkPixmap.h"
 #include "include/core/SkRefCnt.h"
 #include "include/core/SkShader.h"
-#include "include/private/base/SkAssert.h"
-#include "src/base/SkArenaAlloc.h"
+#include "include/private/SkAssert.h"
+#include "src/core/SkArenaAlloc.h"
 #include "src/core/SkBlitter.h"
 #include "src/core/SkColorSpacePriv.h"
 #include "src/core/SkColorSpaceXformSteps.h"
@@ -80,7 +80,7 @@ class SkSpriteBlitter_Memcpy final : public SkSpriteBlitter {
 public:
     static bool Supports(const SkPixmap& dst, const SkPixmap& src, const SkPaint& paint) {
         // the caller has already inspected the colorspace on src and dst
-        SkASSERT(0 == SkColorSpaceXformSteps(src,dst).flags.mask());
+        SkASSERT(0 == SkColorSpaceXformSteps(src,dst).fFlags.mask());
 
         if (dst.colorType() != src.colorType()) {
             return false;
@@ -183,7 +183,7 @@ public:
 private:
     SkArenaAlloc*              fAlloc;
     SkBlitter*                 fBlitter;
-    SkRasterPipeline_MemoryCtx fSrcPtr;
+    SkRasterPipelineContexts::MemoryCtx fSrcPtr;
     SkColor4f                  fPaintColor;
     sk_sp<SkShader>            fClipShader;
 
@@ -215,7 +215,7 @@ SkBlitter* SkBlitter::ChooseSprite(const SkPixmap& dst, const SkPaint& paint,
 
     if (gSkForceRasterPipelineBlitter) {
         // Do not use any of these optimized memory blitters
-    } else if (0 == SkColorSpaceXformSteps(source,dst).flags.mask() && !clipShader) {
+    } else if (0 == SkColorSpaceXformSteps(source,dst).fFlags.mask() && !clipShader) {
         if (!blitter && SkSpriteBlitter_Memcpy::Supports(dst, source, paint)) {
             blitter = alloc->make<SkSpriteBlitter_Memcpy>(source);
         }

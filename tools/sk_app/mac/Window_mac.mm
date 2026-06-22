@@ -1,5 +1,5 @@
 /*
-* Copyright 2019 Google Inc.
+* Copyright 2019 Google LLC
 *
 * Use of this source code is governed by a BSD-style license that can be
 * found in the LICENSE file.
@@ -10,7 +10,30 @@
 #include "include/core/SkTypes.h"
 #include "tools/sk_app/mac/Window_mac.h"
 #include "tools/skui/ModifierKey.h"
-#include "tools/window/mac/WindowContextFactory_mac.h"
+#include "tools/window/DisplayParams.h"
+#include "tools/window/WindowContext.h"
+#include "tools/window/mac/MacWindowInfo.h"
+
+#if defined(SK_GANESH) && defined(SK_ANGLE)
+#include "tools/window/mac/GaneshANGLEWindowContext_mac.h"
+#endif
+
+#if defined(SK_GANESH) && defined(SK_GL)
+#include "tools/window/mac/GaneshGLWindowContext_mac.h"
+#include "tools/window/mac/RasterWindowContext_mac.h"
+#endif
+
+#if defined(SK_GANESH) && defined(SK_METAL)
+#include "tools/window/mac/GaneshMetalWindowContext_mac.h"
+#endif
+
+#if defined(SK_GRAPHITE) && defined(SK_METAL)
+#include "tools/window/mac/GraphiteNativeMetalWindowContext_mac.h"
+#endif
+
+#if defined(SK_GRAPHITE) && defined(SK_DAWN)
+#include "tools/window/mac/GraphiteDawnMetalWindowContext_mac.h"
+#endif
 
 @interface WindowDelegate : NSObject<NSWindowDelegate>
 
@@ -27,12 +50,13 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 using sk_app::Window;
+using skwindow::DisplayParams;
 
 namespace sk_app {
 
 SkTDynamicHash<Window_mac, NSInteger> Window_mac::gWindowMap;
 
-Window* Window::CreateNativeWindow(void*) {
+Window* Windows::CreateNativeWindow(void*) {
     Window_mac* window = new Window_mac();
     if (!window->initWindow()) {
         delete window;
@@ -59,8 +83,8 @@ bool Window_mac::initWindow() {
     constexpr int initialHeight = 960;
     NSRect windowRect = NSMakeRect(100, 100, initialWidth, initialHeight);
 
-    NSUInteger windowStyle = (NSTitledWindowMask | NSClosableWindowMask | NSResizableWindowMask |
-                              NSMiniaturizableWindowMask);
+    NSUInteger windowStyle = (NSWindowStyleMaskTitled | NSWindowStyleMaskClosable |
+                              NSWindowStyleMaskResizable | NSWindowStyleMaskMiniaturizable);
 
     fWindow = [[NSWindow alloc] initWithContentRect:windowRect styleMask:windowStyle
                                 backing:NSBackingStoreBuffered defer:NO];
@@ -122,48 +146,38 @@ bool Window_mac::attach(BackendType attachType) {
     skwindow::MacWindowInfo info;
     info.fMainView = [fWindow contentView];
     switch (attachType) {
-#if SK_ANGLE
-        case kANGLE_BackendType:
-            fWindowContext = skwindow::MakeANGLEForMac(info, fRequestedDisplayParams);
+#if defined(SK_GANESH) && defined(SK_ANGLE)
+        case BackendType::kANGLE:
+            fWindowContext =
+                    skwindow::MakeGaneshANGLEForMac(info, fRequestedDisplayParams->clone());
             break;
 #endif
-#ifdef SK_DAWN
-#if defined(SK_GRAPHITE)
-        case kGraphiteDawn_BackendType:
-            fWindowContext = MakeGraphiteDawnMetalForMac(info, fRequestedDisplayParams);
+#if defined(SK_GRAPHITE) && defined(SK_DAWN)
+        case BackendType::kGraphiteDawnMetal:
+            fWindowContext = MakeGraphiteDawnMetalForMac(info, fRequestedDisplayParams->clone());
             break;
 #endif
-#endif
-#ifdef SK_VULKAN
-        case kVulkan_BackendType:
-            fWindowContext = MakeVulkanForMac(info, fRequestedDisplayParams);
-            break;
-#if defined(SK_GRAPHITE)
-        case kGraphiteVulkan_BackendType:
-            fWindowContext = nullptr;
-            return false;
-#endif
-#endif
-#ifdef SK_METAL
-        case kMetal_BackendType:
-            fWindowContext = MakeMetalForMac(info, fRequestedDisplayParams);
-            break;
-#if defined(SK_GRAPHITE)
-        case kGraphiteMetal_BackendType:
-            fWindowContext = MakeGraphiteMetalForMac(info, fRequestedDisplayParams);
+#if defined(SK_GANESH) && defined(SK_METAL)
+        case BackendType::kMetal:
+            fWindowContext = MakeGaneshMetalForMac(info, fRequestedDisplayParams->clone());
             break;
 #endif
-#endif
-#ifdef SK_GL
-        case kNativeGL_BackendType:
-            fWindowContext = MakeGLForMac(info, fRequestedDisplayParams);
+#if defined(SK_GRAPHITE) && defined(SK_METAL)
+        case BackendType::kGraphiteMetal:
+            fWindowContext = MakeGraphiteNativeMetalForMac(info, fRequestedDisplayParams->clone());
             break;
-        case kRaster_BackendType:
-            fWindowContext = MakeRasterForMac(info, fRequestedDisplayParams);
+#endif
+#if defined(SK_GANESH) && defined(SK_GL)
+        case BackendType::kNativeGL:
+            fWindowContext = MakeGaneshGLForMac(info, fRequestedDisplayParams->clone());
+            break;
+        case BackendType::kRaster:
+            // The Raster IMPL requires GL
+            fWindowContext = MakeRasterForMac(info, fRequestedDisplayParams->clone());
             break;
 #endif
         default:
-            SkASSERT_RELEASE(false);
+            SK_ABORT("Unknown backend");
     }
     this->onBackendCreated();
 
@@ -197,6 +211,13 @@ void Window_mac::PaintWindows() {
 }
 
 - (void)windowDidResize:(NSNotification *)notification {
+    NSView* view = fWindow->window().contentView;
+    CGFloat scale = skwindow::GetBackingScaleFactor(view);
+    fWindow->onResize(view.bounds.size.width * scale, view.bounds.size.height * scale);
+    fWindow->inval();
+}
+
+- (void)windowDidChangeScreen:(NSNotification *)notification {
     NSView* view = fWindow->window().contentView;
     CGFloat scale = skwindow::GetBackingScaleFactor(view);
     fWindow->onResize(view.bounds.size.width * scale, view.bounds.size.height * scale);
@@ -275,7 +296,9 @@ static skui::ModifierKey get_modifiers(const NSEvent* event) {
         modifiers |= skui::ModifierKey::kOption;
     }
 
-    if ((NSKeyDown == [event type] || NSKeyUp == [event type]) && ![event isARepeat]) {
+    if ((NSEventTypeKeyDown == [event type] || NSEventTypeKeyUp == [event type]) &&
+        ![event isARepeat])
+    {
         modifiers |= skui::ModifierKey::kFirstPress;
     }
 

@@ -9,8 +9,8 @@
 #define GrVkBackendSurfacePriv_DEFINED
 
 #include "include/core/SkRefCnt.h"
-#include "include/gpu/vk/GrVkTypes.h"
-#include "include/private/base/SkAPI.h"
+#include "include/gpu/ganesh/vk/GrVkTypes.h"
+#include "include/private/SkAPI.h"
 
 class GrBackendTexture;
 class GrBackendRenderTarget;

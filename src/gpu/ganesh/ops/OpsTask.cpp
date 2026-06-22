@@ -1,31 +1,48 @@
 /*
- * Copyright 2019 Google Inc.
+ * Copyright 2019 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
-
 #include "src/gpu/ganesh/ops/OpsTask.h"
 
-#include "include/gpu/GrRecordingContext.h"
-#include "src/base/SkScopeExit.h"
+#include "include/core/SkPoint.h"
+#include "include/core/SkSize.h"
+#include "include/core/SkString.h"
+#include "include/gpu/GpuTypes.h"
+#include "include/gpu/ganesh/GrRecordingContext.h"
+#include "src/core/SkArenaAlloc.h"
 #include "src/core/SkRectPriv.h"
+#include "src/core/SkScopeExit.h"
+#include "src/core/SkStringUtils.h"
 #include "src/core/SkTraceEvent.h"
+#include "src/gpu/ganesh/GrAppliedClip.h"
 #include "src/gpu/ganesh/GrAttachment.h"
 #include "src/gpu/ganesh/GrAuditTrail.h"
 #include "src/gpu/ganesh/GrCaps.h"
 #include "src/gpu/ganesh/GrGpu.h"
-#include "src/gpu/ganesh/GrMemoryPool.h"
 #include "src/gpu/ganesh/GrNativeRect.h"
 #include "src/gpu/ganesh/GrOpFlushState.h"
 #include "src/gpu/ganesh/GrOpsRenderPass.h"
 #include "src/gpu/ganesh/GrRecordingContextPriv.h"
 #include "src/gpu/ganesh/GrRenderTarget.h"
+#include "src/gpu/ganesh/GrRenderTargetProxy.h"
 #include "src/gpu/ganesh/GrResourceAllocator.h"
 #include "src/gpu/ganesh/GrResourceProvider.h"
-#include "src/gpu/ganesh/GrTexture.h"
+#include "src/gpu/ganesh/GrSurfaceProxyView.h"
+#include "src/gpu/ganesh/GrTextureProxy.h"
 #include "src/gpu/ganesh/GrTextureResolveManager.h"
 #include "src/gpu/ganesh/geometry/GrRect.h"
+
+#include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <functional>
+#include <memory>
+#include <utility>
+
+class GrDrawingManager;
+enum GrSurfaceOrigin : int;
 
 using namespace skia_private;
 
@@ -568,6 +585,7 @@ bool OpsTask::onExecute(GrOpFlushState* flushState) {
         stencil = renderTarget->getStencilAttachment(fUsesMSAASurface);
     }
 
+    bool markStencilCleared = false;
     GrLoadOp stencilLoadOp;
     switch (fInitialStencilContent) {
         case StencilContent::kDontCare:
@@ -585,7 +603,7 @@ bool OpsTask::onExecute(GrOpFlushState* flushState) {
             }
             if (!stencil->hasPerformedInitialClear()) {
                 stencilLoadOp = GrLoadOp::kClear;
-                stencil->markHasPerformedInitialClear();
+                markStencilCleared = true;
                 break;
             }
             // SurfaceDrawContexts are required to leave the user stencil bits in a cleared state
@@ -625,6 +643,9 @@ bool OpsTask::onExecute(GrOpFlushState* flushState) {
 
     if (!renderPass) {
         return false;
+    }
+    if (markStencilCleared) {
+        stencil->markHasPerformedInitialClear();
     }
     flushState->setOpsRenderPass(renderPass);
     renderPass->begin();
@@ -783,7 +804,7 @@ void OpsTask::discard() {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-#if defined(GR_TEST_UTILS)
+#if defined(GPU_TEST_UTILS)
 void OpsTask::dump(const SkString& label,
                    SkString indent,
                    bool printDependencies,

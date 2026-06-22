@@ -45,6 +45,7 @@ namespace SkSL {
 
 class Inliner;
 struct Module;
+enum class ModuleType : int8_t;
 class Pool;
 struct ProgramConfig;
 class ProgramUsage;
@@ -148,7 +149,7 @@ public:
     }
 
     std::unique_ptr<Module> compileModule(ProgramKind kind,
-                                          const char* moduleName,
+                                          ModuleType moduleType,
                                           std::string moduleSource,
                                           const Module* parentModule,
                                           bool shouldInline);
@@ -164,8 +165,7 @@ public:
 private:
     class CompilerErrorReporter : public ErrorReporter {
     public:
-        CompilerErrorReporter(Compiler* compiler)
-            : fCompiler(*compiler) {}
+        explicit CompilerErrorReporter(Compiler* compiler) : fCompiler(*compiler) {}
 
         void handleError(std::string_view msg, Position pos) override {
             fCompiler.handleError(msg, pos);
@@ -183,7 +183,7 @@ private:
                            ProgramKind kind,
                            ProgramSettings settings,
                            std::string_view source,
-                           bool isModule);
+                           ModuleType moduleType);
 
     /** Cleans up the Context post-compilation. */
     void cleanupContext();

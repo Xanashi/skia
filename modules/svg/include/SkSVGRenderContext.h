@@ -9,22 +9,32 @@
 #define SkSVGRenderContext_DEFINED
 
 #include "include/core/SkFontMgr.h"
+#include "include/core/SkFourByteTag.h"
 #include "include/core/SkM44.h"
-#include "include/core/SkPaint.h"
 #include "include/core/SkPath.h"
 #include "include/core/SkRect.h"
+#include "include/core/SkRefCnt.h"
+#include "include/core/SkScalar.h"
 #include "include/core/SkSize.h"
 #include "include/core/SkTypes.h"
-#include "modules/skresources/include/SkResources.h"
 #include "modules/skshaper/include/SkShaper.h"
 #include "modules/skshaper/include/SkShaper_factory.h"
 #include "modules/svg/include/SkSVGAttribute.h"
 #include "modules/svg/include/SkSVGIDMapper.h"
-#include "src/base/SkTLazy.h"
+#include "modules/svg/include/SkSVGNode.h"
+#include "modules/svg/include/SkSVGTypes.h"
 #include "src/core/SkTHash.h"
+#include "src/core/SkTLazy.h"
+
+#include <cstddef>
+#include <cstdint>
+#include <memory>
+#include <utility>
 
 class SkCanvas;
-class SkSVGLength;
+class SkPaint;
+class SkString;
+namespace skresources { class ResourceProvider; }
 
 class SK_API SkSVGLengthContext {
 public:
@@ -146,13 +156,13 @@ public:
     // (effectively breaks reference cycles, assuming appropriate return value scoping).
     BorrowedNode findNodeById(const SkSVGIRI&) const;
 
-    SkTLazy<SkPaint> fillPaint() const;
-    SkTLazy<SkPaint> strokePaint() const;
+    std::optional<SkPaint> fillPaint() const;
+    std::optional<SkPaint> strokePaint() const;
 
     SkSVGColorType resolveSvgColor(const SkSVGColor&) const;
 
     // The local computed clip path (not inherited).
-    const SkPath* clipPath() const { return fClipPath.getMaybeNull(); }
+    const SkPath* clipPath() const { return SkOptAddressOrNull(fClipPath); }
 
     const sk_sp<skresources::ResourceProvider>& resourceProvider() const {
         return fResourceProvider;
@@ -175,6 +185,8 @@ public:
     SkRect resolveOBBRect(const SkSVGLength& x, const SkSVGLength& y,
                           const SkSVGLength& w, const SkSVGLength& h,
                           SkSVGObjectBoundingBoxUnits) const;
+
+    const OBBScope& currentOBBScope() const { return fOBBScope; }
 
     std::unique_ptr<SkShaper> makeShaper() const {
         SkASSERT(fTextShapingFactory);
@@ -207,7 +219,7 @@ private:
     void applyCornerRadius(const SkSVGLength&);
     void applyMask(const SkSVGFuncIRI&);
 
-    SkTLazy<SkPaint> commonPaint(const SkSVGPaint&, float opacity) const;
+    std::optional<SkPaint> commonPaint(const SkSVGPaint&, float opacity) const;
 
     const sk_sp<SkFontMgr>&                       fFontMgr;
     const sk_sp<SkShapers::Factory>&              fTextShapingFactory;
@@ -221,7 +233,7 @@ private:
     int                                           fCanvasSaveCount;
 
     // clipPath, if present for the current context (not inherited).
-    SkTLazy<SkPath>                               fClipPath;
+    std::optional<SkPath>                         fClipPath;
 
     // Deferred opacity optimization for leaf nodes.
     float                                         fDeferredPaintOpacity = 1;

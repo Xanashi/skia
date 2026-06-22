@@ -17,12 +17,12 @@
 #include "include/core/SkSurfaceProps.h"
 #include "include/core/SkTypes.h"
 #include "include/gpu/GpuTypes.h"
-#include "include/gpu/GrBackendSurface.h"
-#include "include/gpu/GrDirectContext.h"
-#include "include/gpu/GrRecordingContext.h"
-#include "include/gpu/GrTypes.h"
-#include "include/private/SkColorData.h"
+#include "include/gpu/ganesh/GrBackendSurface.h"
+#include "include/gpu/ganesh/GrDirectContext.h"
+#include "include/gpu/ganesh/GrRecordingContext.h"
+#include "include/gpu/ganesh/GrTypes.h"
 #include "include/private/gpu/ganesh/GrTypesPriv.h"
+#include "src/core/SkColorData.h"
 #include "src/gpu/SkBackingFit.h"
 #include "src/gpu/Swizzle.h"
 #include "src/gpu/ganesh/GrCaps.h"
@@ -234,7 +234,8 @@ static void textureop_creation_test(skiatest::Reporter* reporter, GrDirectContex
                                     overallAA,
                                     SkCanvas::kStrict_SrcRectConstraint,
                                     SkMatrix::I(),
-                                    nullptr);
+                                    nullptr,
+                                    /* setMayHavePersp= */ true);
     }
 
     auto opsTask = sdc->testingOnly_PeekLastOpsTask();

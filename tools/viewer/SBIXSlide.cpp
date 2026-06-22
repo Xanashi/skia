@@ -1,5 +1,5 @@
 /*
- * Copyright 2022 Google Inc.
+ * Copyright 2022 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -11,8 +11,8 @@
 #include "include/core/SkFontMgr.h"
 #include "include/core/SkGraphics.h"
 #include "include/core/SkTypeface.h"
-#include "include/private/base/SkTemplates.h"
-#include "src/base/SkTime.h"
+#include "include/private/SkTemplates.h"
+#include "src/core/SkTime.h"
 #include "src/sfnt/SkOTTable_glyf.h"
 #include "src/sfnt/SkOTTable_head.h"
 #include "src/sfnt/SkOTTable_hhea.h"
@@ -126,13 +126,13 @@ public:
         for (auto&& font : fFonts) {
             paint.setStyle(SkPaint::kFill_Style);
             paint.setColor(SK_ColorBLACK);
-            canvas->drawGlyphs(1, &kGlyphID, &position, origin, font, paint);
+            canvas->drawGlyphs({&kGlyphID, 1}, {&position, 1}, origin, font, paint);
 
             paint.setStrokeWidth(SkIntToScalar(kPointSize / 2));
             paint.setStyle(SkPaint::kStroke_Style);
             SkScalar advance;
             SkRect rect;
-            font.getWidthsBounds(&kGlyphID, 1, &advance, &rect, &paint);
+            font.getWidthsBounds({&kGlyphID, 1}, {&advance, 1}, {&rect, 1}, &paint);
 
             paint.setColor(SK_ColorRED);
             canvas->drawRect(rect, paint);
@@ -145,7 +145,7 @@ public:
             paint.setStrokeWidth(SkIntToScalar(kPointSize));
             for (auto&& pt : fPts) {
                 paint.setColor(pt.color);
-                canvas->drawPoints(SkCanvas::kPoints_PointMode, 1, &pt.location, paint);
+                canvas->drawPoints(SkCanvas::kPoints_PointMode, {&pt.location, 1}, paint);
             }
 
             canvas->translate(kFontSize, 0);

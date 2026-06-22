@@ -29,7 +29,7 @@ class iOSFlavor(default.DefaultFlavor):
   def env(self):
     return {
       'IOS_BUNDLE_ID': 'com.google.%s' % self.app_name,
-      'IOS_MOUNT_POINT': self.m.vars.workdir.join('mnt_iosdevice'),
+      'IOS_MOUNT_POINT': self.m.vars.workdir.joinpath('mnt_iosdevice'),
     }
 
   def context(self):
@@ -50,6 +50,11 @@ class iOSFlavor(default.DefaultFlavor):
 
   def _install(self):
     # We assume a single device is connected.
+
+    # Kill usbmuxd.  This tends to help with connection problems.
+    if self.m.platform.is_mac:
+      self.m.step('killall usbmuxd', ['sudo', '/usr/bin/killall', '-v', 'usbmuxd'])
+      self.m.step('sleep 10', ['sleep', '10'])
 
     # Pair the device.
     try:
@@ -94,9 +99,13 @@ class iOSFlavor(default.DefaultFlavor):
 
       self._run('mount developer image', 'ideviceimagemounter', image, sig)
 
+    # Install XCode.
+    if self.m.platform.is_mac:
+      self.m.xcode.install()
+
     # Install app (necessary before copying any resources to the device).
     if self.app_name:
-      app_package = self.host_dirs.bin_dir.join('%s.app' % self.app_name)
+      app_package = self.host_dirs.bin_dir.joinpath('%s.app' % self.app_name)
 
       def uninstall_app(attempt):
         # If app ID changes, upgrade will fail, so try uninstalling.
@@ -117,22 +126,30 @@ class iOSFlavor(default.DefaultFlavor):
 
   def step(self, name, cmd, **kwargs):
     app_name = cmd[0]
+    app_package = self.host_dirs.bin_dir.joinpath('%s.app' % app_name)
     bundle_id = 'com.google.%s' % app_name
-    args = [bundle_id] + [str(ele) for ele in cmd[1:]]
-    success = False
-    with self.context():
-      try:
-        self.m.run(self.m.step, name, cmd=['idevicedebug', 'run'] + args)
-        success = True
-      finally:
-        if not success:
-          self.m.run(
-              self.m.step, '%s with full debug output' % name,
-              cmd=['python3', self.module.resource('ios_debug_cmd.py')] + args)
+    if self.m.platform.is_mac:
+      args = [self.m.xcode.path, app_package, bundle_id] + [str(ele) for ele in cmd[1:]]
+      with self.context():
+        self.m.run(
+            self.m.step, name,
+            cmd=['python3', self.module.resource('ios_xcode_run.py')] + args)
+    else:
+      args = [bundle_id] + [str(ele) for ele in cmd[1:]]
+      success = False
+      with self.context():
+        try:
+          self.m.run(self.m.step, name, cmd=['idevicedebug', 'run'] + args)
+          success = True
+        finally:
+          if not success:
+            self.m.run(
+                self.m.step, '%s with full debug output' % name,
+                cmd=['python3', self.module.resource('ios_debug_cmd.py')] + args)
 
   def _run_ios_script(self, script, first, *rest):
     with self.context():
-      full = self.m.path.start_dir.join(
+      full = self.m.path.start_dir.joinpath(
           'skia', 'platform_tools', 'ios', 'bin', 'ios_' + script)
       self.m.run(self.m.step,
                  name = '%s %s' % (script, first),
@@ -157,7 +174,7 @@ class iOSFlavor(default.DefaultFlavor):
 
   def read_file_on_device(self, path, **kwargs):
     with self.context():
-      full = self.m.path.start_dir.join(
+      full = self.m.path.start_dir.joinpath(
           'skia', 'platform_tools', 'ios', 'bin', 'ios_cat_file')
       rv = self.m.run(self.m.step,
                       name = 'cat_file %s' % path,

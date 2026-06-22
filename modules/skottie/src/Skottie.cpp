@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 Google Inc.
+ * Copyright 2017 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -13,10 +13,11 @@
 #include "include/core/SkMatrix.h"
 #include "include/core/SkRect.h"
 #include "include/core/SkStream.h"
-#include "include/private/base/SkDebug.h"
-#include "include/private/base/SkFloatingPoint.h"
-#include "include/private/base/SkTPin.h"
-#include "include/private/base/SkTo.h"
+#include "include/private/SkDebug.h"
+#include "include/private/SkFloatingPoint.h"
+#include "include/private/SkTPin.h"
+#include "include/private/SkTo.h"
+#include "modules/jsonreader/SkJSONReader.h"
 #include "modules/skottie/include/ExternalLayer.h"
 #include "modules/skottie/include/SkottieProperty.h"
 #include "modules/skottie/include/SlotManager.h"
@@ -33,7 +34,6 @@
 #include "modules/skshaper/include/SkShaper_factory.h"
 #include "src/core/SkTHash.h"
 #include "src/core/SkTraceEvent.h"
-#include "src/utils/SkJSON.h"
 
 #include <algorithm>
 #include <chrono>
@@ -45,10 +45,6 @@
 #include <memory>
 #include <ratio>
 #include <utility>
-
-#if !defined(SK_DISABLE_LEGACY_SHAPER_FACTORY)
-#include "modules/skshaper/utils/FactoryHelpers.h"
-#endif
 
 namespace sksg {
 class Color;
@@ -181,7 +177,7 @@ AnimationBuilder::AnimationInfo AnimationBuilder::parse(const skjson::ObjectValu
     fRevalidator->setRoot(root);
     fRevalidator->revalidate();
 
-    return { std::move(root), std::move(animators), std::move(fSlotManager)};
+    return { std::move(root), std::move(animators), std::move(fSlotManager), std::move(fLayerInfo)};
 }
 
 void AnimationBuilder::parseAssets(const skjson::ArrayValue* jassets) {
@@ -402,23 +398,19 @@ sk_sp<Animation> Animation::Builder::make(const char* data, size_t data_len) {
                outPoint = std::max(ParseDefault<float>(json["op"], SK_ScalarMax), inPoint),
                duration = sk_ieee_float_divide(outPoint - inPoint, fps);
 
-    if (size.isEmpty() || version.isEmpty() || fps <= 0 ||
+    if (size.isEmpty() || fps <= 0 ||
         !SkIsFinite(inPoint, outPoint, duration)) {
         if (fLogger) {
             const auto msg = SkStringPrintf(
-                         "Invalid animation params (version: %s, size: [%f %f], frame rate: %f, "
+                         "Invalid animation params (size: [%f %f], frame rate: %f, "
                          "in-point: %f, out-point: %f)\n",
-                         version.c_str(), size.width(), size.height(), fps, inPoint, outPoint);
+                         size.width(), size.height(), fps, inPoint, outPoint);
             fLogger->log(Logger::Level::kError, msg.c_str());
         }
         return nullptr;
     }
 
-#if defined(SK_DISABLE_LEGACY_SHAPER_FACTORY)
     auto factory = fShapingFactory ? fShapingFactory : ::SkShapers::Primitive::Factory();
-#else
-    auto factory = fShapingFactory ? fShapingFactory : ::SkShapers::BestAvailable();
-#endif
     SkASSERT(resolvedProvider);
     internal::AnimationBuilder builder(std::move(resolvedProvider), fFontMgr,
                                        std::move(fPropertyObserver),
@@ -431,6 +423,7 @@ sk_sp<Animation> Animation::Builder::make(const char* data, size_t data_len) {
     auto ainfo = builder.parse(json);
 
     fSlotManager = ainfo.fSlotManager;
+    fLayerInfo = std::move(ainfo.fLayerInfo);
 
     const auto t2 = std::chrono::steady_clock::now();
     fStats.fSceneParseTimeMS = std::chrono::duration<float, std::milli>{t2-t1}.count();
@@ -493,7 +486,7 @@ void Animation::render(SkCanvas* canvas, const SkRect* dstR, RenderFlags renderF
 
     const SkRect srcR = SkRect::MakeSize(this->size());
     if (dstR) {
-        canvas->concat(SkMatrix::RectToRect(srcR, *dstR, SkMatrix::kCenter_ScaleToFit));
+        canvas->concat(SkMatrix::RectToRectOrIdentity(srcR, *dstR, SkMatrix::kCenter_ScaleToFit));
     }
 
     if (!(renderFlags & RenderFlag::kDisableTopLevelClipping)) {

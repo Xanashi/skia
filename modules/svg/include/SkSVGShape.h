@@ -9,12 +9,20 @@
 #define SkSVGShape_DEFINED
 
 
+#include "include/core/SkPathTypes.h"
+#include "include/core/SkRect.h"
+#include "include/core/SkRefCnt.h"
+#include "include/private/SkAPI.h"
 #include "modules/svg/include/SkSVGTransformableNode.h"
 #include "modules/svg/include/SkSVGAnimate.h"
 
-class SkSVGLengthContext;
+class SkCanvas;
 class SkPaint;
 class SkPath;
+class SkSVGLengthContext;
+class SkSVGNode;
+class SkSVGRenderContext;
+enum class SkSVGTag;
 
 struct PathPoint {
     SkPoint pt;

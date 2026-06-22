@@ -7,14 +7,14 @@
 
 #include "src/core/SkImageFilterCache.h"
 
-#include "include/private/base/SkMutex.h"
-#include "include/private/base/SkOnce.h"
-#include "src/base/SkTInternalLList.h"
+#include "include/private/SkMutex.h"
+#include "include/private/SkOnce.h"
 #include "src/core/SkChecksum.h"
 #include "src/core/SkImageFilterTypes.h"
 #include "src/core/SkSpecialImage.h"
 #include "src/core/SkTDynamicHash.h"
 #include "src/core/SkTHash.h"
+#include "src/core/SkTInternalLList.h"
 
 #include <vector>
 
@@ -158,12 +158,11 @@ sk_sp<SkImageFilterCache> SkImageFilterCache::Create(size_t maxBytes) {
 
 sk_sp<SkImageFilterCache> SkImageFilterCache::Get(CreateIfNecessary createIfNecessary) {
     static SkOnce once;
-    static sk_sp<SkImageFilterCache> cache;
+    static SkImageFilterCache* cache = nullptr;
 
     if (createIfNecessary == CreateIfNecessary::kNo) {
-        return cache;
+        return sk_ref_sp(cache);
     }
-
-    once([]{ cache = SkImageFilterCache::Create(kDefaultCacheSize); });
-    return cache;
+    once([] { cache = SkImageFilterCache::Create(kDefaultCacheSize).release(); });
+    return sk_ref_sp(cache);
 }

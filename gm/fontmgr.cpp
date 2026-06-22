@@ -42,7 +42,7 @@ static SkScalar drawString(SkCanvas* canvas, const SkString& text, SkScalar x,
     return x + font.measureText(text.c_str(), text.size(), SkTextEncoding::kUTF8);
 }
 
-static SkScalar drawCharacter(SkCanvas* canvas, uint32_t character, SkScalar x,
+static SkScalar drawCharacter(SkCanvas* canvas, SkUnichar character, SkScalar x,
                               SkScalar y, const SkFont& origFont, SkFontMgr* fm,
                               const char* fontName, const char* bcp47[], int bcp47Count,
                               const SkFontStyle& fontStyle) {
@@ -55,17 +55,30 @@ static SkScalar drawCharacter(SkCanvas* canvas, uint32_t character, SkScalar x,
     font.setTypeface(typeface);
     x = drawString(canvas, ch, x, y, font) + 20;
 
-    if (nullptr == typeface) {
-        return x;
-    }
-
     // repeat the process, but this time use the family name of the typeface
     // from the first pass.  This emulates the behavior in Blink where it
     // it expects to get the same glyph when following this pattern.
-    SkString familyName;
-    typeface->getFamilyName(&familyName);
-    font.setTypeface(fm->legacyMakeTypeface(familyName.c_str(), typeface->fontStyle()));
-    return drawString(canvas, ch, x, y, font) + 20;
+    if (typeface) {
+        SkString familyName;
+        typeface->getFamilyName(&familyName);
+        font.setTypeface(fm->legacyMakeTypeface(familyName.c_str(), typeface->fontStyle()));
+        x = drawString(canvas, ch, x, y, font) + 20;
+    }
+
+    // find typeface containing the requested character and draw it
+    SkFontMgr::Request request;
+    SkFontMgr::Request::CMapEntry cmapEntry{character, 0};
+    request.cmapEntries = SkSpan(&cmapEntry, 1);
+    request.bcp47 = SkSpan(bcp47, bcp47Count);
+    request.familyName = fontName;
+    SkFontArguments::VariationPosition::Coordinate model[4];
+    SkFontMgr::Request::SetModel(fontStyle, model);
+    request.model = SkSpan(model);
+    sk_sp<SkTypeface> typeface1 = fm->fallback(request);
+    font.setTypeface(typeface1);
+    x = drawString(canvas, ch, x, y, font) + 20;
+
+    return x;
 }
 
 static const char* zh = "zh";
@@ -151,7 +164,12 @@ class FontMgrMatchGM : public skiagm::GM {
             sname.appendf(" [%d %d]", fs.weight(), fs.width());
 
             f.setTypeface(sk_sp<SkTypeface>(fset->createTypeface(j)));
-            (void)drawString(canvas, sname, 0, y, f);
+            SkScalar x = 0;
+            x = drawString(canvas, sname, x, y, f) + 20;
+            // check to see that we get different glyphs in japanese and chinese
+            // and the style matches with no name
+            x = drawCharacter(canvas, 0x5203, x, y, font, fFM.get(), nullptr, &zh, 1, fs);
+            x = drawCharacter(canvas, 0x5203, x, y, font, fFM.get(), nullptr, &ja, 1, fs);
             y += 24;
         }
     }
@@ -168,7 +186,12 @@ class FontMgrMatchGM : public skiagm::GM {
                     SkString str;
                     str.printf("request [%d %d]", fs.weight(), fs.width());
                     f.setTypeface(std::move(face));
-                    (void)drawString(canvas, str, 0, y, f);
+                    SkScalar x = 0;
+                    x = drawString(canvas, str, x, y, f) + 20;
+                    // check to see that we get different glyphs in japanese and chinese
+                    // and the style matches with no name
+                    x = drawCharacter(canvas, 0x5203, x, y, font, fFM.get(), nullptr, &zh, 1, fs);
+                    x = drawCharacter(canvas, 0x5203, x, y, font, fFM.get(), nullptr, &ja, 1, fs);
                     y += 24;
                 }
             }
@@ -182,7 +205,7 @@ class FontMgrMatchGM : public skiagm::GM {
         font.setSize(17);
 
         const char* gNames[] = {
-            "Helvetica Neue", "Arial", "sans"
+            "Helvetica Neue", "Arial", "sans", "Roboto"
         };
 
         sk_sp<SkFontStyleSet> fset;
@@ -199,7 +222,7 @@ class FontMgrMatchGM : public skiagm::GM {
 
         canvas->translate(20, 40);
         this->exploreFamily(canvas, font, fset.get());
-        canvas->translate(150, 0);
+        canvas->translate(350, 0);
         this->iterateFamily(canvas, font, fset.get());
         return DrawResult::kOk;
     }
@@ -238,8 +261,7 @@ private:
             int numGlyphs = font.getTypeface()->countGlyphs();
             for (int i = 0; i < numGlyphs; ++i) {
                 SkGlyphID glyphId = i;
-                SkRect cur;
-                font.getBounds(&glyphId, 1, &cur, nullptr);
+                SkRect cur = font.getBounds(glyphId, nullptr);
                 if (cur.fLeft   < min.fLeft  ) { min.fLeft   = cur.fLeft;   left   = i; }
                 if (cur.fTop    < min.fTop   ) { min.fTop    = cur.fTop ;   top    = i; }
                 if (min.fRight  < cur.fRight ) { min.fRight  = cur.fRight;  right  = i; }
@@ -262,7 +284,7 @@ private:
         canvas->drawRect(fontBounds, boundsPaint);
 
         const SkScalar intervals[] = { 10.f, 10.f };
-        boundsPaint.setPathEffect(SkDashPathEffect::Make(intervals, 2, 0.f));
+        boundsPaint.setPathEffect(SkDashPathEffect::Make(intervals, 0.f));
         canvas->drawRect(min, boundsPaint);
 
         SkFontMetrics fm;
@@ -307,8 +329,7 @@ private:
             canvas->drawString(name, min.fLeft, min.fBottom, labelFont, SkPaint());
         }
         for (const GlyphToDraw& glyphToDraw : glyphsToDraw) {
-            SkPath path;
-            font.getPath(glyphToDraw.id, &path);
+            SkPath path = font.getPath(glyphToDraw.id).value_or(SkPath());
             SkPaint::Style style = path.isEmpty() ? SkPaint::kFill_Style : SkPaint::kStroke_Style;
             SkPaint glyphPaint;
             glyphPaint.setStyle(style);
@@ -341,7 +362,7 @@ private:
         const SkColor boundsColors[2] = { SK_ColorRED, SK_ColorBLUE };
 
         SkFontMgr* fm = fFM.get();
-        int count = std::min(fm->countFamilies(), 32);
+        int count = fm->countFamilies();
         if (count == 0) {
             *errorMsg = "No families in SkFontMgr under test.";
             return DrawResult::kSkip;
@@ -352,14 +373,19 @@ private:
 
         canvas->translate(10, 120);
 
-        for (int i = 0; i < count; ++i) {
+        int typefacesVisited = 0;
+        for (int i = 0; i < count && typefacesVisited < 32; ++i) {
             sk_sp<SkFontStyleSet> set(fm->createStyleSet(i));
-            for (int j = 0; j < set->count() && j < 3; ++j) {
+            int stylesVisited = 0;
+            for (int j = 0; j < set->count() && typefacesVisited < 32 && stylesVisited < 3; ++j) {
                 font.setTypeface(sk_sp<SkTypeface>(set->createTypeface(j)));
                 // Fonts with lots of glyphs are interesting, but can take a long time to find
                 // the glyphs which make up the maximum extent.
                 SkTypeface* typeface = font.getTypeface();
                 if (typeface && 0 < typeface->countGlyphs() && typeface->countGlyphs() < 1000) {
+                    ++typefacesVisited;
+                    ++stylesVisited;
+
                     SkColor color = boundsColors[index & 1];
                     SkRect drawBounds = show_bounds(canvas, font, x, y, color, fLabelBounds);
                     x += drawBounds.width() + 20;

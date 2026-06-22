@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Google Inc.
+ * Copyright 2020 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -45,7 +45,7 @@ int main(int argc, char** argv) {
     }
 
     SkFILEStream in(FLAGS_input[0]);
-    if (!in.isValid()) {
+    if (!in.has_value()) {
         std::cerr << "Could not open " << FLAGS_input[0] << "\n";
         return 1;
     }
@@ -85,7 +85,7 @@ int main(int argc, char** argv) {
     surface->peekPixels(&pixmap);
 
     SkFILEWStream out(FLAGS_output[0]);
-    if (!out.isValid()) {
+    if (!out.has_value()) {
         std::cerr << "Could not open " << FLAGS_output[0] << " for writing.\n";
         return 1;
     }

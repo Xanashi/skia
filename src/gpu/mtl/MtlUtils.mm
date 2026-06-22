@@ -1,5 +1,5 @@
 /*
- * Copyright 2021 Google Inc.
+ * Copyright 2021 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -15,48 +15,6 @@
 
 namespace skgpu {
 
-bool MtlFormatIsDepthOrStencil(MTLPixelFormat format) {
-    switch (format) {
-        case MTLPixelFormatStencil8: // fallthrough
-        case MTLPixelFormatDepth16Unorm:
-        case MTLPixelFormatDepth32Float:
-#if defined(SK_BUILD_FOR_MAC)
-        case MTLPixelFormatDepth24Unorm_Stencil8:
-#endif
-        case MTLPixelFormatDepth32Float_Stencil8:
-            return true;
-        default:
-            return false;
-    }
-}
-
-bool MtlFormatIsDepth(MTLPixelFormat format) {
-    switch (format) {
-        case MTLPixelFormatDepth16Unorm:
-        case MTLPixelFormatDepth32Float:
-#if defined(SK_BUILD_FOR_MAC)
-        case MTLPixelFormatDepth24Unorm_Stencil8:
-#endif
-        case MTLPixelFormatDepth32Float_Stencil8:
-            return true;
-        default:
-            return false;
-    }
-}
-
-bool MtlFormatIsStencil(MTLPixelFormat format) {
-    switch (format) {
-        case MTLPixelFormatStencil8: // fallthrough
-#if defined(SK_BUILD_FOR_MAC)
-        case MTLPixelFormatDepth24Unorm_Stencil8:
-#endif
-        case MTLPixelFormatDepth32Float_Stencil8:
-            return true;
-        default:
-            return false;
-    }
-}
-
 bool MtlFormatIsCompressed(MTLPixelFormat mtlFormat) {
     switch (mtlFormat) {
         case MTLPixelFormatETC2_RGB8:
@@ -68,6 +26,8 @@ bool MtlFormatIsCompressed(MTLPixelFormat mtlFormat) {
         default:
             return false;
     }
+
+    SkUNREACHABLE;
 }
 
 const char* MtlFormatToString(MTLPixelFormat mtlFormat) {
@@ -97,6 +57,8 @@ const char* MtlFormatToString(MTLPixelFormat mtlFormat) {
 
         default:                            return "Unknown";
     }
+
+    SkUNREACHABLE;
 }
 
 uint32_t MtlFormatChannels(MTLPixelFormat mtlFormat) {
@@ -125,6 +87,8 @@ uint32_t MtlFormatChannels(MTLPixelFormat mtlFormat) {
 
         default:                            return 0;
     }
+
+    SkUNREACHABLE;
 }
 
 size_t MtlFormatBytesPerBlock(MTLPixelFormat mtlFormat) {
@@ -154,6 +118,8 @@ size_t MtlFormatBytesPerBlock(MTLPixelFormat mtlFormat) {
 
         default:                            return 0;
     }
+
+    SkUNREACHABLE;
 }
 
 SkTextureCompressionType MtlFormatToCompressionType(MTLPixelFormat mtlFormat) {
@@ -164,6 +130,8 @@ SkTextureCompressionType MtlFormatToCompressionType(MTLPixelFormat mtlFormat) {
 #endif
         default:                      return SkTextureCompressionType::kNone;
     }
+
+    SkUNREACHABLE;
 }
 
 } // namespace skgpu

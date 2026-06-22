@@ -11,8 +11,8 @@
 #include "include/core/SkRefCnt.h"
 #include "include/core/SkRegion.h"
 #include "include/core/SkTypeface.h"
-#include "include/private/base/SkAssert.h"
-#include "include/private/base/SkTo.h"
+#include "include/private/SkAssert.h"
+#include "include/private/SkTo.h"
 #include "src/core/SkPicturePriv.h"
 #include "src/core/SkReadBuffer.h"
 
@@ -153,6 +153,7 @@ enum SaveLayerRecFlatFlags {
     SAVELAYERREC_HAS_CLIPMATRIX_OBSOLETE = 1 << 5,  // 6/13/2020
     SAVELAYERREC_HAS_BACKDROP_SCALE      = 1 << 6,
     SAVELAYERREC_HAS_MULTIPLE_FILTERS    = 1 << 7,
+    SAVELAYERREC_HAS_BACKDROP_TILEMODE   = 1 << 8,
 };
 
 enum SaveBehindFlatFlags {

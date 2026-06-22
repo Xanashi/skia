@@ -9,7 +9,7 @@
 #define SkGraphics_DEFINED
 
 #include "include/core/SkRefCnt.h"
-#include "include/private/base/SkAPI.h"
+#include "include/private/SkAPI.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -140,8 +140,8 @@ public:
      */
     static void PurgeAllCaches();
 
-    typedef std::unique_ptr<SkImageGenerator>
-                                            (*ImageGeneratorFromEncodedDataFactory)(sk_sp<SkData>);
+    using ImageGeneratorFromEncodedDataFactory =
+            std::unique_ptr<SkImageGenerator> (*)(sk_sp<const SkData>);
 
     /**
      *  To instantiate images from encoded data, first looks at this runtime function-ptr. If it

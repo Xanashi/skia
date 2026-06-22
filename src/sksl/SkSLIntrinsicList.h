@@ -67,7 +67,6 @@
     SKSL_INTRINSIC(length)           \
     SKSL_INTRINSIC(lessThanEqual)    \
     SKSL_INTRINSIC(lessThan)         \
-    SKSL_INTRINSIC(loadFloatBuffer)  \
     SKSL_INTRINSIC(log2)             \
     SKSL_INTRINSIC(log)              \
     SKSL_INTRINSIC(matrixCompMult)   \
@@ -108,6 +107,7 @@
     SKSL_INTRINSIC(tan)              \
     SKSL_INTRINSIC(textureHeight)    \
     SKSL_INTRINSIC(textureRead)      \
+    SKSL_INTRINSIC(textureSize)      \
     SKSL_INTRINSIC(textureWidth)     \
     SKSL_INTRINSIC(textureWrite)     \
     SKSL_INTRINSIC(toLinearSrgb)     \

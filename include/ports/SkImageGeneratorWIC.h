@@ -8,14 +8,14 @@
 #ifndef SkImageGeneratorWIC_DEFINED
 #define SkImageGeneratorWIC_DEFINED
 
-#include "include/private/base/SkFeatures.h"
+#include "include/private/SkFeatures.h"
 
 #if defined(SK_BUILD_FOR_WIN)
 
 #include "include/core/SkData.h"
 #include "include/core/SkImageGenerator.h"
 #include "include/core/SkRefCnt.h"
-#include "include/private/base/SkAPI.h"
+#include "include/private/SkAPI.h"
 
 #include <memory>
 
@@ -34,7 +34,7 @@
  * https://msdn.microsoft.com/en-us/library/windows/desktop/ff485844.aspx
  */
 namespace SkImageGeneratorWIC {
-SK_API std::unique_ptr<SkImageGenerator> MakeFromEncodedWIC(sk_sp<SkData>);
+SK_API std::unique_ptr<SkImageGenerator> MakeFromEncodedWIC(sk_sp<const SkData>);
 }
 
 #endif  // SK_BUILD_FOR_WIN

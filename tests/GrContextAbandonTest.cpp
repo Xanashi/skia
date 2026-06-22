@@ -6,11 +6,10 @@
  */
 
 #include "include/core/SkTypes.h"
-#include "include/gpu/GrDirectContext.h"
+#include "include/gpu/ganesh/GrDirectContext.h"
 #include "tests/CtsEnforcement.h"
 #include "tests/Test.h"
 #include "tools/gpu/ContextType.h"
-#include "tools/gpu/FenceSync.h"
 
 struct GrContextOptions;
 

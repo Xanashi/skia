@@ -8,9 +8,9 @@
 #include "bench/Benchmark.h"
 #include "include/core/SkRRect.h"
 #include "include/core/SkRect.h"
-#include "src/base/SkRandom.h"
 #include "src/core/SkGeometry.h"
 #include "src/core/SkPathPriv.h"
+#include "src/core/SkRandom.h"
 
 class GeometryBench : public Benchmark {
 public:
@@ -266,11 +266,11 @@ public:
         return Backend::kNonRendering == backend;
     }
 
-    virtual void preparePath(SkPath*) = 0;
+    virtual SkPath preparePath() = 0;
 
 protected:
     void onPreDraw(SkCanvas*) override {
-        this->preparePath(&fPath);
+        fPath = this->preparePath();
     }
 
     void onDraw(int loops, SkCanvas* canvas) override {
@@ -287,10 +287,10 @@ class RRectConvexityBench : public ConvexityBench {
 public:
     RRectConvexityBench() : ConvexityBench("rrect") {}
 
-    void preparePath(SkPath* path) override {
+    SkPath preparePath() override {
         SkRRect rr;
         rr.setRectXY({0, 0, 100, 100}, 20, 30);
-        path->addRRect(rr);
+        return SkPath::RRect(rr);
     }
 };
 DEF_BENCH( return new RRectConvexityBench; )

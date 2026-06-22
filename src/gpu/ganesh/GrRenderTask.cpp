@@ -183,7 +183,7 @@ void GrRenderTask::addDependency(GrDrawingManager* drawingMgr,
         SkASSERT(textureProxy);
         if (skgpu::Mipmapped::kYes != textureProxy->mipmapped()) {
             // There are some cases where we might be given a non-mipmapped texture with a mipmap
-            // filter. See skbug.com/7094.
+            // filter. See skbug.com/40038328.
             mipmapped = skgpu::Mipmapped::kNo;
         } else if (textureProxy->mipmapsAreDirty()) {
             resolveFlags |= GrSurfaceProxy::ResolveFlags::kMipMaps;
@@ -321,7 +321,7 @@ void GrRenderTask::addTarget(GrDrawingManager* drawingMgr, sk_sp<GrSurfaceProxy>
     fTargets.emplace_back(std::move(proxy));
 }
 
-#if defined(GR_TEST_UTILS)
+#if defined(GPU_TEST_UTILS)
 void GrRenderTask::dump(const SkString& label,
                         SkString indent,
                         bool printDependencies,

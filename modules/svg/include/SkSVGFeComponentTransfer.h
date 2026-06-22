@@ -1,5 +1,5 @@
 /*
- * Copyright 2024 Google Inc.
+ * Copyright 2024 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -8,12 +8,19 @@
 #ifndef SkSVGFeComponentTransfer_DEFINED
 #define SkSVGFeComponentTransfer_DEFINED
 
+#include "include/core/SkRefCnt.h"
+#include "include/private/SkAPI.h"
 #include "modules/svg/include/SkSVGFe.h"
 #include "modules/svg/include/SkSVGHiddenContainer.h"
 #include "modules/svg/include/SkSVGNode.h"
 #include "modules/svg/include/SkSVGTypes.h"
 
 #include <cstdint>
+#include <vector>
+
+class SkImageFilter;
+class SkSVGFilterContext;
+class SkSVGRenderContext;
 
 class SkSVGFeFunc final : public SkSVGHiddenContainer {
 public:
@@ -33,6 +40,10 @@ public:
         return sk_sp<SkSVGFeFunc>(new SkSVGFeFunc(SkSVGTag::kFeFuncB));
     }
 
+    sk_sp<SkSVGNode> makeShallowClone() const override {
+        return sk_sp<SkSVGFeFunc>(new SkSVGFeFunc(*this));
+    }
+
     SVG_ATTR(Amplitude  , SkSVGNumberType,                          1)
     SVG_ATTR(Exponent   , SkSVGNumberType,                          1)
     SVG_ATTR(Intercept  , SkSVGNumberType,                          0)
@@ -47,7 +58,7 @@ protected:
     bool parseAndSetAttribute(const char*, const char*) override;
 
 private:
-    SkSVGFeFunc(SkSVGTag tag) : INHERITED(tag) {}
+    explicit SkSVGFeFunc(SkSVGTag tag) : SkSVGHiddenContainer(tag) {}
 
     using INHERITED = SkSVGHiddenContainer;
 };
@@ -58,6 +69,10 @@ public:
 
     static sk_sp<SkSVGFeComponentTransfer> Make() {
         return sk_sp<SkSVGFeComponentTransfer>(new SkSVGFeComponentTransfer());
+    }
+
+    sk_sp<SkSVGNode> makeShallowClone() const override {
+        return sk_sp<SkSVGFeComponentTransfer>(new SkSVGFeComponentTransfer(*this));
     }
 
 protected:

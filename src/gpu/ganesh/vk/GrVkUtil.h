@@ -8,20 +8,41 @@
 #ifndef GrVkUtil_DEFINED
 #define GrVkUtil_DEFINED
 
-#include "include/gpu/GrTypes.h"
-#include "include/gpu/vk/GrVkTypes.h"
-#include "include/private/base/SkMacros.h"
+#include "include/private/SkAssert.h"
+#include "include/private/SkDebug.h"
+#include "include/private/SkMacros.h"
 #include "include/private/gpu/ganesh/GrTypesPriv.h"
-#include "src/gpu/ganesh/GrColor.h"
-#include "src/gpu/ganesh/GrDataUtils.h"
+#include "include/private/gpu/vk/SkiaVulkan.h"
 #include "src/gpu/vk/VulkanInterface.h"
 #include "src/sksl/ir/SkSLProgram.h"
 
-namespace SkSL { struct ProgramSettings; }
-class GrVkGpu;
+#include <string>
 
-// makes a Vk call on the interface
-#define GR_VK_CALL(IFACE, X) (IFACE)->fFunctions.f##X
+class GrVkGpu;
+namespace SkSL {
+struct NativeShader;
+struct ProgramSettings;
+}  // namespace SkSL
+
+// Uncomment to log all Ganesh Vulkan calls
+// #define GR_VK_DEBUG_LOG(X) SkDebugf("vk%s (%s:%d)\n", #X, __FILE__, __LINE__)
+
+// Or uncomment to trace all Ganesh Vulkan calls
+// TODO(b/471244369): expose this functionality as a build argument.
+// #include "src/core/SkTraceEvent.h"
+// #define GR_VK_DEBUG_LOG(X) \
+//     TRACE_EVENT1_ALWAYS("skia.gpu", "vk" #X, "line", __FILE__ ":" SK_MACRO_STRINGIFY(__LINE__))
+
+// Makes a Vk call on the interface
+#ifdef GR_VK_DEBUG_LOG
+    #define GR_VK_CALL(IFACE, X)             \
+        ([&]() {                             \
+            GR_VK_DEBUG_LOG(X);              \
+            return (IFACE)->fFunctions.f##X; \
+        })()
+#else
+    #define GR_VK_CALL(IFACE, X) (IFACE)->fFunctions.f##X
+#endif
 
 // Note: must be called before checkVkResult, since this does not log if the GPU is already
 // considering the device to be lost.
@@ -35,8 +56,8 @@ class GrVkGpu;
 #define GR_VK_CALL_RESULT(GPU, RESULT, X)                                 \
     do {                                                                  \
         (RESULT) = GR_VK_CALL(GPU->vkInterface(), X);                     \
-        SkASSERT(VK_SUCCESS == RESULT || VK_ERROR_DEVICE_LOST == RESULT); \
         GR_VK_LOG_IF_NOT_SUCCESS(GPU, RESULT, #X);                        \
+        SkASSERT(VK_SUCCESS == RESULT || VK_ERROR_DEVICE_LOST == RESULT); \
         GPU->checkVkResult(RESULT);                                       \
     } while (false)
 
@@ -49,7 +70,7 @@ class GrVkGpu;
 // same as GR_VK_CALL but checks for success
 #define GR_VK_CALL_ERRCHECK(GPU, X)                                  \
     VkResult SK_MACRO_APPEND_LINE(ret);                              \
-    GR_VK_CALL_RESULT(GPU, SK_MACRO_APPEND_LINE(ret), X)             \
+    GR_VK_CALL_RESULT(GPU, SK_MACRO_APPEND_LINE(ret), X)
 
 
 bool GrVkFormatIsSupported(VkFormat);
@@ -113,11 +134,11 @@ bool GrCompileVkShaderModule(GrVkGpu* gpu,
                              VkShaderModule* shaderModule,
                              VkPipelineShaderStageCreateInfo* stageInfo,
                              const SkSL::ProgramSettings& settings,
-                             std::string* outSPIRV,
+                             SkSL::NativeShader* outSPIRV,
                              SkSL::Program::Interface* outInterface);
 
 bool GrInstallVkShaderModule(GrVkGpu* gpu,
-                             const std::string& spirv,
+                             const SkSL::NativeShader& spirv,
                              VkShaderStageFlagBits stage,
                              VkShaderModule* shaderModule,
                              VkPipelineShaderStageCreateInfo* stageInfo);

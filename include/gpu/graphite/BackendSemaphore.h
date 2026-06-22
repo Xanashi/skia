@@ -8,13 +8,12 @@
 #ifndef skgpu_graphite_BackendSemaphore_DEFINED
 #define skgpu_graphite_BackendSemaphore_DEFINED
 
-#include "include/core/SkRefCnt.h"
-#include "include/gpu/graphite/GraphiteTypes.h"
-#include "include/private/base/SkAnySubclass.h"
+#include "include/private/SkAPI.h"
+#include "include/private/SkAnySubclass.h"
 
-#ifdef SK_VULKAN
-#include "include/private/gpu/vk/SkiaVulkan.h"
-#endif
+#include <cstddef>
+
+namespace skgpu { enum class BackendApi : unsigned int; }
 
 namespace skgpu::graphite {
 
@@ -24,10 +23,6 @@ class SK_API BackendSemaphore {
 public:
     BackendSemaphore();
 
-#ifdef SK_VULKAN
-    BackendSemaphore(VkSemaphore semaphore);
-#endif
-
     BackendSemaphore(const BackendSemaphore&);
 
     ~BackendSemaphore();
@@ -36,10 +31,6 @@ public:
 
     bool isValid() const { return fIsValid; }
     BackendApi backend() const { return fBackend; }
-
-#ifdef SK_VULKAN
-    VkSemaphore getVkSemaphore() const;
-#endif
 
 private:
     friend class BackendSemaphoreData;
@@ -61,17 +52,6 @@ private:
     AnyBackendSemaphoreData fSemaphoreData;
 
     bool fIsValid = false;
-
-    // TODO(b/294543706): Re-write with SkAnySubclass
-    union {
-#ifdef SK_DAWN
-        // TODO: WebGPU doesn't seem to have the notion of an Event or Semaphore
-#endif
-#ifdef SK_VULKAN
-        VkSemaphore fVkSemaphore;
-#endif
-        void* fEnsureUnionNonEmpty;
-    };
 };
 
 } // namespace skgpu::graphite

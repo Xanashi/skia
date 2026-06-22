@@ -3,9 +3,6 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-if (is_fuchsia) {
-  import("//build/fuchsia/sdk.gni")
-}
 if (is_wasm) {
   import("../toolchain/wasm.gni")
 }
@@ -77,26 +74,6 @@ config("default") {
     cflags += [ "-ffp-contract=off" ]
   }
 
-  if (is_fuchsia && using_fuchsia_sdk) {
-    ldflags += [
-      "-v",
-      "--sysroot=" + rebase_path("$fuchsia_sdk_path/arch/$current_cpu/sysroot"),
-    ]
-    cflags += [ "--sysroot=" +
-                rebase_path("$fuchsia_sdk_path/arch/$current_cpu/sysroot") ]
-    if (current_cpu == "x64") {
-      current_cpu = "--target=x86_64-${current_os}"
-    } else if (current_cpu == "arm64") {
-      target_triple = "--target=aarch64-unknown-${current_os}"
-    } else {
-      print("Unknown target CPU for Fuchsia target build.")
-      assert(false)
-    }
-    ldflags += [ target_triple ]
-    cflags += [ target_triple ]
-    asmflags += [ target_triple ]
-  }
-
   if (is_win) {
     if (is_clang && current_cpu == "arm64") {
       cflags += [ "--target=arm64-windows" ]
@@ -104,8 +81,13 @@ config("default") {
     cflags += [
       "/bigobj",  # Some of our files are bigger than the regular limits.
       "/utf-8",  # Set Source and Executable character sets to UTF-8.
+
+      # Without fp:precise, MSVC makes some assumptions about NANs and Infinities that break us.
+      # https://learn.microsoft.com/en-us/cpp/build/reference/fp-specify-floating-point-behavior
+      "/fp:precise",
     ]
-    cflags_cc += [ "/std:c++17" ]
+    cflags_cc += [ "/std:c++20" ]
+
     if (!is_clang) {
       # https://developercommunity.visualstudio.com/t/Incorrect-C4573-when-taking-address-of-m/10662923
       cflags_cc += [ "/Zc:lambda" ]
@@ -143,14 +125,11 @@ config("default") {
     ]
   } else {
     cflags += [
-      "-fstrict-aliasing",
       "-fPIC",
       "-fvisibility=hidden",
     ]
-    cflags_cc += [
-      "-std=c++17",
-      "-fvisibility-inlines-hidden",
-    ]
+    cflags_cc += [ "-fvisibility-inlines-hidden" ]
+    cflags_cc += [ "-std=c++20" ]
   }
 
   if (current_cpu == "arm") {
@@ -253,9 +232,15 @@ config("default") {
                ] + _arch_flags
     libs += [ "objc" ]
     if (ios_min_target != "") {
-      cflags += [ "-miphoneos-version-min=$ios_min_target" ]
-      asmflags += [ "-miphoneos-version-min=$ios_min_target" ]
-      ldflags += [ "-miphoneos-version-min=$ios_min_target" ]
+      if (ios_use_simulator) {
+        cflags += [ "-miphonesimulator-version-min=$ios_min_target" ]
+        asmflags += [ "-miphonesimulator-version-min=$ios_min_target" ]
+        ldflags += [ "-miphonesimulator-version-min=$ios_min_target" ]
+      } else {
+        cflags += [ "-miphoneos-version-min=$ios_min_target" ]
+        asmflags += [ "-miphoneos-version-min=$ios_min_target" ]
+        ldflags += [ "-miphoneos-version-min=$ios_min_target" ]
+      }
     }
   }
 
@@ -306,20 +291,20 @@ config("default") {
     } else {
       asmflags += [
         "-target",
-        "x86_64-apple-macos10.13",
+        "x86_64-apple-macos11",
       ]
       cflags += [
         "-target",
-        "x86_64-apple-macos10.13",
+        "x86_64-apple-macos11",
       ]
       ldflags += [
         "-target",
-        "x86_64-apple-macos10.13",
+        "x86_64-apple-macos11",
       ]
     }
   }
 
-  if (is_wasm) {
+  if (is_canvaskit) {
     cflags += [ "--sysroot=$skia_emsdk_dir/upstream/emscripten/cache/sysroot" ]
     ldflags += [ "--sysroot=$skia_emsdk_dir/upstream/emscripten/cache/sysroot" ]
   }
@@ -342,7 +327,7 @@ config("default") {
       sanitizers = "undefined,address,float-divide-by-zero"
 
       if (is_android) {
-        # TODO(skia:13344): work out UBSAN link errors
+        # TODO(skbug.com/40044427): work out UBSAN link errors
         sanitizers = "address"
       }
     } else if (sanitize == "HWASAN") {
@@ -360,6 +345,10 @@ config("default") {
       "-fno-sanitize-recover=$sanitizers",
       "-fsanitize-blacklist=$_suppressions",
     ]
+    if (is_mac) {
+      # https://github.com/llvm/llvm-project/issues/109074
+      cflags += [ "-fno-sanitize=function" ]
+    }
 
     if (is_win) {
       cflags += [
@@ -368,11 +357,31 @@ config("default") {
       ]
 
       assert(clang_win != "")
-      libs += [ "$clang_win/lib/clang/$clang_win_version/lib/windows/clang_rt.asan-x86_64.lib" ]
+
+      # Chromium's clang toolchain uses dynamic dependencies for ASAN.
+      # They use clang_rt.asan_dynamic-x86_64.dll.
+      # https://chromium.googlesource.com/chromium/src/+/85202d981e0c257f8f941e24b9baae38000d5019
+      #
+      # We do what they do and link against the dynamic runtime (clang_rt.asan_dynamic-x86_64.lib)
+      # and its associated thunk. Then, we copy the .dll into the out/ASAN (or whatever) directory.
+      # We use /WHOLEARCHIVE for the thunk to ensure all ASan hooks are correctly linked.
+      libs += [ "$clang_win/lib/clang/$clang_win_version/lib/windows/clang_rt.asan_dynamic-x86_64.lib" ]
+      if (is_component_build) {
+        ldflags += [ "/WHOLEARCHIVE:$clang_win/lib/clang/$clang_win_version/lib/windows/clang_rt.asan_dynamic_runtime_thunk-x86_64.lib" ]
+      } else {
+        ldflags += [ "/WHOLEARCHIVE:$clang_win/lib/clang/$clang_win_version/lib/windows/clang_rt.asan_static_runtime_thunk-x86_64.lib" ]
+      }
     } else {
       cflags += [ "-fno-omit-frame-pointer" ]
 
       ldflags += [ "-fsanitize=$sanitizers" ]
+    }
+
+    if (is_win && sanitize == "ASAN") {
+      copy("copy_asan_runtime") {
+        sources = [ "$clang_win/lib/clang/$clang_win_version/lib/windows/clang_rt.asan_dynamic-x86_64.dll" ]
+        outputs = [ "$root_out_dir/clang_rt.asan_dynamic-x86_64.dll" ]
+      }
     }
 
     if (is_linux) {
@@ -391,7 +400,7 @@ config("default") {
   cflags_objcc += cflags_cc
 }
 
-# See skia:9731.
+# See skbug.com/40041063.
 config("recover_pointer_overflow") {
   if (sanitize == "ASAN" && !(is_win && !is_clang)) {
     cflags = [ "-fsanitize-recover=pointer-overflow" ]
@@ -532,7 +541,6 @@ config("warnings") {
       "-Wno-pedantic",
       "-Wno-reserved-id-macro",
       "-Wno-reserved-identifier",
-      "-Wno-shift-sign-overflow",
       "-Wno-signed-enum-bitfield",
       "-Wno-switch-enum",
       "-Wno-thread-safety-negative",
@@ -542,6 +550,10 @@ config("warnings") {
       "-Wno-unused-macros",
       "-Wno-unused-member-function",
       "-Wno-non-c-typedef-for-linkage",  # Dawn, not Skia per se.
+
+      "-Wno-lifetime-safety",
+      "-Wno-lifetime-safety-suggestions",
+      "-Wno-lifetime-safety-validations",
 
       # We would like to fix this, otherwise it could cause runtime issues
       # when compiled for WASM.
@@ -558,9 +570,12 @@ config("warnings") {
       "-Wno-covered-switch-default",
       "-Wno-deprecated",
       "-Wno-missing-noreturn",
-      "-Wno-old-style-cast",
       "-Wno-newline-eof",
+      "-Wno-old-style-cast",
       "-Wno-padded",
+      "-Wno-pessimizing-move",
+      "-Wno-nrvo",
+      "-Wno-unique-object-duplication",
       "-Wno-return-std-move-in-c++11",  # we no longer support C++11, and don't
                                         # need C++11-only performance warnings
       "-Wno-shadow-field-in-constructor",
@@ -580,6 +595,8 @@ config("warnings") {
       "-Wno-c++98-compat",
       "-Wno-c++98-compat-pedantic",
       "-Wno-undefined-func-template",
+      "-Wc++98-compat-extra-semi",
+      "-Wno-c++20-compat",
     ]
     cflags_objc += [
       "-Wno-direct-ivar-access",
@@ -672,7 +689,7 @@ config("debug_symbols") {
       cflags += [ "-gcodeview-ghash" ]
       ldflags = [ "/DEBUG:GHASH" ]
     } else {
-      ldflags = [ "/DEBUG:FASTLINK" ]
+      ldflags = [ "/DEBUG:FULL" ]
     }
   } else {
     cflags = [
@@ -683,7 +700,9 @@ config("debug_symbols") {
 }
 
 config("no_rtti") {
-  if (sanitize != "ASAN") {  # -fsanitize=vptr requires RTTI
+  # -fsanitize=vptr requires RTTI which is enabled as a part of
+  # -fsanitize=undefined
+  if (sanitize != "ASAN") {
     if (is_win) {
       cflags_cc = [ "/GR-" ]
     } else {
@@ -709,13 +728,7 @@ config("optimize") {
     ]
   } else {
     if (skia_enable_optimize_size) {
-      cflags = [
-        "-Oz",
-
-        # We currently use bloaty 1.0 on the CI. Newer versions of Bloaty do not
-        # seem to handle newer DWARF data as well.
-        "-gdwarf-4",
-      ]
+      cflags = [ "-Oz" ]
       if (!is_android) {
         cflags += [
           # Clang 15 turns PIE (Position-indendendent Executable) on by default.
@@ -729,7 +742,7 @@ config("optimize") {
     }
     if (is_mac || is_ios) {
       ldflags += [ "-dead_strip" ]
-    } else if (!is_wasm) {
+    } else if (!is_canvaskit) {
       cflags += [
         "-fdata-sections",
         "-ffunction-sections",
@@ -746,6 +759,23 @@ config("NDEBUG") {
 config("trivial_abi") {
   if (is_clang) {
     #defines = [ "SK_TRIVIAL_ABI=[[clang::trivial_abi]]" ]
+  }
+}
+
+# PartitionAlloc, Chrome, and many other C++ projects are written assuming
+# different types may freely point to the same location in memory. This is
+# undefined behavior in C/C++. With `-fstrict-aliasing`, some compiler will
+# optimize code in a way that would crash those projects.
+#
+# As of 2024, only GCC is aggressive about strict aliasing. Clang isn't.
+config("strict_aliasing") {
+  if (!is_win) {
+    cflags = [ "-fstrict-aliasing" ]
+  }
+}
+config("no_strict_aliasing") {
+  if (!is_win) {
+    cflags = [ "-fno-strict-aliasing" ]
   }
 }
 
@@ -768,5 +798,39 @@ config("executable") {
       "/INCREMENTAL:NO",  # Quiet warnings about failing to incrementally link
                           # by never trying to.
     ]
+  }
+}
+
+if (is_wasm) {
+  if (is_canvaskit) {
+    # CK manages its flags separately.
+    config("wasm") {
+    }
+  } else {
+    config("wasm") {
+      common = [
+        "--sysroot=$skia_emsdk_dir/upstream/emscripten/cache/sysroot",
+        "-pthread",
+      ]
+      cflags = common
+      ldflags = common
+      ldflags += [
+        "-sDYNAMIC_EXECUTION=0",  # Disallow eval(): widens portability
+        "-sMIN_WEBGL_VERSION=2",
+        "-sMAX_WEBGL_VERSION=2",
+        "-sWASM=1",
+        "-sALLOW_MEMORY_GROWTH=1",
+        "-sSTACK_SIZE=1048576",  # 1 MB
+        "-sEXPORT_ES6=1",
+        "-sMODULARIZE=1",  # Do not pollute global JS scope
+      ]
+      if (is_debug) {
+        ldflags += [
+          "-sASSERTIONS=1",
+          "-sPTHREADS_DEBUG=1",
+          "-gsource-map",
+        ]
+      }
+    }
   }
 }

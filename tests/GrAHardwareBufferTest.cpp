@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 Google Inc.
+ * Copyright 2018 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -18,13 +18,13 @@
 #include "include/core/SkColorSpace.h"
 #include "include/core/SkImage.h"
 #include "include/core/SkSurface.h"
-#include "include/gpu/GrDirectContext.h"
+#include "include/gpu/ganesh/GrDirectContext.h"
 #include "include/gpu/ganesh/SkSurfaceGanesh.h"
 #include "src/gpu/ganesh/GrAHardwareBufferImageGenerator.h"
 #include "src/gpu/ganesh/GrDirectContextPriv.h"
 #include "src/gpu/ganesh/GrGpu.h"
 #include "tests/Test.h"
-#include "tools/gpu/GrContextFactory.h"
+#include "tools/ganesh/GrContextFactory.h"
 
 #include <android/hardware_buffer.h>
 #include <cinttypes>
@@ -283,6 +283,8 @@ static void surface_draw_test_helper(skiatest::Reporter* reporter,
         REPORTER_ASSERT(reporter, surface->readPixels(readbackBitmap, 0, 0));
         REPORTER_ASSERT(reporter, check_read(reporter, srcBitmap, readbackBitmap));
     }
+
+    surface.reset();
 
     cleanup_resources(buffer);
 }

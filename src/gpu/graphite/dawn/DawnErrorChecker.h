@@ -8,7 +8,7 @@
 #ifndef skgpu_graphite_DawnErrorChecker_DEFINED
 #define skgpu_graphite_DawnErrorChecker_DEFINED
 
-#include "src/base/SkEnumBitMask.h"
+#include "src/core/SkEnumBitMask.h"
 
 #include "src/gpu/graphite/dawn/DawnAsyncWait.h"
 
@@ -24,7 +24,7 @@ enum class DawnErrorType : uint32_t {
     kOutOfMemory = 0b00000010,
     kInternal    = 0b00000100,
 };
-SK_MAKE_BITMASK_OPS(DawnErrorType);
+SK_MAKE_BITMASK_OPS(DawnErrorType)
 
 // DawnErrorChecker immediately pushes error scopes for all known Dawn error filter types
 // (Validation, OutOfMemory, Internal) upon construction and detects any errors that are

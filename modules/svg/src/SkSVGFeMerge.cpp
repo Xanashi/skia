@@ -1,15 +1,18 @@
 /*
- * Copyright 2024 Google Inc.
+ * Copyright 2024 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
  */
 
+#include "include/private/SkTArray.h"
 #include "include/effects/SkImageFilters.h"
 #include "modules/svg/include/SkSVGAttributeParser.h"
 #include "modules/svg/include/SkSVGFeMerge.h"
 #include "modules/svg/include/SkSVGFilterContext.h"
 #include "modules/svg/include/SkSVGRenderContext.h"
+
+class SkSVGRenderContext;
 
 void SkSVGFeMerge::appendChild(sk_sp<SkSVGNode> node) {
     //auto mergeNode = reinterpret_cast<sk_sp<SkSVGFeMergeNode>>(node);

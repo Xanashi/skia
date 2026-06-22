@@ -6,38 +6,6 @@ package(
 
 licenses(["notice"])
 
-skia_cc_library(
-    name = "legacy_skottie",
-    srcs = [
-        "//modules/skottie/src:srcs",
-        "//modules/skottie/src/text:text_shaper_srcs",
-    ],
-    hdrs = ["//modules/skottie/include:hdrs"],
-    defines = [
-        "SK_ENABLE_SKOTTIE_SKSLEFFECT",
-        "SK_ENABLE_SKOTTIE",
-    ],
-    visibility = ["//:__subpackages__"],
-    deps = [
-        "//:skia_internal",
-        "//modules/skresources:legacy_skresources",
-        "//modules/sksg:legacy_sksg",
-        "//modules/skshaper:legacy_skshaper",
-        "//modules/skunicode:legacy_skunicode",
-    ],
-)
-
-skia_cc_library(
-    name = "legacy_utils",
-    srcs = ["//modules/skottie/utils:srcs"],
-    hdrs = ["//modules/skottie/utils:hdrs"],
-    visibility = ["//:__subpackages__"],
-    deps = [
-        ":legacy_skottie",
-        "//tools/skui",
-    ],
-)
-
 skia_cc_binary(
     name = "skottie_tool_cpu",
     testonly = True,
@@ -58,10 +26,16 @@ skia_cc_binary(
         "//modules/skshaper:skshaper_harfbuzz",
         "//modules/skshaper:skshaper_unicode",
         "//modules/skunicode:skunicode_icu",
-        "//src/base",
         "//src/core:core_priv",
         "//tools/flags:cmd_flags",
-    ],
+    ] + select({
+        "@platforms//os:linux": [
+            "@skia//:fontmgr_fontconfig",
+            "@skia//:freetype_support",
+        ],
+        "@platforms//os:macos": ["//:fontmgr_coretext"],
+        "//conditions:default": ["//:fontmgr_empty_freetype"],
+    }),
 )
 
 skia_cc_binary(
@@ -84,11 +58,10 @@ skia_cc_binary(
         "//modules/skshaper:skshaper_harfbuzz",
         "//modules/skshaper:skshaper_unicode",
         "//modules/skunicode:skunicode_icu",
-        "//src/base",
         "//src/core:core_priv",
         "//src/gpu/ganesh/gl:ganesh_gl_TEST_UTIL",
         "//tools/flags:cmd_flags",
-        "//tools/gpu:ganesh_gl_utils",
+        "//tools/ganesh:ganesh_gl_utils",
     ],
 )
 
@@ -107,11 +80,13 @@ skia_cc_binary(
         "//modules/skshaper:skshaper_harfbuzz",
         "//modules/skshaper:skshaper_unicode",
         "//modules/skunicode:skunicode_icu",
-        "//src/base",
         "//src/core:core_priv",
         "//tools/flags:cmd_flags",
     ] + select({
-        "@platforms//os:linux": ["//:fontmgr_fontconfig_freetype"],
+        "@platforms//os:linux": [
+            "@skia//:fontmgr_fontconfig",
+            "@skia//:freetype_support",
+        ],
         "@platforms//os:macos": ["//:fontmgr_coretext"],
         "//conditions:default": ["//:fontmgr_empty_freetype"],
     }),
@@ -129,18 +104,18 @@ skia_cc_library(
     ],
     features = ["layering_check"],
     local_defines = [
-        "SK_DISABLE_LEGACY_SHAPER_FACTORY",
         "SK_ENABLE_SKOTTIE_SKSLEFFECT",
     ],
     visibility = ["//:__subpackages__"],
     deps = [
         ":textshaper",
         "//:core",
+        "//modules/jsonreader",
         "//modules/skresources",
         "//modules/sksg",
         "//modules/sksg:sksg_priv",
         "//modules/skshaper:skshaper_core",
-        "//src/base",
+        "//modules/skunicode:skunicode_core",
         "//src/codec:codec_support_priv",
         "//src/core:core_priv",
     ],
@@ -164,16 +139,12 @@ skia_cc_library(
     name = "textshaper",
     srcs = ["//modules/skottie/src/text:text_shaper_srcs"],
     hdrs = ["//modules/skottie/include:text_shaper_hdrs"],
-    defines = [
-        "SK_DISABLE_LEGACY_SHAPER_FACTORY",
-    ],
     features = ["layering_check"],
     visibility = ["//:__subpackages__"],
     deps = [
         "//:core",
         "//modules/skshaper:skshaper_core",
         "//modules/skunicode:skunicode_core",
-        "//src/base",
         "//src/core:core_priv",
     ],
 )

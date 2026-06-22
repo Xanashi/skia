@@ -9,12 +9,12 @@
 
 #include "include/core/SkPoint.h"
 #include "include/core/SkSpan.h"
-#include "include/private/base/SkTArray.h"
-#include "include/private/base/SkTo.h"
-#include "src/base/SkEnumBitMask.h"
-#include "src/base/SkStringView.h"
-#include "src/base/SkUtils.h"
+#include "include/private/SkTArray.h"
+#include "include/private/SkTo.h"
+#include "src/core/SkEnumBitMask.h"
+#include "src/core/SkStringView.h"
 #include "src/core/SkTHash.h"
+#include "src/core/SkUtils.h"
 #include "src/sksl/SkSLAnalysis.h"
 #include "src/sksl/SkSLBuiltinTypes.h"
 #include "src/sksl/SkSLCompiler.h"
@@ -1419,6 +1419,17 @@ std::optional<SlotRange> Generator::writeFunction(
             const Expression& arg = *arguments[index];
             const Variable& param = *parameters[index];
 
+            // If we are passing a child effect to a function, we need to add its mapping to our
+            // child map.
+            if (arg.type().isEffectChild()) {
+                if (int* childIndex = fChildEffectMap.find(arg.as<VariableReference>()
+                                                              .variable())) {
+                    SkASSERT(!fChildEffectMap.find(&param));
+                    fChildEffectMap[&param] = *childIndex;
+                }
+                continue;
+            }
+
             // Use LValues for out-parameters and inout-parameters, so we can store back to them
             // later.
             if (IsInoutParameter(param) || IsOutParameter(param)) {
@@ -1526,6 +1537,14 @@ std::optional<SlotRange> Generator::writeFunction(
             fProgramSlots.mapVariableToSlots(*remapped.fVariable, *remapped.fSlotRange);
         } else {
             fProgramSlots.unmapVariableSlots(*remapped.fVariable);
+        }
+    }
+
+    // Remove any child-effect mappings that were made for this call.
+    for (size_t index = 0; index < arguments.size(); ++index) {
+        const Expression& arg = *arguments[index];
+        if (arg.type().isEffectChild()) {
+            fChildEffectMap.remove(parameters[index]);
         }
     }
 
@@ -3349,9 +3368,9 @@ bool Generator::pushIntrinsic(IntrinsicKind intrinsic,
             subexpressionStack.exit();
             subexpressionStack.pushClone(/*slots=*/3);
 
-            fBuilder.swizzle(/*consumedSlots=*/3, {1, 2, 0});
+            fBuilder.swizzle(/*consumedSlots=*/3, {{1, 2, 0}});
             subexpressionStack.enter();
-            fBuilder.swizzle(/*consumedSlots=*/3, {2, 0, 1});
+            fBuilder.swizzle(/*consumedSlots=*/3, {{2, 0, 1}});
             subexpressionStack.exit();
 
             // Push `arg1.zxy` onto this stack and `arg1.yzx` onto the next stack. Perform the
@@ -3364,11 +3383,11 @@ bool Generator::pushIntrinsic(IntrinsicKind intrinsic,
             subexpressionStack.exit();
             subexpressionStack.pushClone(/*slots=*/3);
 
-            fBuilder.swizzle(/*consumedSlots=*/3, {2, 0, 1});
+            fBuilder.swizzle(/*consumedSlots=*/3, {{2, 0, 1}});
             fBuilder.binary_op(BuilderOp::mul_n_floats, 3);
 
             subexpressionStack.enter();
-            fBuilder.swizzle(/*consumedSlots=*/3, {1, 2, 0});
+            fBuilder.swizzle(/*consumedSlots=*/3, {{1, 2, 0}});
             fBuilder.binary_op(BuilderOp::mul_n_floats, 3);
             subexpressionStack.exit();
 

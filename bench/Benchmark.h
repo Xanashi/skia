@@ -11,8 +11,14 @@
 #include "include/core/SkRefCnt.h"
 #include "include/core/SkSize.h"
 #include "include/core/SkString.h"
-#include "include/private/base/SkTArray.h"
+#include "include/private/SkTArray.h"
 #include "tools/Registry.h"
+
+#if defined(SK_GRAPHITE)
+#include "include/gpu/graphite/Context.h"
+#endif
+
+#include <functional>
 
 #define DEF_BENCH3(code, N) \
     static BenchRegistry gBench##N([](void*) -> Benchmark* { code; });
@@ -59,6 +65,10 @@ public:
     // Allows a benchmark to override options used to construct the GrContext.
     virtual void modifyGrContextOptions(GrContextOptions*) {}
 
+#if defined(SK_GRAPHITE)
+    virtual void modifyGraphiteContextOptions(skgpu::graphite::ContextOptions*) {}
+#endif
+
     // Whether or not this benchmark requires multiple samples to get a meaningful result.
     virtual bool shouldLoop() const {
         return true;
@@ -79,7 +89,7 @@ public:
     void postDraw(SkCanvas*);
 
     // Bench framework can tune loops to be large enough for stable timing.
-    void draw(int loops, SkCanvas*);
+    void draw(int loops, SkCanvas*, std::function<void()> submitFrame = nullptr);
 
     virtual void getGpuStats(SkCanvas*,
                              skia_private::TArray<SkString>* keys,
@@ -106,10 +116,19 @@ protected:
     // Each bench should do its main work in a loop like this:
     //   for (int i = 0; i < loops; i++) { <work here> }
     virtual void onDraw(int loops, SkCanvas*) = 0;
+    // Similar to onDraw except after each frame the Benchmark draws it should call the endFrame
+    // callback (if valid). This is useful for Benchmarks like MSKP which inherently draw multiple
+    // frames within one draw call. Benchmarks that want to use this should make sure to return
+    // true from hasInternalFrames.
+    virtual void onDrawFrame(int loops, SkCanvas*, std::function<void()> endFrame) {}
 
     virtual SkISize onGetSize();
 
 private:
+    // If the Benchmark has its own internal frames (e.g. MSKPs) this function should return true.
+    // If it returns true then onDrawFrame will be called intstead of onDraw.
+    virtual bool submitsInternalFrames() { return false; }
+
     int fUnits = 1;
 
     using INHERITED = SkRefCnt;

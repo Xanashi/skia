@@ -10,16 +10,16 @@
 #include "include/core/SkAlphaType.h"
 #include "include/core/SkColorSpace.h"
 #include "include/core/SkData.h"
+#include "include/private/SkAlign.h"
+#include "include/private/SkAssert.h"
+#include "include/private/SkMath.h"
 #include "include/private/SkSLSampleUsage.h"
-#include "include/private/base/SkAlign.h"
-#include "include/private/base/SkAssert.h"
-#include "include/private/base/SkMath.h"
-#include "include/private/base/SkTArray.h"
-#include "include/private/base/SkTo.h"
-#include "src/base/SkSafeMath.h"
+#include "include/private/SkTArray.h"
+#include "include/private/SkTo.h"
 #include "src/core/SkChecksum.h"
 #include "src/core/SkMeshPriv.h"
 #include "src/core/SkRuntimeEffectPriv.h"
+#include "src/core/SkSafeMath.h"
 #include "src/sksl/SkSLAnalysis.h"
 #include "src/sksl/SkSLBuiltinTypes.h"
 #include "src/sksl/SkSLCompiler.h"
@@ -509,7 +509,7 @@ SkMeshSpecification::Result SkMeshSpecification::MakeFromSourceWithStructs(
     SkSL::ProgramSettings settings;
     settings.fUseMemoryPool = false;
 
-    // TODO(skia:11209): Add SkCapabilities to the API, check against required version.
+    // TODO(skbug.com/40042585): Add SkCapabilities to the API, check against required version.
     std::unique_ptr<SkSL::Program> vsProgram = compiler.convertProgram(
             SkSL::ProgramKind::kMeshVertex,
             std::string(vs.c_str()),

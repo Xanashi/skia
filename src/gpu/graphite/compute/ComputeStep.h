@@ -8,19 +8,25 @@
 #ifndef skgpu_graphite_compute_ComputeStep_DEFINED
 #define skgpu_graphite_compute_ComputeStep_DEFINED
 
-#include "include/core/SkColorType.h"
-#include "include/core/SkSize.h"
 #include "include/core/SkSpan.h"
-#include "include/private/base/SkTArray.h"
-#include "include/private/base/SkTo.h"
-#include "src/base/SkEnumBitMask.h"
+#include "include/private/SkTArray.h"
+#include "include/private/SkTo.h"
+#include "src/core/SkEnumBitMask.h"
 #include "src/gpu/graphite/ComputeTypes.h"
+#include "src/gpu/graphite/ResourceTypes.h"
 
-#include <optional>
+#include <cstddef>
+#include <cstdint>
 #include <string>
 #include <string_view>
 #include <tuple>
-#include <vector>
+
+enum SkColorType : int;
+struct SkISize;
+
+namespace skgpu {
+struct BufferWriter;
+}
 
 namespace skgpu::graphite {
 
@@ -149,8 +155,8 @@ public:
     // can optionally provide a list of memory sizes and binding indices.
     struct WorkgroupBufferDesc {
         // The buffer size in bytes.
-        size_t size;
-        size_t index;
+        uint32_t size;
+        uint32_t index;
     };
 
     virtual ~ComputeStep() = default;
@@ -211,8 +217,7 @@ public:
     // `ComputeStep::resources()`.
     virtual void prepareStorageBuffer(int resourceIndex,
                                       const ResourceDesc& resource,
-                                      void* buffer,
-                                      size_t bufferSize) const;
+                                      BufferWriter&&) const;
 
     // Populates a uniform buffer resource. This method will be called once for a resource right
     // after its allocation and before pipeline execution. For shared resources, only the first

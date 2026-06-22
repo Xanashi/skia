@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Google Inc.
+ * Copyright 2023 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -104,34 +104,6 @@ struct IRHelpers {
         SkAssertResult(Analysis::UpdateVariableRefKind(l.get(), VariableRefKind::kWrite));
         return ExpressionStatement::Make(fContext,
                                          Binary(std::move(l), OperatorKind::EQ, std::move(r)));
-    }
-
-    static std::unique_ptr<Expression> LoadFloatBuffer(const Context& context,
-                                                       const SkSL::ShaderCaps& shaderCaps,
-                                                       Position position,
-                                                       std::unique_ptr<Expression> idx) {
-        SkASSERT(shaderCaps.fFloatBufferArrayName != nullptr);
-
-        const Symbol* floatBufferArraySymbol =
-            context.fSymbolTable->find(shaderCaps.fFloatBufferArrayName);
-        SkASSERT(floatBufferArraySymbol->is<FieldSymbol>());
-
-        const FieldSymbol& floatBufferArrayField = floatBufferArraySymbol->as<FieldSymbol>();
-        auto floatBufferArrayAccess = std::make_unique<FieldAccess>(
-                                            position,
-                                            std::make_unique<VariableReference>(
-                                               position,
-                                               &floatBufferArrayField.owner(),
-                                               VariableRefKind::kRead
-                                           ),
-                                           floatBufferArrayField.fieldIndex(),
-                                           FieldAccessOwnerKind::kAnonymousInterfaceBlock);
-
-        return IndexExpression::Make(
-                            context,
-                            position,
-                            std::move(floatBufferArrayAccess),
-                            std::move(idx));
     }
 
     const Context& fContext;

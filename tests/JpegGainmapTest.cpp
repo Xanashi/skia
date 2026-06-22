@@ -1,5 +1,5 @@
 /*
- * Copyright 2023 Google Inc.
+ * Copyright 2023 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -501,21 +501,19 @@ void decode_all(Reporter& r,
             SkAndroidCodec::MakeFromCodec(std::move(baseCodec));
     REPORTER_ASSERT(r, androidCodec);
 
-    // Extract the gainmap info and stream.
-    std::unique_ptr<SkStream> gainmapStream;
-    REPORTER_ASSERT(r, androidCodec->getAndroidGainmap(&gainmapInfo, &gainmapStream));
-    REPORTER_ASSERT(r, gainmapStream);
+    // Extract the gainmap info and codec.
+    std::unique_ptr<SkAndroidCodec> gainmapCodec;
+    REPORTER_ASSERT(r, androidCodec->getGainmapAndroidCodec(&gainmapInfo, &gainmapCodec));
+    REPORTER_ASSERT(r, gainmapCodec);
 
     // Decode the gainmap bitmap.
-    std::unique_ptr<SkCodec> gainmapCodec = SkCodec::MakeFromStream(std::move(gainmapStream));
-    REPORTER_ASSERT(r, gainmapCodec);
     SkBitmap bm;
     bm.allocPixels(gainmapCodec->getInfo());
     gainmapBitmap.allocPixels(gainmapCodec->getInfo());
     REPORTER_ASSERT(r,
-                    SkCodec::kSuccess == gainmapCodec->getPixels(gainmapBitmap.info(),
-                                                                 gainmapBitmap.getPixels(),
-                                                                 gainmapBitmap.rowBytes()));
+                    SkCodec::kSuccess == gainmapCodec->getAndroidPixels(gainmapBitmap.info(),
+                                                                        gainmapBitmap.getPixels(),
+                                                                        gainmapBitmap.rowBytes()));
 }
 
 DEF_TEST(AndroidCodec_jpegGainmapDecode, r) {
@@ -788,8 +786,7 @@ static SkBitmap render_gainmap(const SkImageInfo& renderInfo,
                                                    SkSamplingOptions(),
                                                    gainmapInfo,
                                                    dstRect,
-                                                   renderHdrRatio,
-                                                   renderInfo.refColorSpace());
+                                                   renderHdrRatio);
 
     SkBitmap result;
     result.allocPixels(renderInfo);

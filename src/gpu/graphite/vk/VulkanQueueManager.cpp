@@ -24,11 +24,13 @@ const VulkanSharedContext* VulkanQueueManager::vkSharedContext() const {
 }
 
 std::unique_ptr<CommandBuffer> VulkanQueueManager::getNewCommandBuffer(
-        ResourceProvider* resourceProvider) {
+        ResourceProvider* resourceProvider, Protected isProtected) {
     VulkanResourceProvider* vkResourceProvider =
             static_cast<VulkanResourceProvider*>(resourceProvider);
 
-    auto cmdBuffer = VulkanCommandBuffer::Make(this->vkSharedContext(), vkResourceProvider);
+    auto cmdBuffer = VulkanCommandBuffer::Make(this->vkSharedContext(),
+                                               vkResourceProvider,
+                                               isProtected);
     return cmdBuffer;
 }
 
@@ -47,11 +49,11 @@ private:
     }
 };
 
-QueueManager::OutstandingSubmission VulkanQueueManager::onSubmitToGpu() {
+QueueManager::OutstandingSubmission VulkanQueueManager::onSubmitToGpu(const SubmitInfo& submitInfo) {
     SkASSERT(fCurrentCommandBuffer);
     VulkanCommandBuffer* vkCmdBuffer =
             static_cast<VulkanCommandBuffer*>(fCurrentCommandBuffer.get());
-    if (!vkCmdBuffer->submit(fQueue)) {
+    if (!vkCmdBuffer->submit(fQueue, submitInfo)) {
         fCurrentCommandBuffer->callFinishedProcs(/*success=*/false);
         return nullptr;
     }

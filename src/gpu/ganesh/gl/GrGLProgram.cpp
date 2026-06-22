@@ -7,9 +7,9 @@
 #include "src/gpu/ganesh/gl/GrGLProgram.h"
 
 #include "include/core/SkSamplingOptions.h"
-#include "include/gpu/GrTypes.h"
-#include "include/gpu/gl/GrGLFunctions.h"
-#include "include/gpu/gl/GrGLInterface.h"
+#include "include/gpu/ganesh/GrTypes.h"
+#include "include/gpu/ganesh/gl/GrGLFunctions.h"
+#include "include/gpu/ganesh/gl/GrGLInterface.h"
 #include "src/gpu/Swizzle.h"
 #include "src/gpu/ganesh/GrCaps.h"
 #include "src/gpu/ganesh/GrFragmentProcessor.h"
@@ -34,7 +34,6 @@
 class GrTexture;
 
 #define GL_CALL(X) GR_GL_CALL(fGpu->glInterface(), X)
-#define GL_CALL_RET(R, X) GR_GL_CALL_RET(fGpu->glInterface(), R, X)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 

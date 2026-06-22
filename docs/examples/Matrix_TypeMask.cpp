@@ -1,4 +1,4 @@
-// Copyright 2019 Google LLC.
+// Copyright 2019 Google LLC
 // Use of this source code is governed by a BSD-style license that can be found in the LICENSE file.
 #include "tools/fiddle/examples.h"
 REG_FIDDLE(Matrix_TypeMask, 256, 256, true, 0) {
@@ -22,7 +22,7 @@ debugster("postScale", matrix);
 matrix.postRotate(45);
 debugster("postScale", matrix);
 SkPoint polys[][4] = {{{0, 0}, {0, 1}, {1, 1}, {1, 0}}, {{0, 0}, {0, 1}, {2, 1}, {1, 0}}};
-matrix.setPolyToPoly(polys[0], polys[1], 4);
+matrix.setPolyToPoly(polys[0], polys[1]);
 debugster("setPolyToPoly", matrix);
 }
 }  // END FIDDLE

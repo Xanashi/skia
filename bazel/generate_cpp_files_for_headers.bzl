@@ -4,8 +4,8 @@ THIS IS THE EXTERNAL-ONLY VERSION OF THIS FILE. G3 HAS ITS OWN.
 The macro defined in this file allows us to generate .cpp files for header files. The content
 is a copy of the header file.
 
-This allows us to actually "compile" the header file, which allows tools like IWYU to properly
-analyze a header file on its own.
+This allows us to actually "compile" the header file, which makes sure the headers are
+self-sufficient.
 
 """
 
@@ -30,6 +30,7 @@ def generate_cpp_files_for_headers(name, headers):
             # https://bazel.build/reference/be/make-variables#predefined_genrule_variables
             # execpath returns the path to the given label relative to the Skia root.
             cmd = "cp $(execpath :%s) $@" % hdr,
+            cmd_bat = "copy $(execpath :%s) $@" % hdr,
         )
         rules.append(":gen/" + cpp)
 

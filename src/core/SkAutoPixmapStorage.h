@@ -10,7 +10,7 @@
 
 #include "include/core/SkPixmap.h"
 #include "include/core/SkRefCnt.h"
-#include "include/private/base/SkMalloc.h"
+#include "include/private/SkMalloc.h"
 
 #include <cstddef>
 
@@ -18,7 +18,7 @@ class SkData;
 struct SkImageInfo;
 struct SkMask;
 
-class SkAutoPixmapStorage : public SkPixmap {
+class [[nodiscard]] SkAutoPixmapStorage : public SkPixmap {
 public:
     SkAutoPixmapStorage();
     ~SkAutoPixmapStorage();

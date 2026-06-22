@@ -27,7 +27,7 @@ DEF_CONDITIONAL_GRAPHITE_TEST_FOR_ALL_CONTEXTS(ImageWrapTextureMipmapsTest,
                                                context,
                                                testContext,
                                                true,
-                                               CtsEnforcement::kNextRelease) {
+                                               CtsEnforcement::kApiLevel_202404) {
     auto recorder = context->makeRecorder();
     if (!recorder) {
         ERRORF(reporter, "Could not make recorder");
@@ -84,7 +84,6 @@ DEF_CONDITIONAL_GRAPHITE_TEST_FOR_ALL_CONTEXTS(ImageWrapTextureMipmapsTest,
 
         auto image = SkImages::WrapTexture(recorder.get(),
                                            mbet->texture(),
-                                           info.colorType(),
                                            info.alphaType(),
                                            info.refColorSpace(),
                                            Origin::kTopLeft,

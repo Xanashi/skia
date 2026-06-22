@@ -5,11 +5,11 @@
  * found in the LICENSE file.
  */
 
-#include "include/gpu/GrYUVABackendTextures.h"
+#include "include/gpu/ganesh/GrYUVABackendTextures.h"
 
 #include "include/core/SkColor.h"
 #include "include/core/SkSize.h"
-#include "include/private/base/SkDebug.h"
+#include "include/private/SkDebug.h"
 #include "src/core/SkYUVAInfoLocation.h"
 
 #include <algorithm>

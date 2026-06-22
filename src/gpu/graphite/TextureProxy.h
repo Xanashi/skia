@@ -11,7 +11,9 @@
 #include "include/core/SkRefCnt.h"
 #include "include/core/SkSize.h"
 #include "include/gpu/graphite/TextureInfo.h"
-#include "include/private/base/SkTo.h"
+#include "include/private/SkPixelStorage.h"
+#include "include/private/SkTo.h"
+#include "src/gpu/graphite/TextureInfoPriv.h"
 
 #include <functional>
 
@@ -24,16 +26,17 @@ class Recorder;
 class ResourceProvider;
 class ScratchResourceManager;
 class Texture;
+enum class TextureFormat : uint8_t;
 
-class TextureProxy : public SkRefCnt {
+class TextureProxy : public SkPixelStorage {
 public:
     TextureProxy() = delete;
 
     ~TextureProxy() override;
 
-    int numSamples() const { return fInfo.numSamples(); }
+    SampleCount sampleCount() const { return fInfo.sampleCount(); }
     Mipmapped mipmapped() const { return fInfo.mipmapped(); }
-
+    TextureFormat format() const { return TextureInfoPriv::ViewFormat(fInfo); }
     SkISize dimensions() const;
     const TextureInfo& textureInfo() const { return fInfo; }
 
@@ -42,7 +45,8 @@ public:
     bool isLazy() const;
     bool isFullyLazy() const;
     bool isVolatile() const;
-    bool isProtected() const;
+
+    Protected isProtected() const { return fInfo.isProtected(); }
 
     size_t uninstantiatedGpuMemorySize() const;
 

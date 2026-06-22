@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Google Inc.
+ * Copyright 2019 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -26,7 +26,7 @@
 
 // Mimics https://output.jsbin.com/falefice/1/quiet?CC_POSTER_CIRCLE, which can't be captured as
 // an SKP due to many 3D layers being composited post-SKP capture.
-// See skbug.com/9028
+// See skbug.com/40040313
 class PosterCircleGM : public skiagm::GM {
 public:
     PosterCircleGM() : fTime(0.f) {}

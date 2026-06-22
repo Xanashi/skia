@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 Google Inc.
+ * Copyright 2017 Google LLC
  *
  * Use of this source code is governed by a BSD-style license that can be
  * found in the LICENSE file.
@@ -16,9 +16,9 @@
 #include "include/core/SkSurfaceProps.h"
 #include "include/core/SkTypes.h"
 #include "include/gpu/GpuTypes.h"
-#include "include/gpu/GrDirectContext.h"
-#include "include/gpu/GrRecordingContext.h"
-#include "include/gpu/GrTypes.h"
+#include "include/gpu/ganesh/GrDirectContext.h"
+#include "include/gpu/ganesh/GrRecordingContext.h"
+#include "include/gpu/ganesh/GrTypes.h"
 #include "include/private/gpu/ganesh/GrTypesPriv.h"
 #include "src/core/SkPathPriv.h"
 #include "src/gpu/SkBackingFit.h"
@@ -44,13 +44,13 @@
 struct GrContextOptions;
 
 static SkPath create_concave_path() {
-    SkPath path;
-    path.moveTo(100, 0);
-    path.lineTo(200, 200);
-    path.lineTo(100, 150);
-    path.lineTo(0, 200);
-    path.close();
-    return path;
+    return SkPathBuilder()
+           .moveTo(100, 0)
+           .lineTo(200, 200)
+           .lineTo(100, 150)
+           .lineTo(0, 200)
+           .close()
+           .detach();
 }
 
 static void draw_path(GrRecordingContext* rContext,

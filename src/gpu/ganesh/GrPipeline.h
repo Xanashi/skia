@@ -8,12 +8,12 @@
 #ifndef GrPipeline_DEFINED
 #define GrPipeline_DEFINED
 
+#include "include/core/SkPoint.h"
 #include "include/core/SkRefCnt.h"
-#include "include/gpu/GrTypes.h"
-#include "include/private/base/SkDebug.h"
-#include "include/private/base/SkPoint_impl.h"
-#include "include/private/base/SkTemplates.h"
-#include "include/private/base/SkTo.h"
+#include "include/private/SkDebug.h"
+#include "include/private/SkMacros.h"
+#include "include/private/SkTemplates.h"
+#include "include/private/SkTo.h"
 #include "include/private/gpu/ganesh/GrTypesPriv.h"
 #include "src/gpu/Swizzle.h"
 #include "src/gpu/ganesh/GrCaps.h"
@@ -226,7 +226,7 @@ private:
         kScissorTestEnabled = (kLastInputFlag << 2),
     };
 
-    GR_DECL_BITFIELD_CLASS_OPS_FRIENDS(Flags);
+    SK_DECL_BITFIELD_CLASS_OPS_FRIENDS(Flags);
 
     friend bool operator&(Flags, InputFlags);
 
@@ -246,8 +246,8 @@ private:
     skgpu::Swizzle fWriteSwizzle;
 };
 
-GR_MAKE_BITFIELD_CLASS_OPS(GrPipeline::InputFlags)
-GR_MAKE_BITFIELD_CLASS_OPS(GrPipeline::Flags)
+SK_MAKE_BITFIELD_CLASS_OPS(GrPipeline::InputFlags)
+SK_MAKE_BITFIELD_CLASS_OPS(GrPipeline::Flags)
 
 inline bool operator&(GrPipeline::Flags flags, GrPipeline::InputFlags inputFlag) {
     return (flags & (GrPipeline::Flags)inputFlag);

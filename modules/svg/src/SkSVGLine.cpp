@@ -5,10 +5,15 @@
  * found in the LICENSE file.
  */
 
-#include "include/core/SkCanvas.h"
 #include "modules/svg/include/SkSVGLine.h"
+
+#include "include/core/SkCanvas.h"
+#include "include/core/SkPathTypes.h"
+#include "include/core/SkPoint.h"
+#include "modules/svg/include/SkSVGAttributeParser.h"
 #include "modules/svg/include/SkSVGRenderContext.h"
-#include "modules/svg/include/SkSVGValue.h"
+
+class SkPaint;
 
 SkSVGLine::SkSVGLine() : INHERITED(SkSVGTag::kLine), fPath(SkPath()) {}
 
@@ -42,7 +47,6 @@ void SkSVGLine::onDraw(SkCanvas* canvas, const SkSVGLengthContext& lctx,
 }
 
 SkPath SkSVGLine::onAsPath(const SkSVGRenderContext& ctx) const {
-    this->onResolvePath(ctx);
-    this->mapToParent(&fPath);
-    return fPath;
+    this->onResolvePath(ctx);    
+    return this->mapToParent(fPath);
 }

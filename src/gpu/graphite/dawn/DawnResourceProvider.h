@@ -8,9 +8,11 @@
 #ifndef skgpu_graphite_DawnResourceProvider_DEFINED
 #define skgpu_graphite_DawnResourceProvider_DEFINED
 
-#include "include/gpu/graphite/dawn/DawnTypes.h"
+#include "include/core/SkSpan.h"
+#include "include/gpu/graphite/dawn/DawnGraphiteTypes.h"
 #include "src/core/SkLRUCache.h"
 #include "src/core/SkTHash.h"
+#include "src/gpu/graphite/PipelineData.h"
 #include "src/gpu/graphite/ResourceProvider.h"
 
 namespace skgpu::graphite {
@@ -20,13 +22,32 @@ class DawnSampler;
 class DawnSharedContext;
 class DawnTexture;
 class DawnBuffer;
+class DawnCommandBuffer;
 
 class DawnResourceProvider final : public ResourceProvider {
 public:
     template <size_t NumEntries>
     using BindGroupKey = FixedSizeKey<2 * NumEntries>;
 
-    static constexpr size_t kNumUniformEntries = 4;
+    static constexpr size_t kNumUniformEntries = 3;
+
+    class BlitWithDrawEncoder {
+    public:
+        BlitWithDrawEncoder(wgpu::RenderPipeline pipeline,
+                            bool srcIsMSAA);
+
+        operator bool() const { return fPipeline != nullptr; }
+
+        void EncodeBlit(const wgpu::Device& device,
+                        const wgpu::RenderPassEncoder& encoder,
+                        const wgpu::TextureView& srcTextureView,
+                        const SkIPoint& srcOffset,
+                        const SkIRect& dstBounds);
+
+    private:
+        wgpu::RenderPipeline fPipeline;
+        const bool fSrcIsMSAA;
+    };
 
     DawnResourceProvider(SharedContext* sharedContext,
                          SingleOwner*,
@@ -37,67 +58,62 @@ public:
     sk_sp<DawnTexture> findOrCreateDiscardableMSAALoadTexture(SkISize dimensions,
                                                               const TextureInfo& msaaInfo);
 
-    wgpu::RenderPipeline findOrCreateBlitWithDrawPipeline(const RenderPassDesc& renderPassDesc);
+    BlitWithDrawEncoder findOrCreateBlitWithDrawEncoder(const RenderPassDesc& renderPassDesc,
+                                                        SampleCount srcSampleCount);
 
     sk_sp<DawnBuffer> findOrCreateDawnBuffer(size_t size,
                                              BufferType type,
                                              AccessPattern,
                                              std::string_view label);
 
-    const wgpu::BindGroupLayout& getOrCreateUniformBuffersBindGroupLayout();
-    const wgpu::BindGroupLayout& getOrCreateSingleTextureSamplerBindGroupLayout();
+    wgpu::BindGroup createBindGroup(SkSpan<wgpu::BindGroupEntry>, const wgpu::BindGroupLayout);
 
-    // Find the cached bind group or create a new one based on the bound buffers and their
-    // binding sizes (boundBuffersAndSizes) for these uniforms (in order):
-    // - Intrinsic constants.
-    // - Render step uniforms.
-    // - Paint uniforms.
-    const wgpu::BindGroup& findOrCreateUniformBuffersBindGroup(
-            const std::array<std::pair<const DawnBuffer*, uint32_t>, kNumUniformEntries>&
-                    boundBuffersAndSizes);
+    // Find or create a bind group containing the given buffer.
+    wgpu::BindGroup findOrCreateSingleUniformBindGroup(const BindBufferInfo&);
 
     // Find or create a bind group containing the given sampler & texture.
-    const wgpu::BindGroup& findOrCreateSingleTextureSamplerBindGroup(const DawnSampler* sampler,
-                                                                     const DawnTexture* texture);
+    wgpu::BindGroup findOrCreateSingleTextureSamplerBindGroup(const DawnSampler*,
+                                                              const DawnTexture*);
 
-    const sk_sp<DawnBuffer>& getOrCreateIntrinsicConstantBuffer();
+    // Find the cached bind buffer info, or create a new one for the given intrinsic values.
+    BindBufferInfo findOrCreateIntrinsicBindBufferInfo(DawnCommandBuffer* cb,
+                                                       UniformDataBlock intrinsicValues);
+
+    void releasePendingIntrinsicBuffers();
+
+    // For BindGroupEntries, using this method to get a null buffer pointer rather than simply using
+    // nullptr allows for assigning a label (when enabled in Caps) for more clear debugging.
+    const wgpu::Buffer& getOrCreateNullBuffer();
 
 private:
-    sk_sp<GraphicsPipeline> createGraphicsPipeline(const RuntimeEffectDictionary*,
-                                                   const GraphicsPipelineDesc&,
-                                                   const RenderPassDesc&) override;
     sk_sp<ComputePipeline> createComputePipeline(const ComputePipelineDesc&) override;
 
-    sk_sp<Texture> createTexture(SkISize, const TextureInfo&, skgpu::Budgeted) override;
-    sk_sp<Buffer> createBuffer(size_t size, BufferType type, AccessPattern) override;
+    sk_sp<Texture> createTexture(SkISize, const TextureInfo&, std::string_view label) override;
+    sk_sp<Buffer> createBuffer(size_t, BufferType, AccessPattern, std::string_view label) override;
 
-    sk_sp<Texture> onCreateWrappedTexture(const BackendTexture&) override;
+    sk_sp<Texture> onCreateWrappedTexture(const BackendTexture&, std::string_view label) override;
 
     sk_sp<Sampler> createSampler(const SamplerDesc&) override;
 
     BackendTexture onCreateBackendTexture(SkISize dimensions, const TextureInfo&) override;
     void onDeleteBackendTexture(const BackendTexture&) override;
 
-    const wgpu::Buffer& getOrCreateNullBuffer();
-
     DawnSharedContext* dawnSharedContext() const;
+
+    void onFreeGpuResources() override;
+    void onPurgeResourcesNotUsedSince(
+            StdSteadyClock::time_point purgeTime,
+            std::optional<StdSteadyClock::time_point> quitPurgingTime) override;
 
     skia_private::THashMap<uint32_t, wgpu::RenderPipeline> fBlitWithDrawPipelines;
 
-    wgpu::BindGroupLayout fUniformBuffersBindGroupLayout;
-    wgpu::BindGroupLayout fSingleTextureSamplerBindGroupLayout;
-
     wgpu::Buffer fNullBuffer;
 
-    sk_sp<DawnBuffer> fIntrinsicConstantBuffer;
+    class IntrinsicBuffer;
+    class IntrinsicConstantsManager;
+    std::unique_ptr<IntrinsicConstantsManager> fIntrinsicConstantsManager;
 
-    template <size_t NumEntries>
-    using BindGroupCache = SkLRUCache<BindGroupKey<NumEntries>,
-                                      wgpu::BindGroup,
-                                      typename BindGroupKey<NumEntries>::Hash>;
-
-    BindGroupCache<kNumUniformEntries> fUniformBufferBindGroupCache;
-    BindGroupCache<1> fSingleTextureSamplerBindGroups;
+    SingleOwner* fSingleOwner = nullptr;
 };
 
 }  // namespace skgpu::graphite

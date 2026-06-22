@@ -7,18 +7,34 @@
 
 #include "src/gpu/ganesh/vk/GrVkResourceProvider.h"
 
-#include "include/gpu/GrDirectContext.h"
+#include "include/core/SkData.h"
+#include "include/core/SkString.h"
+#include "include/gpu/ganesh/GrDirectContext.h"
+#include "include/gpu/ganesh/GrTypes.h"
+#include "include/private/SkDebug.h"
+#include "include/private/gpu/ganesh/GrTypesPriv.h"
 #include "src/core/SkTaskGroup.h"
 #include "src/core/SkTraceEvent.h"
+#include "src/gpu/Blend.h"
+#include "src/gpu/RefCntedCallback.h"
 #include "src/gpu/ganesh/GrDirectContextPriv.h"
+#include "src/gpu/ganesh/GrGeometryProcessor.h"
 #include "src/gpu/ganesh/GrSamplerState.h"
 #include "src/gpu/ganesh/GrStencilSettings.h"
 #include "src/gpu/ganesh/vk/GrVkCommandBuffer.h"
 #include "src/gpu/ganesh/vk/GrVkCommandPool.h"
+#include "src/gpu/ganesh/vk/GrVkDescriptorPool.h"
 #include "src/gpu/ganesh/vk/GrVkGpu.h"
 #include "src/gpu/ganesh/vk/GrVkPipeline.h"
 #include "src/gpu/ganesh/vk/GrVkRenderTarget.h"
 #include "src/gpu/ganesh/vk/GrVkUtil.h"
+
+#include <algorithm>
+#include <cstring>
+
+class GrProgramInfo;
+class GrRenderTarget;
+class GrVkDescriptorSet;
 
 GrVkResourceProvider::GrVkResourceProvider(GrVkGpu* gpu)
     : fGpu(gpu)
@@ -540,7 +556,7 @@ void GrVkResourceProvider::releaseUnlockedBackendObjects() {
     fAvailableCommandPools.clear();
 }
 
-void GrVkResourceProvider::storePipelineCacheData() {
+void GrVkResourceProvider::storePipelineCacheData(size_t maxSize) {
     if (this->pipelineCache() == VK_NULL_HANDLE) {
         return;
     }
@@ -552,11 +568,18 @@ void GrVkResourceProvider::storePipelineCacheData() {
         return;
     }
 
+    dataSize = std::min(dataSize, maxSize);
+
     std::unique_ptr<uint8_t[]> data(new uint8_t[dataSize]);
 
-    GR_VK_CALL_RESULT(fGpu, result, GetPipelineCacheData(fGpu->device(), this->pipelineCache(),
-                                                         &dataSize, (void*)data.get()));
-    if (result != VK_SUCCESS) {
+    GR_VK_CALL_RESULT_NOCHECK(
+            fGpu,
+            result,
+            GetPipelineCacheData(
+                    fGpu->device(), this->pipelineCache(), &dataSize, (void*)data.get()));
+    fGpu->checkVkResult(result);
+    if ((result != VK_SUCCESS) && (result != VK_INCOMPLETE)) {
+        SkDebugf("%s: vkGetPipelineCacheData: failed vulkan call (%d)", __func__, result);
         return;
     }
 

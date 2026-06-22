@@ -6,7 +6,7 @@
  */
 #include "src/core/SkOpts.h"
 
-#include "include/private/base/SkFeatures.h"
+#include "include/private/SkFeatures.h"
 #include "src/core/SkCpu.h"
 #include "src/core/SkOptsTargets.h"
 
@@ -29,7 +29,7 @@ namespace SkOpts {
     StageFn ops_highp[] = { SK_RASTER_PIPELINE_OPS_ALL(M) };
     StageFn just_return_highp = (StageFn)SK_OPTS_NS::just_return;
     void (*start_pipeline_highp)(size_t, size_t, size_t, size_t, SkRasterPipelineStage*,
-                                 SkSpan<SkRasterPipeline_MemoryCtxPatch>,
+                                 SkSpan<SkRasterPipelineContexts::MemoryCtxPatch>,
                                  uint8_t*) =
             SK_OPTS_NS::start_pipeline;
 #undef M
@@ -38,31 +38,34 @@ namespace SkOpts {
     StageFn ops_lowp[] = { SK_RASTER_PIPELINE_OPS_LOWP(M) };
     StageFn just_return_lowp = (StageFn)SK_OPTS_NS::lowp::just_return;
     void (*start_pipeline_lowp)(size_t, size_t, size_t, size_t, SkRasterPipelineStage*,
-                                SkSpan<SkRasterPipeline_MemoryCtxPatch>,
+                                SkSpan<SkRasterPipelineContexts::MemoryCtxPatch>,
                                 uint8_t*) =
             SK_OPTS_NS::lowp::start_pipeline;
 #undef M
 
     // Each Init_foo() is defined in src/opts/SkOpts_foo.cpp.
-    void Init_hsw();
-    void Init_skx();
+    void Init_ml3();
+    void Init_ml4();
     void Init_lasx();
 
     static bool init() {
     #if defined(SK_ENABLE_OPTIMIZE_SIZE)
         // All Init_foo functions are omitted when optimizing for size
     #elif defined(SK_CPU_X86)
-        #if SK_CPU_SSE_LEVEL < SK_CPU_SSE_LEVEL_AVX2
-            if (SkCpu::Supports(SkCpu::HSW)) { Init_hsw(); }
+        #if SK_CPU_X64_LEVEL < SK_CPU_X64_LEVEL_AVX2
+            if (SkCpu::Supports(SkX64::ML3)) { Init_ml3(); }
         #endif
 
-        #if (SK_CPU_SSE_LEVEL < SK_CPU_SSE_LEVEL_SKX) && defined(SK_ENABLE_AVX512_OPTS)
-            if (SkCpu::Supports(SkCpu::SKX)) { Init_skx(); }
+        #if (SK_CPU_X64_LEVEL < SK_CPU_X64_LEVEL_ML4)
+            // TODO(kjlubick): Remove the SK_ENABLE_AVX512_OPTS flag in favor of the disable one
+            #if defined(SK_ENABLE_AVX512_OPTS) && !defined(SK_DISABLE_AVX512_OPTS)
+                if (SkCpu::Supports(SkX64::ML4)) { Init_ml4(); }
+            #endif
         #endif
 
     #elif defined(SK_CPU_LOONGARCH)
         #if SK_CPU_LSX_LEVEL < SK_CPU_LSX_LEVEL_LASX
-            if (SkCpu::Supports(SkCpu::LOONGARCH_ASX)) { Init_lasx(); }
+            if (SkCpu::Supports(SkLoongArch::ASX)) { Init_lasx(); }
         #endif
     #endif
         return true;

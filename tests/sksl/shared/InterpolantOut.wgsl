@@ -1,9 +1,10 @@
 diagnostic(off, derivative_uniformity);
 diagnostic(off, chromium.unreachable_code);
+enable f16;
 struct VSOut {
   @location(0) defaultVarying: f32,
   @location(1) @interpolate(linear) linearVarying: f32,
-  @location(2) @interpolate(flat) flatVarying: f32,
+  @location(2) @interpolate(flat, either) flatVarying: f32,
   @builtin(position) sk_Position: vec4<f32>,
 };
 fn _skslMain(_stageOut: ptr<function, VSOut>) {

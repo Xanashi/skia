@@ -5,10 +5,15 @@
  * found in the LICENSE file.
  */
 
-#include "include/core/SkCanvas.h"
 #include "modules/svg/include/SkSVGCircle.h"
+
+#include "include/core/SkCanvas.h"
+#include "include/core/SkPathTypes.h"
+#include "include/core/SkPoint.h"
+#include "modules/svg/include/SkSVGAttributeParser.h"
 #include "modules/svg/include/SkSVGRenderContext.h"
-#include "modules/svg/include/SkSVGValue.h"
+
+class SkPaint;
 
 SkSVGCircle::SkSVGCircle() : INHERITED(SkSVGTag::kCircle) {}
 
@@ -44,9 +49,8 @@ void SkSVGCircle::onDraw(SkCanvas* canvas, const SkSVGLengthContext& lctx,
 }
 
 SkPath SkSVGCircle::onAsPath(const SkSVGRenderContext& ctx) const {
-    this->onResolvePath(ctx);
-    this->mapToParent(&fPath);
-    return fPath;
+    this->onResolvePath(ctx);    
+    return this->mapToParent(fPath);
 }
 
 SkRect SkSVGCircle::onObjectBoundingBox(const SkSVGRenderContext& ctx) const {

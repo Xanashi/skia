@@ -8,7 +8,6 @@
 
 import calendar
 
-PYTHON_VERSION_COMPATIBILITY = "PY3"
 
 DEPS = [
   'checkout',
@@ -30,7 +29,7 @@ def RunSteps(api):
 
   # TODO(borenet): Detect static initializers?
 
-  skia_dir = checkout_root.join('skia')
+  skia_dir = checkout_root.joinpath('skia')
   if not api.vars.is_trybot:
     api.doxygen.generate_and_upload(skia_dir)
 
