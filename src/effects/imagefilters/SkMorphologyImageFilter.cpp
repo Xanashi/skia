@@ -7,9 +7,13 @@
 
 #include "include/effects/SkImageFilters.h"
 
+#include "include/core/SkBitmap.h"
 #include "include/core/SkFlattenable.h"
+#include "include/core/SkImage.h"
 #include "include/core/SkImageFilter.h"
+#include "include/core/SkImageInfo.h"
 #include "include/core/SkM44.h"
+#include "include/core/SkPixmap.h"
 #include "include/core/SkRect.h"
 #include "include/core/SkRefCnt.h"
 #include "include/core/SkScalar.h"
@@ -22,12 +26,15 @@
 #include "src/core/SkImageFilter_Base.h"
 #include "src/core/SkKnownRuntimeEffects.h"
 #include "src/core/SkReadBuffer.h"
+#include "src/core/SkSpecialImage.h"
+#include "src/core/SkVx.h"
 #include "src/core/SkWriteBuffer.h"
 
 #include <algorithm>
 #include <cstdint>
 #include <optional>
 #include <utility>
+#include <vector>
 
 namespace {
 
@@ -222,6 +229,150 @@ skif::FilterResult morphology_pass(const skif::Context& ctx, const skif::FilterR
     return childOutput;
 }
 
+// Per-channel max (dilate) and min (erode) of two premultiplied N32 pixels.
+uint32_t pixel_max(uint32_t a, uint32_t b) {
+    uint32_t result;
+    skvx::max(skvx::byte4::Load(&a), skvx::byte4::Load(&b)).store(&result);
+    return result;
+}
+
+uint32_t pixel_min(uint32_t a, uint32_t b) {
+    uint32_t result;
+    skvx::min(skvx::byte4::Load(&a), skvx::byte4::Load(&b)).store(&result);
+    return result;
+}
+
+// 1D van Herk/Gil-Werman filter: the max or min over a window of 2 * r + 1 pixels, in a constant
+// number of operations per pixel regardless of the radius. 'prefix' and 'suffix' are scratch
+// buffers of at least n pixels. Pixels outside [0, n) count as transparent black. 'src' and 'dst'
+// may be the same buffer.
+template <uint32_t (*Op)(uint32_t, uint32_t)>
+void van_herk_pass(const uint32_t* src, uint32_t* dst, int n, int r,
+                   uint32_t* prefix, uint32_t* suffix) {
+    if (r <= 0) {
+        std::copy(src, src + n, dst);
+        return;
+    }
+    const int window = 2 * r + 1;
+    for (int i = 0; i < n; ++i) {
+        prefix[i] = (i % window == 0) ? src[i] : Op(prefix[i - 1], src[i]);
+    }
+    for (int i = n - 1; i >= 0; --i) {
+        suffix[i] = (i % window == window - 1 || i == n - 1) ? src[i] : Op(suffix[i + 1], src[i]);
+    }
+    for (int i = 0; i < n; ++i) {
+        const int lo = i - r;
+        const int hi = i + r;
+        const uint32_t a = (lo >= 0) ? suffix[lo] : 0;
+        const uint32_t b = (hi < n) ? prefix[hi] : 0;
+        dst[i] = Op(a, b);
+    }
+}
+
+// Applies the 1D filter to every row with radius rx, then to every column with radius ry.
+template <uint32_t (*Op)(uint32_t, uint32_t)>
+void morphology_2d(const SkPixmap& src, const SkPixmap& dst, int rx, int ry) {
+    const int w = src.width();
+    const int h = src.height();
+    std::vector<uint32_t> prefix(std::max(w, h));
+    std::vector<uint32_t> suffix(std::max(w, h));
+    std::vector<uint32_t> column(h);
+    std::vector<uint32_t> tmp((size_t)w * h);
+
+    for (int y = 0; y < h; ++y) {
+        van_herk_pass<Op>(src.addr32(0, y), tmp.data() + (size_t)y * w, w, rx,
+                          prefix.data(), suffix.data());
+    }
+
+    for (int x = 0; x < w; ++x) {
+        for (int y = 0; y < h; ++y) {
+            column[y] = tmp[(size_t)y * w + x];
+        }
+        van_herk_pass<Op>(column.data(), column.data(), h, ry, prefix.data(), suffix.data());
+        for (int y = 0; y < h; ++y) {
+            *dst.writable_addr32(x, y) = column[y];
+        }
+    }
+}
+
+// Applies the morphology directly on the CPU. Returns std::nullopt if the input isn't a raster
+// N32 premul image (e.g. a GPU texture or F16), in which case the caller falls back to the
+// shader passes. An empty FilterResult means the output is empty.
+std::optional<skif::FilterResult> apply_native_morphology(
+        const skif::Context& ctx,
+        const skif::FilterResult& input,
+        MorphType type,
+        skif::LayerSpace<SkISize> radii,
+        skif::LayerSpace<SkIRect> maxOutput) {
+    auto [srcImg, srcOrigin] = input.imageAndOffset(ctx);
+    if (!srcImg) {
+        return skif::FilterResult{};
+    }
+
+    sk_sp<SkImage> srcAsImage = srcImg->asImage();
+    SkPixmap probe;
+    if (!srcAsImage || !srcAsImage->peekPixels(&probe)) {
+        return std::nullopt;
+    }
+    if (probe.colorType() != kN32_SkColorType || probe.alphaType() != kPremul_SkAlphaType) {
+        return std::nullopt;
+    }
+
+    const int rx = radii.width();
+    const int ry = radii.height();
+
+    // The working area is maxOutput outset by the radii, so every output window lies inside it.
+    // Pixels the child didn't cover stay transparent black, which matches decal tiling: dilate's
+    // max ignores them and erode's min shrinks towards them.
+    skif::LayerSpace<SkIRect> srcBounds = maxOutput;
+    srcBounds.outset(radii);
+    const int workW = srcBounds.width();
+    const int workH = srcBounds.height();
+    if (workW <= 0 || workH <= 0) {
+        return skif::FilterResult{};
+    }
+
+    const SkImageInfo info = SkImageInfo::Make(workW, workH, kN32_SkColorType,
+                                               kPremul_SkAlphaType, probe.refColorSpace());
+    SkBitmap srcBuf, dstBuf;
+    if (!srcBuf.tryAllocPixels(info) || !dstBuf.tryAllocPixels(info)) {
+        return std::nullopt;
+    }
+    srcBuf.eraseColor(SK_ColorTRANSPARENT);
+
+    // Copy the child's output into srcBuf at its position relative to the working area.
+    const int dx = srcOrigin.x() - srcBounds.left();
+    const int dy = srcOrigin.y() - srcBounds.top();
+    SkIRect land = SkIRect::MakeXYWH(dx, dy, srcImg->width(), srcImg->height());
+    if (land.intersect(SkIRect::MakeWH(workW, workH))) {
+        SkPixmap bufPixmap, subset;
+        if (srcBuf.peekPixels(&bufPixmap) && bufPixmap.extractSubset(&subset, land)) {
+            (void)srcAsImage->readPixels(subset, land.left() - dx, land.top() - dy);
+        }
+    }
+
+    SkPixmap srcPixmap, dstPixmap;
+    srcBuf.peekPixels(&srcPixmap);
+    dstBuf.peekPixels(&dstPixmap);
+    if (type == MorphType::kDilate) {
+        morphology_2d<pixel_max>(srcPixmap, dstPixmap, rx, ry);
+    } else {
+        morphology_2d<pixel_min>(srcPixmap, dstPixmap, rx, ry);
+    }
+
+    // The output for maxOutput is the interior of dstBuf, inset by the radii.
+    SkBitmap out;
+    if (!dstBuf.extractSubset(&out, SkIRect::MakeXYWH(rx, ry, maxOutput.width(),
+                                                      maxOutput.height()))) {
+        return std::nullopt;
+    }
+    out.setImmutable();
+
+    auto special = SkSpecialImages::MakeFromRaster(SkIRect::MakeWH(out.width(), out.height()),
+                                                   out, SkSurfaceProps{});
+    return skif::FilterResult(std::move(special), maxOutput.topLeft());
+}
+
 } // end namespace
 
 sk_sp<SkImageFilter> SkImageFilters::Dilate(SkScalar radiusX, SkScalar radiusY,
@@ -282,8 +433,12 @@ skif::FilterResult SkMorphologyImageFilter::onFilterImage(const skif::Context& c
         return {};
     }
 
-    // The X pass has to preserve the extra rows to later be consumed by the Y pass.
     skif::LayerSpace<SkISize> radii = this->radii(ctx.mapping());
+    if (auto handled = apply_native_morphology(ctx, childOutput, fType, radii, maxOutput)) {
+        return *handled;
+    }
+
+    // The X pass has to preserve the extra rows to later be consumed by the Y pass.
     skif::LayerSpace<SkIRect> maxOutputX = maxOutput;
     maxOutputX.outset(skif::LayerSpace<SkISize>({0, radii.height()}));
     childOutput = morphology_pass(ctx.withNewDesiredOutput(maxOutputX), childOutput, fType,
