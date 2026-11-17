@@ -12,7 +12,7 @@
 
 void SkSVGCss::applyCssToNodeTree(const FontContext& ctx, const sk_sp<SkSVGNode>& root,
                                   const SkString& cssStylesheet) {
-    future::CSSParser* parser = new future::CSSParser;
+    std::unique_ptr<future::CSSParser> parser(new future::CSSParser);
     parser->parseByString(cssStylesheet.c_str());
 
     addEmbeddedFonts(ctx, parser->getKeywords());
