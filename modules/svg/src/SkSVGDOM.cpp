@@ -12,7 +12,9 @@
 #include "include/core/SkString.h"
 #include "include/private/SkAssert.h"
 #include "include/private/SkTo.h"
+#include "include/ports/SkTypeface_win.h"
 #include "modules/skshaper/include/SkShaper_factory.h"
+#include "modules/skshaper/utils/FactoryHelpers.h"
 #include "modules/svg/include/SkSVGAnimate.h"
 #include "modules/svg/include/SkSVGAttribute.h"
 #include "modules/svg/include/SkSVGAttributeParser.h"
@@ -405,7 +407,7 @@ sk_sp<SkSVGDOM> SkSVGDOM::Builder::make(SkStream& str) const {
         sk_sp<SkData> load(const char[], const char[]) const override { return nullptr; }
     };
 
-    auto fontMgr = fFontMgr ? fFontMgr : SkFontMgr::RefDefault();
+    auto fontMgr = fFontMgr ? fFontMgr : SkFontMgr_New_DirectWrite();
     auto resource_provider = fResourceProvider ? fResourceProvider
                                                : sk_make_sp<NullResourceProvider>();
 
@@ -422,7 +424,7 @@ sk_sp<SkSVGDOM> SkSVGDOM::Builder::make(SkStream& str) const {
     FontContext fctx(fontMgr.get(), resource_provider.get());
     cssParser.applyCssToNodeTree(fctx, root, cssStyleSheet);
 
-    auto factory = fTextShapingFactory ? fTextShapingFactory : SkShapers::Primitive::Factory();
+    auto factory = fTextShapingFactory ? fTextShapingFactory : SkShapers::BestAvailable();
 
     return sk_sp<SkSVGDOM>(new SkSVGDOM(sk_sp<SkSVGSVG>(static_cast<SkSVGSVG*>(root.release())),
                                         std::move(fontMgr), 
