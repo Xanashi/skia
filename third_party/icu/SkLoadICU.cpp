@@ -99,6 +99,18 @@ static std::wstring executable_directory() {
     return get_module_path(hModule);
 }
 
+static std::wstring parent_directory(const std::wstring& dir) {
+    // Make sure to remove any trailing slashes first
+    size_t end = dir.find_last_not_of(L"\\/");
+    if (end == std::wstring::npos) { 
+        return dir;
+    }
+    size_t slash = dir.find_last_of(L"\\/", end);
+    if (slash == std::wstring::npos) {
+    }
+    return dir.substr(0, slash);
+}
+
 static bool load_from(const std::wstring& dir) {
     auto sPath = dir + L"\\icudtl.dat";
     if (void* addr = win_mmap(sPath.c_str())) {
@@ -113,7 +125,9 @@ bool SkLoadICU() {
     static bool good = false;
     static std::once_flag flag;
     std::call_once(flag, []() {
-        good = load_from(executable_directory()) || load_from(library_directory());
+        const std::wstring libDir = library_directory();
+        good = load_from(parent_directory(libDir)) ||
+               load_from(executable_directory()) || load_from(libDir);
     });
     return good;
 }
